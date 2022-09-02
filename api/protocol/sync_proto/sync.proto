@@ -1,0 +1,98 @@
+// Copyright 2022 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
+syntax = "proto3";
+package sync_proto;
+option go_package = "github.com/amazechain/amc/api/protocol/sync_proto";
+
+import "types_pb/types.proto";
+
+import "gogoproto/gogo.proto";
+
+message SyncProtocol {
+
+}
+
+
+enum SyncType {
+  FINDReq = 0;
+  FindRes = 1;
+  HeaderReq = 2;
+  HeaderRes = 3;
+  BodyReq = 4;
+  BodyRes = 5;
+  StateReq = 6;
+  StateRes = 7;
+  TransactionReq = 8;
+  TransactionRes = 9;
+  PeerInfoBroadcast = 10;
+}
+
+message Value {
+  string hash = 1;
+  uint64 height = 2;
+}
+
+message SyncBlockRequest {
+  repeated string number  = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+}
+
+message SyncBlockResponse {
+  repeated types.pb.PBlock blocks = 1;
+}
+
+message SyncHeaderRequest {
+  bytes number = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  bytes amount = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+}
+
+message SyncHeaderResponse {
+  repeated types.pb.PBHeader headers = 1;
+}
+
+message SyncTransactionRequest {
+  bytes bloom = 1;
+}
+
+message SyncTransactionResponse {
+  repeated types.pb.Transaction transactions = 1;
+}
+
+message SyncPeerInfoBroadcast {
+  string Difficulty = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  string Number = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+}
+
+
+message SyncTask {
+  uint64 id = 1; // task id
+  bool ok = 2;
+  SyncType syncType = 3;
+  oneof payload {
+    //header
+    SyncHeaderRequest syncHeaderRequest = 4;
+    SyncHeaderResponse syncHeaderResponse = 5;
+    //body
+    SyncBlockRequest syncBlockRequest = 6;
+    SyncBlockResponse syncBlockResponse = 7;
+    //Transaction
+    SyncTransactionRequest syncTransactionRequest = 8;
+    SyncTransactionResponse syncTransactionResponse = 9;
+    //
+    SyncPeerInfoBroadcast syncPeerInfoBroadcast = 10;
+  }
+}
+

@@ -1,0 +1,46 @@
+// Copyright 2022 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
+syntax = "proto3";
+import "types_pb/types.proto";
+
+import "gogoproto/gogo.proto";
+
+package msg_proto;
+option go_package = "github.com/amazechain/amc/api/protocol/msg_proto";
+
+message MessageData {
+  string clientVersion = 2; //client version
+  int64  timestamp = 3; //unix time
+  string id = 4; // message id hash256(payload)
+  string nodeID = 5; //id of peer that created the message, not the peer that may have send it.
+  bytes nodePubKey = 6; // peer public key
+  bytes sign = 7; // signature of message data
+  bytes payload = 8; // payload
+  bool gossip = 9;
+}
+
+message NewBlockMessageData {
+  bytes hash = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  bytes Number = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  types.pb.PBlock block = 3;
+}
+
+message ProtocolHandshakeMessage {
+  string version = 1;
+  string genesisHash = 2;
+  bytes currentHeight = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+}

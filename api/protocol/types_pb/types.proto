@@ -1,0 +1,102 @@
+// Copyright 2022 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
+syntax = "proto3";
+package types.pb;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/amazechain/amc/api/protocol/types_pb";
+
+message PBlock{
+  PBHeader Header = 1;
+  PBody txs = 2;
+}
+
+message PBHeader {
+//  option (gogoproto.goproto_getters) = false;
+
+  bytes ParentHash = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  bytes Coinbase = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  bytes Root = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  bytes TxHash = 4 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  bytes ReceiptHash = 5 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  string Difficulty = 6 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  string Number = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  uint64 GasLimit = 8;
+  uint64 GasUsed = 9;
+  uint64 Time = 10;
+  uint64 Nonce = 11;
+  string BaseFee = 12 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  bytes Extra = 13;
+}
+
+message PBody {
+  repeated Transaction txs = 1;
+}
+
+message Transaction {
+//  option (gogoproto.goproto_getters) = false;
+  uint64 type = 1;
+  uint64 nonce = 2;
+  string gasPrice = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  uint64 gas = 4;
+  string feePerGas = 5 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  string priorityFeePerGas = 6 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  string value = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  bytes data = 8;
+  bytes sing = 9;
+  string to = 10 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  string from = 11 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  uint64 chainID = 12;
+  bytes hash = 13 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  string r = 14 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  string s = 15 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  string v = 16 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+}
+
+message Receipts {
+  repeated Receipt receipts = 1;
+}
+
+message Receipt {
+  uint64   Type = 1;
+  bytes    PostState = 2;
+  uint64   Status = 3;
+  uint64   CumulativeGasUsed = 4;
+  bytes    Bloom = 5;
+  repeated Log Logs = 6;
+  bytes    TxHash = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  bytes    ContractAddress = 8 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  uint64   GasUsed = 9;
+  bytes    BlockHash = 10 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  string   BlockNumber = 11 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  uint64   TransactionIndex = 12;
+}
+
+message Log {
+  bytes Address = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  repeated bytes Topics = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  bytes Data = 3;
+  string BlockNumber = 4 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  bytes TxHash = 5 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  uint64 TxIndex = 6;
+  bytes BlockHash = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  uint64 Index = 8;
+  bool Removed = 9;
+}
+
+

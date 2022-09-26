@@ -86,7 +86,7 @@ var rpcFlags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:        "http",
 		Usage:       "Enable the HTTP json-rpc server",
-		Value:       DefaultConfig.NodeCfg.HTTP,
+		Value:       false,
 		Destination: &DefaultConfig.NodeCfg.HTTP,
 	},
 	&cli.StringFlag{
@@ -98,8 +98,27 @@ var rpcFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:        "http.port",
 		Usage:       "HTTP server listening port",
-		Value:       DefaultConfig.NodeCfg.HTTPPort,
+		Value:       "20012",
 		Destination: &DefaultConfig.NodeCfg.HTTPPort,
+	},
+
+	&cli.BoolFlag{
+		Name:        "ws",
+		Usage:       "Enable the WS-RPC server",
+		Value:       false,
+		Destination: &DefaultConfig.NodeCfg.WS,
+	},
+	&cli.StringFlag{
+		Name:        "ws.addr",
+		Usage:       "WS-RPC server listening interface",
+		Value:       DefaultConfig.NodeCfg.WSHost,
+		Destination: &DefaultConfig.NodeCfg.WSHost,
+	},
+	&cli.StringFlag{
+		Name:        "ws.port",
+		Usage:       "WS-RPC server listening port",
+		Value:       "20013",
+		Destination: &DefaultConfig.NodeCfg.WSPort,
 	},
 }
 
@@ -107,7 +126,7 @@ var consensusFlag = []cli.Flag{
 	&cli.StringFlag{
 		Name:        "engine.type",
 		Usage:       "consensus engine",
-		Value:       "MPoaEngine",
+		Value:       "APoaEngine",
 		Destination: &DefaultConfig.GenesisBlockCfg.Engine.EngineName,
 	},
 	&cli.BoolFlag{

@@ -26,19 +26,24 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-func LoadGenesis(db db.IDatabase) (block.IBlock, error) {
+func GetGenesis(db db.IDatabase) (block.IBlock, error) {
 	header, _, err := GetHeader(db, types.NewInt64(0))
 	if err != nil {
 		return nil, err
 	}
+	body, err := GetBody(db, types.NewInt64(0))
 
-	genesisBlock := block.NewBlock(header, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	genesisBlock := block.NewBlock(header, body.Transactions())
 
 	return genesisBlock, nil
 }
 
-func SaveGenesis(db db.IDatabase, genesisBlock block.IBlock) error {
-	return StoreHeader(db, genesisBlock.Header())
+func StoreGenesis(db db.IDatabase, genesisBlock block.IBlock) error {
+	return StoreBlock(db, genesisBlock)
 }
 
 func GetHeader(db db.IDatabase, number types.Int256) (block.IHeader, types.Hash, error) {
@@ -136,28 +141,37 @@ func GetHeaderByHash(db db.IDatabase, hash types.Hash) (block.IHeader, types.Has
 
 func SaveBlocks(db db.IDatabase, blocks []block.IBlock) (int, error) {
 
-	for _, block := range blocks {
-		if err := StoreHeader(db, block.Header()); err != nil {
-			return 0, err
-		}
-
-		if err := StoreBody(db, block.Number64(), block.Body()); err != nil {
-			return 0, err
-		}
-
-		if err := StoreHashNumber(db, block.Header().Hash(), block.Number64()); err != nil {
-			return 0, err
-		}
-		// index
-		for _, tx := range block.Transactions() {
-			hash, _ := tx.Hash()
-			if err := StoreTransactionIndex(db, block.Number64(), hash); err != nil {
-				return 0, err
-			}
+	// todo  batch?
+	for i, block := range blocks {
+		if err := StoreBlock(db, block); err != nil {
+			return i + 1, err
 		}
 	}
 
 	return 0, nil
+}
+
+func StoreBlock(db db.IDatabase, block block.IBlock) error {
+
+	if err := StoreHeader(db, block.Header()); err != nil {
+		return err
+	}
+
+	if err := StoreBody(db, block.Number64(), block.Body()); err != nil {
+		return err
+	}
+
+	if err := StoreHashNumber(db, block.Header().Hash(), block.Number64()); err != nil {
+		return err
+	}
+	// index
+	for _, tx := range block.Transactions() {
+		hash, _ := tx.Hash()
+		if err := StoreTransactionIndex(db, block.Number64(), hash); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func GetBody(db db.IDatabase, number types.Int256) (block.IBody, error) {
@@ -252,7 +266,7 @@ func SaveLatestBlock(db db.IDatabase, block block.IBlock) error {
 	return w.Put(key[:], b)
 }
 
-//GetTransaction get tx by txHash
+// GetTransaction get tx by txHash
 func GetTransaction(db db.IDatabase, txHash types.Hash) (*transaction.Transaction, types.Hash, types.Int256, uint64, error) {
 
 	blockNumber, err := GetTransactionIndex(db, txHash)
@@ -277,7 +291,7 @@ func GetTransaction(db db.IDatabase, txHash types.Hash) (*transaction.Transactio
 	return nil, types.Hash{}, types.NewInt64(0), 0, nil
 }
 
-//StoreTransactionIndex store txHash blockNumber index
+// StoreTransactionIndex store txHash blockNumber index
 func StoreTransactionIndex(db db.IDatabase, blockNumber types.Int256, txHash types.Hash) error {
 	v, err := blockNumber.MarshalText()
 	if err != nil {
@@ -291,7 +305,7 @@ func StoreTransactionIndex(db db.IDatabase, blockNumber types.Int256, txHash typ
 	return r.Put(txHash.HexBytes(), v)
 }
 
-//GetTransactionIndex get block number by txHash
+// GetTransactionIndex get block number by txHash
 func GetTransactionIndex(db db.IDatabase, txHash types.Hash) (types.Int256, error) {
 
 	r, err := db.OpenReader(transactionIndex)

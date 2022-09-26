@@ -74,7 +74,7 @@ type BlockChain struct {
 	//state        *statedb.StateDB
 	chainDB  db.IDatabase
 	changeDB kv.RwDB
-	engine   consensus.IEngine
+	engine   consensus.Engine
 
 	insertLock    chan struct{}
 	latestBlockCh chan block2.IBlock
@@ -111,15 +111,14 @@ type insertStats struct {
 //	return bc.state
 //}
 
-func (bc *BlockChain) Engine() consensus.IEngine {
+func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.IEngine, downloader common.IDownloader, database db.IDatabase, changeDB kv.RwDB, pubsub common.IPubSub) (common.IBlockChain, error) {
+func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, database db.IDatabase, changeDB kv.RwDB, pubsub common.IPubSub) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
-	current, err := rawdb.GetLatestBlock(database)
-	if err != nil {
-		log.Warnf("failed to get latest block, err%v", err)
+	current, _ := rawdb.GetLatestBlock(database)
+	if current == nil {
 		current = genesisBlock
 	}
 
@@ -204,10 +203,19 @@ func (bc *BlockChain) AddPeer(hash string, remoteBlock uint64, peerID peer.ID) e
 
 func (bc *BlockChain) GetReceipts(blockHash types.Hash) (block2.Receipts, error) {
 	return rawdb.GetReceipts(bc.chainDB, blockHash)
-	//if r, ok := bc.receiptCache[blockHash]; ok {
-	//	return r, nil
-	//}
-	//return nil, nil
+}
+
+func (bc *BlockChain) GetLogs(blockHash types.Hash) ([][]*block2.Log, error) {
+	receipts, err := bc.GetReceipts(blockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	logs := make([][]*block2.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs, nil
 }
 
 func (bc *BlockChain) InsertBlock(blocks []block2.IBlock, isSync bool) (int, error) {
@@ -218,18 +226,19 @@ func (bc *BlockChain) InsertBlock(blocks []block2.IBlock, isSync bool) (int, err
 		//todo copy?
 		stateDB := statedb.NewStateDB(b.ParentHash(), bc.chainDB, bc.changeDB)
 
-		r, _, err := bc.process.Processor(b, stateDB)
+		receipts, logs, err := bc.process.Processor(b, stateDB)
 		if err != nil {
 			return err
 		}
 
 		stateDB.Commit(b.Number64())
-		rawdb.StoreReceipts(bc.chainDB, b.Hash(), r)
-		//if _, ok := bc.receiptCache[b.Hash()]; !ok {
-		//	bc.receiptCache[b.Hash()] = r
-		//}
-		if len(r) > 0 {
-			log.Infof("Receipt len(%d), receipts: [%v]", len(r), r)
+		rawdb.StoreReceipts(bc.chainDB, b.Hash(), receipts)
+
+		if len(logs) > 0 {
+			event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
+		}
+		if len(receipts) > 0 {
+			log.Infof("Receipt len(%d), receipts: [%v]", len(receipts), receipts)
 		}
 		return nil
 	}
@@ -238,7 +247,7 @@ func (bc *BlockChain) InsertBlock(blocks []block2.IBlock, isSync bool) (int, err
 	var insertBlocks []block2.IBlock
 	for i, block := range blocks {
 		if block.Number64() == current.Number64() && block.Difficulty().Compare(current.Difficulty()) == 1 {
-			if err := bc.engine.VerifyBlock(block); err != nil {
+			if err := bc.engine.VerifyHeader(bc, block.Header(), false); err != nil {
 				log.Errorf("failed verify block err: %v", err)
 				continue
 			}
@@ -250,7 +259,7 @@ func (bc *BlockChain) InsertBlock(blocks []block2.IBlock, isSync bool) (int, err
 			}
 
 		} else if block.Number64().Equal(current.Number64().Add(types.NewInt64(1))) && block.ParentHash().String() == current.Hash().String() {
-			if err := bc.engine.VerifyBlock(block); err != nil {
+			if err := bc.engine.VerifyHeader(bc, block.Header(), false); err != nil {
 				log.Errorf("failed verify block err: %v", err)
 				continue
 			}
@@ -262,8 +271,9 @@ func (bc *BlockChain) InsertBlock(blocks []block2.IBlock, isSync bool) (int, err
 				current = blocks[i]
 			}
 		} else {
-			log.Errorf("failed instert mew block, hash: %s, number: %s, diff: %s, miner: %s, txs: %d", block.Hash(), block.Number64().String(), block.Difficulty().String(), block.Coinbase().String(), len(block.Transactions()))
-			log.Errorf("failed instert cur block, hash: %s, number: %s, diff: %s, miner: %s, txs: %d", current.Hash(), current.Number64().String(), current.Difficulty().String(), current.Coinbase().String(), len(current.Transactions()))
+			author, _ := bc.engine.Author(block.Header())
+			log.Errorf("failed instert mew block, hash: %s, number: %s, diff: %s, miner: %s, txs: %d", block.Hash(), block.Number64().String(), block.Difficulty().String(), author.String(), len(block.Transactions()))
+			log.Errorf("failed instert cur block, hash: %s, number: %s, diff: %s, miner: %s, txs: %d", current.Hash(), current.Number64().String(), current.Difficulty().String(), author.String(), len(current.Transactions()))
 		}
 
 	}
@@ -282,7 +292,8 @@ func (bc *BlockChain) InsertBlock(blocks []block2.IBlock, isSync bool) (int, err
 
 		if !isSync {
 			i := event.GlobalEvent.Send(&current)
-			log.Debugf("current number:%d, miner: %s, feed send count: %d", current.Number64().Uint64(), current.Coinbase(), i)
+			author, _ := bc.engine.Author(current.Header())
+			log.Debugf("current number:%d, miner: %s, feed send count: %d", current.Number64().Uint64(), author, i)
 		}
 
 		return len(insertBlocks), nil
@@ -384,7 +395,7 @@ func (bc *BlockChain) runLoop() {
 	}
 }
 
-//updateFutureBlocksLoop
+// updateFutureBlocksLoop
 func (bc *BlockChain) updateFutureBlocksLoop() {
 	futureTimer := time.NewTicker(2 * time.Second)
 	defer futureTimer.Stop()
@@ -531,7 +542,7 @@ func (bc *BlockChain) NewBlockHandler(payload []byte, peer peer.ID) error {
 	return nil
 }
 
-func (bc *BlockChain) SetEngine(engine consensus.IEngine) {
+func (bc *BlockChain) SetEngine(engine consensus.Engine) {
 	bc.engine = engine
 }
 
@@ -550,9 +561,12 @@ func (bc *BlockChain) GetBlocksFromHash(hash types.Hash, n int) (blocks []block2
 }
 
 func (bc *BlockChain) GetBlock(hash types.Hash) block2.IBlock {
+	if hash == (types.Hash{}) {
+		return nil
+	}
 	header, h, err := rawdb.GetHeaderByHash(bc.chainDB, hash)
 	if err != nil {
-		log.Errorf("GetBlock failed to get block, err:%v", err)
+		log.Errorf("GetBlock failed to get block, hash: %s, err:%v", hash.String(), err)
 		return nil
 	}
 
@@ -577,7 +591,7 @@ func (bc *BlockChain) SealedBlock(b block2.IBlock) {
 	//}
 
 	pbBlock := b.ToProtoMessage()
-	log.Infof("sealed block hash: %s, number: %s, used gas: %d", b.Hash(), b.Number64(), b.GasUsed())
+	log.Infof("sealed block hash: %s, number: %s, used gas: %d", b.Hash(), b.Number64().Uint64(), b.GasUsed())
 
 	_ = bc.pubsub.Publish(message.GossipBlockMessage, pbBlock)
 }
@@ -601,7 +615,7 @@ func (bc *BlockChain) HasBlockAndState(hash types.Hash) bool {
 	return bc.HasState(block.Hash())
 }
 
-//HasState
+// HasState
 func (bc *BlockChain) HasState(hash types.Hash) bool {
 	return false
 }
@@ -619,7 +633,7 @@ func (bc *BlockChain) GetTd(hash types.Hash) types.Int256 {
 	return bc.tdCache[hash]
 }
 
-//InsertChain
+// InsertChain
 func (bc *BlockChain) InsertChain(chain []block2.IBlock) (int, error) {
 	if len(chain) == 0 {
 		return 0, nil
@@ -664,7 +678,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 			return 0, nil
 		}
 		// 2.
-		err := bc.engine.VerifyHeader(block)
+		err := bc.engine.VerifyHeader(bc, block.Header(), false)
 
 		// 3.
 		if err == nil {
@@ -754,12 +768,12 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	return 0, nil
 }
 
-//insertSideChain
+// insertSideChain
 func (bc *BlockChain) insertSideChain(chain []block2.IBlock) (int, error) {
 	return 0, nil
 }
 
-//recoverAncestors
+// recoverAncestors
 func (bc *BlockChain) recoverAncestors(block block2.IBlock) (types.Hash, error) {
 	var (
 		hashes  []types.Hash
@@ -824,7 +838,6 @@ func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock) (err error) {
 	return nil
 }
 
-//
 // WriteBlockWithState
 func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block2.Receipt) (status WriteStatus, err error) {
 	bc.wg.Add(1)
@@ -858,7 +871,7 @@ func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block
 	return status, nil
 }
 
-//writeHeadBlock head
+// writeHeadBlock head
 func (bc *BlockChain) writeHeadBlock(block block2.IBlock) error {
 	if err := rawdb.SaveLatestBlock(bc.chainDB, block); err != nil {
 		log.Errorf("failed to save last block, err: %v", err)

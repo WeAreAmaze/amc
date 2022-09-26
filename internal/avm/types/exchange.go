@@ -10,6 +10,7 @@ import (
 	"github.com/amazechain/amc/internal/avm/crypto"
 	"github.com/amazechain/amc/internal/avm/params"
 	"github.com/amazechain/amc/internal/avm/rlp"
+	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
 	"golang.org/x/crypto/sha3"
 	"math/big"
@@ -250,7 +251,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
-//UnmarshalBinary todo compatible with other txs
+// UnmarshalBinary todo compatible with other txs
 func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
 		// It's a legacy transaction.
@@ -334,6 +335,33 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 	}
 
 	return transaction.NewTransaction(tx.Nonce(), ToAmcAddress(from), to, value, tx.Gas(), gasPrice, tx.Data()), err
+}
+
+func FromAmcHeader(iHeader block.IHeader, engine consensus.Engine) *Header {
+	header := iHeader.(*block.Header)
+	author, _ := engine.Author(iHeader)
+
+	var baseFee *big.Int
+	if !header.BaseFee.IsZero() {
+		baseFee = header.BaseFee.ToBig()
+	}
+	return &Header{
+		ParentHash:  FromAmcHash(header.ParentHash),
+		UncleHash:   common.Hash{},
+		Coinbase:    *FromAmcAddress(author),
+		Root:        FromAmcHash(header.Root),
+		TxHash:      FromAmcHash(header.TxHash),
+		ReceiptHash: FromAmcHash(header.ReceiptHash),
+		Difficulty:  header.Difficulty.ToBig(),
+		Number:      header.Number.ToBig(),
+		GasLimit:    header.GasLimit,
+		GasUsed:     header.GasUsed,
+		Time:        header.Time,
+		Extra:       header.Extra,
+		MixDigest:   FromAmcHash(header.MixDigest),
+		Nonce:       EncodeNonce(header.Nonce.Uint64()),
+		BaseFee:     baseFee,
+	}
 }
 
 func rlpHash(x interface{}) (h common.Hash) {

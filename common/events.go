@@ -17,13 +17,25 @@
 package common
 
 import (
-	block2 "github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 // NewLocalTxsEvent local txs
 type NewLocalTxsEvent struct{ Txs []*transaction.Transaction }
+
+// NewTxsEvent txs
+type NewTxsEvent struct{ Txs []*transaction.Transaction }
+
+// NewLogsEvent new logs
+type NewLogsEvent struct{ Logs []*block.Log }
+
+// RemovedLogsEvent is posted when a reorg happens // todo blockchain v2
+type RemovedLogsEvent struct{ Logs []*block.Log }
+
+// NewPendingLogsEvent is posted when a reorg happens // todo miner v2
+type NewPendingLogsEvent struct{ Logs []*block.Log }
 
 // PeerJoinEvent Peer join
 type PeerJoinEvent struct{ Peer peer.ID }
@@ -38,6 +50,6 @@ type DownloaderStartEvent struct{}
 type DownloaderFinishEvent struct{}
 
 type ChainHighestBlock struct {
-	Block    block2.Block
+	Block    block.Block
 	Inserted bool
 }

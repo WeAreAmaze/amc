@@ -112,6 +112,8 @@ type IStateDB interface {
 
 	TxIndex() int
 	Prepare(thash types.Hash, ti int)
+
+	Error() error
 }
 type ChainStateReader interface {
 	BalanceAt(ctx context.Context, account types.Address, blockNumber types.Int256) (types.Int256, error)

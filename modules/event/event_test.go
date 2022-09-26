@@ -19,7 +19,6 @@ package event
 import (
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/msg_proto"
-	"github.com/amazechain/amc/internal/consensus/solo"
 	"reflect"
 	"strconv"
 	"sync"
@@ -177,13 +176,13 @@ func TestReflect(t *testing.T) {
 		Gossip:        false,
 	}
 
-	sCh := make(chan solo.SoloMiner, 2)
+	//sCh := make(chan solo.SoloMiner, 2)
 
 	t1 := reflect.TypeOf(num)
 	t2 := reflect.TypeOf(s)
-	t3 := reflect.TypeOf(sCh)
+	//t3 := reflect.TypeOf(sCh)
 
 	t.Logf("t1 type: %s", t1.String())
 	t.Logf("t2 type: %s", t2.String())
-	t.Logf("t3 type: %s", t3.Elem().String())
+	//t.Logf("t3 type: %s", t3.Elem().String())
 }

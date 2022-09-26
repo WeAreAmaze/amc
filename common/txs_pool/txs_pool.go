@@ -30,4 +30,5 @@ type ITxsPool interface {
 	AddLocal(tx *transaction.Transaction) error
 	Stats() (int, int, int, int)
 	Nonce(addr types.Address) uint64
+	Content() (map[types.Address][]*transaction.Transaction, map[types.Address][]*transaction.Transaction)
 }

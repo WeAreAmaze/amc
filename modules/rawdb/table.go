@@ -33,4 +33,5 @@ const (
 	difficultyDB     = "DifficultyDB"
 	transactionIndex = "TransactionIndexDB"
 	receiptsDB       = "ReceiptsDB"
+	poaSnapshot      = "PoaSnapshotDB"
 )

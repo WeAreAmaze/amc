@@ -26,6 +26,7 @@ import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/internal/api/filters"
 	"github.com/amazechain/amc/internal/avm"
 	"github.com/amazechain/amc/internal/avm/abi"
 	mvm_common "github.com/amazechain/amc/internal/avm/common"
@@ -58,13 +59,13 @@ type API struct {
 	p2pserver  common.INetwork
 	peers      map[peer.ID]common.Peer
 	bc         common.IBlockChain
-	engine     consensus.IEngine
+	engine     consensus.Engine
 	txspool    txs_pool.ITxsPool
 	downloader common.IDownloader
 }
 
 // NewAPI creates a new protocol API.
-func NewAPI(pubsub common.IPubSub, p2pserver common.INetwork, peers map[peer.ID]common.Peer, bc common.IBlockChain, db db.IDatabase, engine consensus.IEngine, txspool txs_pool.ITxsPool, downloader common.IDownloader) *API {
+func NewAPI(pubsub common.IPubSub, p2pserver common.INetwork, peers map[peer.ID]common.Peer, bc common.IBlockChain, db db.IDatabase, engine consensus.Engine, txspool txs_pool.ITxsPool, downloader common.IDownloader) *API {
 	return &API{
 		db:         db,
 		pubsub:     pubsub,
@@ -98,6 +99,12 @@ func (api *API) Apis() []jsonrpc.API {
 		}, {
 			Namespace: "debug",
 			Service:   NewDebugAPI(api),
+		}, {
+			Namespace: "txpool",
+			Service:   NewTxsPoolAPI(api),
+		}, {
+			Namespace: "eth",
+			Service:   filters.NewFilterAPI(api, 5*time.Minute),
 		},
 	}
 }
@@ -107,7 +114,7 @@ func (n *API) Downloader() common.IDownloader { return n.downloader }
 func (n *API) P2pServer() common.INetwork     { return n.p2pserver }
 func (n *API) Peers() map[peer.ID]common.Peer { return n.peers }
 func (n *API) Database() db.IDatabase         { return n.db }
-func (n *API) Engine() consensus.IEngine      { return n.engine }
+func (n *API) Engine() consensus.Engine       { return n.engine }
 func (n *API) BlockChain() common.IBlockChain { return n.bc }
 func (n *API) GetEvm(ctx context.Context, msg mvm_types.Message, state common.IStateDB, header block.IHeader, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
@@ -119,6 +126,7 @@ func (n *API) GetEvm(ctx context.Context, msg mvm_types.Message, state common.IS
 }
 
 func (n *API) State(blockNrOrHash jsonrpc.BlockNumberOrHash) common.IStateDB {
+	// todo if header not found
 	var blockHash types.Hash
 
 	if blockNr, ok := blockNrOrHash.Number(); ok {
@@ -275,6 +283,44 @@ func (s *BlockChainAPI) GetCode(ctx context.Context, address mvm_common.Address,
 	return code, nil
 }
 
+// GetStorageAt returns the storage from the state at the given address, key and
+// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
+// numbers are also allowed.
+func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address mvm_common.Address, key string, blockNrOrHash jsonrpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	state := s.api.State(blockNrOrHash)
+	if state == nil {
+		return nil, nil
+	}
+	res := state.GetState(mvm_types.ToAmcAddress(address), mvm_types.ToAmcHash(mvm_common.HexToHash(key)))
+	hash := mvm_types.FromAmcHash(res)
+	return hash[:], state.Error()
+}
+
+// GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
+func (s *BlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, blockHash mvm_common.Hash) *hexutil.Uint {
+	if block, _ := s.api.BlockChain().GetBlockByHash(mvm_types.ToAmcHash(blockHash)); block != nil {
+		//POA donot have Uncles
+		n := hexutil.Uint(0)
+		return &n
+	}
+	return nil
+}
+
+// GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
+func (s *BlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, blockHash mvm_common.Hash, index hexutil.Uint) (map[string]interface{}, error) {
+	b, err := s.api.BlockChain().GetBlockByHash(mvm_types.ToAmcHash(blockHash))
+	if b != nil {
+		//POA donot have Uncles
+		var uncles []struct{}
+		if index >= hexutil.Uint(len(uncles)) {
+			return nil, nil
+		}
+		block := block.NewBlock(&block.Header{}, nil)
+		return RPCMarshalBlock(block, false, false, s.api.Engine())
+	}
+	return nil, err
+}
+
 // Result structs for GetProof
 type AccountResult struct {
 	Address      types.Address   `json:"address"`
@@ -292,12 +338,12 @@ type StorageResult struct {
 	Proof []string     `json:"proof"`
 }
 
-//// OverrideAccount indicates the overriding fields of account during the execution
-//// of a message call.
-//// Note, state and stateDiff can't be specified at the same time. If state is
-//// set, message execution will only use the data in the given state. Otherwise
-//// if statDiff is set, all diff will be applied first and then execute the call
-//// message.
+// // OverrideAccount indicates the overriding fields of account during the execution
+// // of a message call.
+// // Note, state and stateDiff can't be specified at the same time. If state is
+// // set, message execution will only use the data in the given state. Otherwise
+// // if statDiff is set, all diff will be applied first and then execute the call
+// // message.
 type OverrideAccount struct {
 	Nonce      *hexutil.Uint64                      `json:"nonce"`
 	Code       *hexutil.Bytes                       `json:"code"`
@@ -306,7 +352,6 @@ type OverrideAccount struct {
 	StateDiff  *map[mvm_common.Hash]mvm_common.Hash `json:"stateDiff"`
 }
 
-//
 // StateOverride is the collection of overridden accounts.
 type StateOverride map[mvm_common.Address]OverrideAccount
 
@@ -434,12 +479,12 @@ func (e *revertError) ErrorData() interface{} {
 	return e.reason
 }
 
-//Call executes the given transaction on the state for the given block number.
+// Call executes the given transaction on the state for the given block number.
 //
-//Additionally, the caller can specify a batch of contract for fields overriding.
+// Additionally, the caller can specify a batch of contract for fields overriding.
 //
-//Note, this function doesn't make and changes in the state/blockchain and is
-//useful to execute and retrieve values.
+// Note, this function doesn't make and changes in the state/blockchain and is
+// useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash jsonrpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
 
 	b, _ := json.Marshal(args)
@@ -471,10 +516,10 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 }
 
 // GetBlockByNumber returns the requested canonical block.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
-// * When fullTx is true all transactions in the block are returned, otherwise
-//   only the transaction hash is returned.
+//   - When blockNr is -1 the chain head is returned.
+//   - When blockNr is -2 the pending chain head is returned.
+//   - When fullTx is true all transactions in the block are returned, otherwise
+//     only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number jsonrpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 
 	var (
@@ -490,7 +535,7 @@ func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number jsonrpc.Blo
 	}
 
 	if block != nil && err == nil {
-		response, err := RPCMarshalBlock(block, true, fullTx)
+		response, err := RPCMarshalBlock(block, true, fullTx, s.api.Engine())
 		if err == nil && number == jsonrpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -503,11 +548,11 @@ func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number jsonrpc.Blo
 	return nil, err
 }
 
-//GetBlockByHash get block by hash
+// GetBlockByHash get block by hash
 func (s *BlockChainAPI) GetBlockByHash(ctx context.Context, hash mvm_common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.api.BlockChain().GetBlockByHash(mvm_types.ToAmcHash(hash))
 	if block != nil {
-		return RPCMarshalBlock(block, true, fullTx)
+		return RPCMarshalBlock(block, true, fullTx, s.api.Engine())
 	}
 	return nil, err
 }
@@ -627,6 +672,15 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash mvm_com
 	return fields, nil
 }
 
+// GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
+func (s *TransactionAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash mvm_common.Hash) *hexutil.Uint {
+	if block, _ := s.api.BlockChain().GetBlockByHash(mvm_types.ToAmcHash(blockHash)); block != nil {
+		n := hexutil.Uint(len(block.Transactions()))
+		return &n
+	}
+	return nil
+}
+
 // GetTransactionByHash returns the transaction for the given hash
 func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash mvm_common.Hash) (*RPCTransaction, error) {
 
@@ -650,6 +704,18 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash mvm_comm
 	}
 
 	return nil, nil
+}
+
+// GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
+func (s *TransactionAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash mvm_common.Hash, index hexutil.Uint) *RPCTransaction {
+	if block, _ := s.api.BlockChain().GetBlockByHash(mvm_types.ToAmcHash(blockHash)); block != nil {
+		for i, tx := range block.Transactions() {
+			if i == int(index) {
+				return newRPCTransaction(tx, mvm_types.ToAmcHash(blockHash), block.Number64().Uint64(), uint64(index), block.Header().BaseFee64().ToBig())
+			}
+		}
+	}
+	return nil
 }
 
 // SubmitTransaction ?
@@ -784,4 +850,41 @@ func (s *NetAPI) PeerCount() hexutil.Uint {
 func (s *NetAPI) Version() string {
 	//todo networkID == chainID？ s.api.GetChainConfig().ChainID
 	return fmt.Sprintf("%d", s.networkVersion)
+}
+
+// TxsPoolAPI offers and API for the transaction pool. It only operates on data that is non confidential.
+type TxsPoolAPI struct {
+	api *API
+}
+
+// NewTxsPoolAPI creates a new tx pool service that gives information about the transaction pool.
+func NewTxsPoolAPI(api *API) *TxsPoolAPI {
+	return &TxsPoolAPI{api}
+}
+
+// Content returns the transactions contained within the transaction pool.
+func (s *TxsPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
+	content := map[string]map[string]map[string]*RPCTransaction{
+		"pending": make(map[string]map[string]*RPCTransaction),
+		"queued":  make(map[string]map[string]*RPCTransaction),
+	}
+	pending, queue := s.api.TxsPool().Content()
+	curHeader := s.api.BlockChain().CurrentBlock().Header()
+	// Flatten the pending transactions
+	for account, txs := range pending {
+		dump := make(map[string]*RPCTransaction)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader)
+		}
+		content["pending"][mvm_types.FromAmcAddress(account).Hex()] = dump
+	}
+	// Flatten the queued transactions
+	for account, txs := range queue {
+		dump := make(map[string]*RPCTransaction)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader)
+		}
+		content["queued"][mvm_types.FromAmcAddress(account).Hex()] = dump
+	}
+	return content
 }

@@ -32,7 +32,9 @@ import (
 const (
 	vsn                      = "2.0"
 	serviceMethodSeparator   = "_"
+	subscribeMethodSuffix    = "_subscribe"
 	notificationMethodSuffix = "_subscription"
+	unsubscribeMethodSuffix  = "_unsubscribe"
 
 	defaultWriteTimeout = 10 * time.Second
 )
@@ -67,6 +69,14 @@ func (msg *jsonrpcMessage) isResponse() bool {
 
 func (msg *jsonrpcMessage) hasValidID() bool {
 	return len(msg.ID) > 0 && msg.ID[0] != '{' && msg.ID[0] != '['
+}
+
+func (msg *jsonrpcMessage) isSubscribe() bool {
+	return strings.HasSuffix(msg.Method, subscribeMethodSuffix)
+}
+
+func (msg *jsonrpcMessage) isUnsubscribe() bool {
+	return strings.HasSuffix(msg.Method, unsubscribeMethodSuffix)
 }
 
 func (msg *jsonrpcMessage) namespace() string {
@@ -179,13 +189,22 @@ func (c *jsonCodec) remoteAddr() string {
 	return c.remote
 }
 
-func (c *jsonCodec) readBatch() (messages *jsonrpcMessage, err error) {
+func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err error) {
+	// Decode the next JSON object in the input stream.
+	// This verifies basic syntax, etc.
 	var rawmsg json.RawMessage
 	if err := c.decode(&rawmsg); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	messages = parseMessage(rawmsg)
-	return messages, nil
+	messages, batch = parseMessage(rawmsg)
+	for i, msg := range messages {
+		if msg == nil {
+			// Message is JSON 'null'. Replace with zero value so it
+			// will be treated like any other invalid message.
+			messages[i] = new(jsonrpcMessage)
+		}
+	}
+	return messages, batch, nil
 }
 
 func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}) error {
@@ -212,10 +231,32 @@ func (c *jsonCodec) closed() <-chan interface{} {
 	return c.closeCh
 }
 
-func parseMessage(raw json.RawMessage) *jsonrpcMessage {
-	var msg jsonrpcMessage
-	json.Unmarshal(raw, &msg)
-	return &msg
+func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
+	if !isBatch(raw) {
+		msgs := []*jsonrpcMessage{{}}
+		json.Unmarshal(raw, &msgs[0])
+		return msgs, false
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.Token() // skip '['
+	var msgs []*jsonrpcMessage
+	for dec.More() {
+		msgs = append(msgs, new(jsonrpcMessage))
+		dec.Decode(&msgs[len(msgs)-1])
+	}
+	return msgs, true
+}
+
+// isBatch returns true when the first non-whitespace characters is '['
+func isBatch(raw json.RawMessage) bool {
+	for _, c := range raw {
+		// skip insignificant whitespace (http://www.ietf.org/rfc/rfc4627.txt)
+		if c == 0x20 || c == 0x09 || c == 0x0a || c == 0x0d {
+			continue
+		}
+		return c == '['
+	}
+	return false
 }
 
 func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]reflect.Value, error) {

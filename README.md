@@ -42,9 +42,10 @@ see [docker-compose.yml](./docker-compose.yml) [dockerfile](./Dockerfile).
 For convenience we provide the following commands:
 ```sh
 make images # build docker images than contain executable AMC binaries
-make up # alias for docker-compose up -d 
-make down # alias for docker-compose down
-make data-clean # clean docker data
+make up # alias for docker-compose up -d && docker-compose logs -f 
+make down # alias for docker-compose down && clean docker data
+make start #  alias for docker-compose start && docker-compose logs -f 
+make stop # alias for docker-compose stop
 ```
 
 ## Executables
@@ -59,10 +60,12 @@ directory.
 
 ## AMC ports
 
-|  Port | Protocol  |               Purpose               |  Expose |
+| Port  | Protocol  |               Purpose               |  Expose |
 |:-----:|:---------:|:-----------------------------------:|:-------:|
 | 61016 | TCP & UDP | amc/msg/ && amc/discover && amc/app |  Public |
-| 20012 |    TCP    |              Json rpc               |  Public |
+| 20012 |    TCP    |            Json rpc/HTTP            |  Public |
+| 20013 |    TCP    |         Json rpc/Websocket          |  Public |
+| 4000  |    TCP    |         BlockChain Explorer         |  Public |
 
 ## License
 The AmazeChain library is licensed under the

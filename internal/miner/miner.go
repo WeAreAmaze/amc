@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
@@ -30,8 +31,9 @@ import (
 
 type Miner struct {
 	coinbase types.Address
-	engine   consensus.IEngine
+	engine   consensus.Engine
 	worker   *worker
+	txsPool  txs_pool.ITxsPool
 
 	startCh chan types.Address
 	stopCh  chan struct{}
@@ -43,15 +45,16 @@ type Miner struct {
 	group *errgroup.Group
 }
 
-func NewMiner(ctx context.Context, conf *conf.ConsensusConfig, bc common.IBlockChain, engine consensus.IEngine, isLocalBlock func(header *block.Header) bool) *Miner {
+func NewMiner(ctx context.Context, conf *conf.ConsensusConfig, bc common.IBlockChain, engine consensus.Engine, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool) *Miner {
 	group, errCtx := errgroup.WithContext(ctx)
 	miner := &Miner{
 		engine:  engine,
+		txsPool: txsPool,
 		startCh: make(chan types.Address),
 		stopCh:  make(chan struct{}),
 		group:   group,
 		ctx:     errCtx,
-		worker:  newWorker(errCtx, group, conf, engine, bc, isLocalBlock, false),
+		worker:  newWorker(errCtx, group, conf, engine, bc, txsPool, isLocalBlock, false),
 	}
 
 	return miner

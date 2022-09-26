@@ -16,21 +16,26 @@
 
 package types
 
-//func TestBloom_Contain(t *testing.T) {
-//	bloom, _ := NewBloom(10)
-//	hashes := []Hash{{0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07}, {0x08}, {0x09}, {0x0a}}
-//	for _, hash := range hashes {
-//		bloom.add(hash.Bytes())
-//	}
-//
-//	searchHash := []Hash{{0x10}, {0x11}, {0x01}}
-//
-//	for _, hash := range searchHash {
-//		if bloom.Contain(hash.Bytes()) {
-//			t.Logf("hash %d is in hashes %d", hash, hashes)
-//		} else {
-//			t.Logf("hash %d is not in hashes %d", hash, hashes)
-//		}
-//	}
-//
-//}
+import "testing"
+
+func TestBloom_Contain(t *testing.T) {
+	bloom, _ := NewBloom(10)
+	hashes := []Hash{{0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07}, {0x08}, {0x09}, {0x0a}}
+	for _, hash := range hashes {
+		bloom.Add(hash.Bytes())
+	}
+
+	searchHash := []Hash{{0x10}, {0x11}, {0x01}}
+
+	for _, hash := range searchHash {
+		if bloom.Contain(hash.Bytes()) {
+			t.Logf("hash %d is in hashes %d", hash, hashes)
+		} else {
+			t.Logf("hash %d is not in hashes %d", hash, hashes)
+		}
+	}
+
+	b, _ := bloom.Marshal()
+	t.Logf("bloom Marshal: %+v", b)
+
+}

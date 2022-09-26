@@ -19,7 +19,6 @@ package jsonrpc
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"reflect"
 	"strconv"
 	"strings"
@@ -29,37 +28,82 @@ import (
 	"github.com/amazechain/amc/log"
 )
 
-var (
-	ErrNotificationsUnsupported = errors.New("notifications not supported")
-	ErrSubscriptionNotFound     = errors.New("subscription not found")
-)
-
 type handler struct {
 	reg            *serviceRegistry
+	unsubscribeCb  *callback
+	idgen          func() ID             // subscription ID generator
 	respWait       map[string]*requestOp // active client requests
 	callWG         sync.WaitGroup        // pending call goroutines
 	rootCtx        context.Context       // canceled by close()
 	cancelRoot     func()                // cancel function for rootCtx
 	conn           jsonWriter            // where responses will be sent
 	allowSubscribe bool
+
+	subLock    sync.Mutex
+	serverSubs map[ID]*Subscription
+	clientSubs map[string]*ClientSubscription // active client subscriptions
 }
 
 type callProc struct {
-	ctx context.Context
+	ctx       context.Context
+	notifiers []*Notifier
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, reg *serviceRegistry) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
-		reg:        reg,
-		conn:       conn,
-		respWait:   make(map[string]*requestOp),
-		rootCtx:    rootCtx,
-		cancelRoot: cancelRoot,
+		reg:            reg,
+		idgen:          idgen,
+		conn:           conn,
+		respWait:       make(map[string]*requestOp),
+		rootCtx:        rootCtx,
+		cancelRoot:     cancelRoot,
+		allowSubscribe: true,
+		serverSubs:     make(map[ID]*Subscription),
+		clientSubs:     make(map[string]*ClientSubscription),
 	}
 	if conn.remoteAddr() != "" {
 	}
+	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 	return h
+}
+
+// handleBatch executes all messages in a batch and returns the responses.
+func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
+	// Emit error response for empty batches:
+	if len(msgs) == 0 {
+		h.startCallProc(func(cp *callProc) {
+			h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{"empty batch"}))
+		})
+		return
+	}
+
+	// Handle non-call messages first:
+	calls := make([]*jsonrpcMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		if handled := h.handleImmediate(msg); !handled {
+			calls = append(calls, msg)
+		}
+	}
+	if len(calls) == 0 {
+		return
+	}
+	// Process calls on a goroutine because they may block indefinitely:
+	h.startCallProc(func(cp *callProc) {
+		answers := make([]*jsonrpcMessage, 0, len(msgs))
+		for _, msg := range calls {
+			if answer := h.handleCallMsg(cp, msg); answer != nil {
+				answers = append(answers, answer)
+			}
+		}
+		h.addSubscriptions(cp.notifiers)
+		if len(answers) > 0 {
+			h.conn.writeJSON(cp.ctx, answers)
+		}
+		for _, n := range cp.notifiers {
+			n.activate()
+		}
+	})
 }
 
 func (h *handler) handleMsg(msg *jsonrpcMessage) {
@@ -68,8 +112,12 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 	}
 	h.startCallProc(func(cp *callProc) {
 		answer := h.handleCallMsg(cp, msg)
+		h.addSubscriptions(cp.notifiers)
 		if answer != nil {
 			h.conn.writeJSON(cp.ctx, answer)
+		}
+		for _, n := range cp.notifiers {
+			n.activate()
 		}
 	})
 }
@@ -78,6 +126,7 @@ func (h *handler) close(err error, inflightReq *requestOp) {
 	h.cancelAllRequests(err, inflightReq)
 	h.callWG.Wait()
 	h.cancelRoot()
+	h.cancelServerSubscriptions(err)
 }
 
 func (h *handler) addRequestOp(op *requestOp) {
@@ -107,6 +156,29 @@ func (h *handler) cancelAllRequests(err error, inflightReq *requestOp) {
 			close(op.resp)
 			didClose[op] = true
 		}
+	}
+}
+
+func (h *handler) addSubscriptions(nn []*Notifier) {
+	h.subLock.Lock()
+	defer h.subLock.Unlock()
+
+	for _, n := range nn {
+		if sub := n.takeSubscription(); sub != nil {
+			h.serverSubs[sub.ID] = sub
+		}
+	}
+}
+
+// cancelServerSubscriptions removes all subscriptions and closes their error channels.
+func (h *handler) cancelServerSubscriptions(err error) {
+	h.subLock.Lock()
+	defer h.subLock.Unlock()
+
+	for id, s := range h.serverSubs {
+		s.err <- err
+		close(s.err)
+		delete(h.serverSubs, id)
 	}
 }
 
@@ -168,7 +240,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			log.Warn("Served "+msg.Method, ctx)
+			//log.Warn("Served "+msg.Method, ctx)
 		} else {
 			log.Debugf("Served "+msg.Method, ctx)
 		}
@@ -181,7 +253,15 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 }
 
 func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
-	callb := h.reg.callback(msg.Method)
+	if msg.isSubscribe() {
+		return h.handleSubscribe(cp, msg)
+	}
+	var callb *callback
+	if msg.isUnsubscribe() {
+		callb = h.unsubscribeCb
+	} else {
+		callb = h.reg.callback(msg.Method)
+	}
 	if callb == nil {
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
@@ -193,12 +273,59 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	return answer
 }
 
+// handleSubscribe processes *_subscribe method calls.
+func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
+	if !h.allowSubscribe {
+		return msg.errorResponse(ErrNotificationsUnsupported)
+	}
+
+	// Subscription method name is first argument.
+	name, err := parseSubscriptionName(msg.Params)
+	if err != nil {
+		return msg.errorResponse(&invalidParamsError{err.Error()})
+	}
+	namespace := msg.namespace()
+	callb := h.reg.subscription(namespace, name)
+	if callb == nil {
+		return msg.errorResponse(&subscriptionNotFoundError{namespace, name})
+	}
+
+	// Parse subscription name arg too, but remove it before calling the callback.
+	argTypes := append([]reflect.Type{stringType}, callb.argTypes...)
+	args, err := parsePositionalArguments(msg.Params, argTypes)
+	if err != nil {
+		return msg.errorResponse(&invalidParamsError{err.Error()})
+	}
+	args = args[1:]
+
+	// Install notifier in context so the subscription handler can find it.
+	n := &Notifier{h: h, namespace: namespace}
+	cp.notifiers = append(cp.notifiers, n)
+	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
+
+	return h.runMethod(ctx, msg, callb, args)
+}
+
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
 		return msg.errorResponse(err)
 	}
 	return msg.response(result)
+}
+
+// unsubscribe is the callback function for all *_unsubscribe calls.
+func (h *handler) unsubscribe(ctx context.Context, id ID) (bool, error) {
+	h.subLock.Lock()
+	defer h.subLock.Unlock()
+
+	s := h.serverSubs[id]
+	if s == nil {
+		return false, ErrSubscriptionNotFound
+	}
+	close(s.err)
+	delete(h.serverSubs, id)
+	return true, nil
 }
 
 type idForLog struct{ json.RawMessage }

@@ -23,18 +23,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-//type IBlockChain interface {
-//	CurrentBlock() *block_proto.Block
-//	Blocks() *block_proto.Blocks
-//	Start() error
-//	GenesisBlock() *block_proto.Block
-//
-//	GetHeaderByNumber(number uint64) (*block_proto.Header, error)
-//	GetHeaderByHash(h types.Hash) (*block_proto.Header, error)
-//
-//	NewBlockHandler(payload []byte, peer peer.ID) error
-//}
-
 type IHeaderChain interface {
 	GetHeaderByNumber(number types.Int256) (block.IHeader, error)
 	GetHeaderByHash(h types.Hash) (block.IHeader, error)
@@ -52,14 +40,19 @@ type IBlockChain interface {
 	NewBlockHandler(payload []byte, peer peer.ID) error
 	InsertChain(blocks []block.IBlock) (int, error)
 	InsertBlock(blocks []block.IBlock, isSync bool) (int, error)
-	SetEngine(engine consensus.IEngine)
+	SetEngine(engine consensus.Engine)
 	GetBlocksFromHash(hash types.Hash, n int) (blocks []block.IBlock)
 	SealedBlock(b block.IBlock)
-	Engine() consensus.IEngine
+	Engine() consensus.Engine
 	GetReceipts(blockHash types.Hash) (block.Receipts, error)
+	GetLogs(blockHash types.Hash) ([][]*block.Log, error)
 	SetHead(head uint64) error
 
 	//
 	GetHeader(types.Hash, types.Int256) block.IHeader
+	// alias for GetBlocksFromHash?
+	GetBlock(hash types.Hash) block.IBlock
 	StateAt(root types.Hash) IStateDB
+
+	GetTd(hash types.Hash) types.Int256
 }

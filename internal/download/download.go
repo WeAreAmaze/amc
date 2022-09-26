@@ -254,17 +254,17 @@ func (d *Downloader) pubSubLoop() {
 	}()
 	defer d.cancel()
 
-	log.Infof("joined block topic pubsub")
-
 	highestBlockCh := make(chan common.ChainHighestBlock)
 	defer close(highestBlockCh)
 	highestSub := event.GlobalEvent.Subscribe(highestBlockCh)
 	defer highestSub.Unsubscribe()
 
+	timer := time.NewTicker(10 * time.Second)
+
 	for {
 		select {
-		//case <-d.ctx.Done():
-		//	return
+		case <-d.ctx.Done():
+			return
 		case err := <-highestSub.Err():
 			log.Debugf("receive a err from highestSub %v", err)
 			return
@@ -278,6 +278,8 @@ func (d *Downloader) pubSubLoop() {
 					d.bodyResultStore[highestBlock.Block.Number64()] = highestBlock.Block.ToProtoMessage().(*types_pb.PBlock)
 				}
 			}
+		case <-timer.C:
+			d.peersInfo.state()
 		}
 	}
 }

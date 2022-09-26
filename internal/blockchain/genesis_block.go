@@ -17,7 +17,7 @@
 package blockchain
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/db"
@@ -25,6 +25,7 @@ import (
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/kv"
 	"github.com/amazechain/amc/modules/statedb"
+	"github.com/amazechain/amc/utils"
 	"math/big"
 )
 
@@ -33,7 +34,7 @@ type GenesisBlock struct {
 	*conf.GenesisBlockConfig
 }
 
-func NewGenesisBlockFromConfig(config *conf.GenesisBlockConfig, db db.IDatabase, changeDB kv.RwDB) (block2.IBlock, error) {
+func NewGenesisBlockFromConfig(config *conf.GenesisBlockConfig, engineName string, db db.IDatabase, changeDB kv.RwDB) (block2.IBlock, error) {
 
 	state := statedb.NewStateDB(types.Hash{}, db, changeDB)
 
@@ -55,13 +56,37 @@ func NewGenesisBlockFromConfig(config *conf.GenesisBlockConfig, db db.IDatabase,
 
 	root := state.IntermediateRoot()
 
-	//todo
-	engine, err := json.Marshal(config.Engine)
-	if err != nil {
-		return nil, err
-	}
+	var ExtraData []byte
 
-	engineHash := types.BytesToHash(engine)
+	switch engineName {
+	case "APoaEngine":
+
+		var signers []types.Address
+
+		for _, miner := range config.Miners {
+			public, err := utils.StringToPublic(miner)
+			if err != nil {
+				return nil, err
+			}
+			addr := types.PublicToAddress(public)
+			signers = append(signers, addr)
+		}
+		// Sort the signers and embed into the extra-data section
+		for i := 0; i < len(signers); i++ {
+			for j := i + 1; j < len(signers); j++ {
+				if bytes.Compare(signers[i][:], signers[j][:]) > 0 {
+					signers[i], signers[j] = signers[j], signers[i]
+				}
+			}
+		}
+		ExtraData = make([]byte, 32+len(signers)*types.AddressLength+65)
+		for i, signer := range signers {
+			copy(ExtraData[32+i*types.AddressLength:], signer[:])
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid engine name %s", engineName)
+	}
 
 	header := block2.Header{
 		ParentHash:  types.Hash{0},
@@ -74,7 +99,7 @@ func NewGenesisBlockFromConfig(config *conf.GenesisBlockConfig, db db.IDatabase,
 		GasLimit:    500000000,
 		GasUsed:     0,
 		Time:        uint64(config.Timestamp),
-		Extra:       engineHash[:],
+		Extra:       ExtraData,
 		MixDigest:   types.Hash{0},
 		Nonce:       block2.BlockNonce{0},
 		BaseFee:     types.NewInt64(0),
@@ -82,7 +107,7 @@ func NewGenesisBlockFromConfig(config *conf.GenesisBlockConfig, db db.IDatabase,
 
 	block := block2.NewBlock(&header, nil)
 
-	_, err = state.Commit(types.NewInt64(0))
+	_, err := state.Commit(types.NewInt64(0))
 
 	return block, err
 }

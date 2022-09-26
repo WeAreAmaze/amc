@@ -21,12 +21,12 @@ type ConsensusConfig struct {
 	BlsKey     string     `json:"bls" yaml:"bls"`
 	MinerKey   string     `json:"miner" yaml:"miner"`
 	Period     uint64     `json:"period" yaml:"period"`
-	MPoa       MPoaConfig `json:"poa" yaml:"poa"`
+	APoa       APoaConfig `json:"poa" yaml:"poa"`
 	GasFloor   uint64     `json:"gasFloor" yaml:"gasFloor"` // Target gas floor for mined blocks.
 	GasCeil    uint64     `json:"gasCeil" yaml:"gasCeil"`   // Target gas ceiling for mined blocks.
 }
 
-type MPoaConfig struct {
+type APoaConfig struct {
 	Epoch              uint64 `json:"epoch" yaml:"epoch"`
 	CheckpointInterval uint64 `json:"checkpointInterval" yaml:"checkpointInterval"`
 	InmemorySnapshots  int    `json:"inmemorySnapshots" yaml:"inmemorySnapshots"`

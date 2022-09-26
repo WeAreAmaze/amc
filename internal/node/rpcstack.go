@@ -41,6 +41,14 @@ type httpConfig struct {
 	prefix             string
 }
 
+// wsConfig is the JSON-RPC/Websocket configuration
+type wsConfig struct {
+	Origins   []string
+	Modules   []string
+	prefix    string // path prefix on which to mount ws handler
+	jwtSecret []byte // optional JWT secret
+}
+
 type rpcHandler struct {
 	http.Handler
 	server *jsonrpc.Server
@@ -55,6 +63,10 @@ type httpServer struct {
 	httpConfig  httpConfig
 	httpHandler atomic.Value
 
+	// WebSocket handler things.
+	wsConfig  wsConfig
+	wsHandler atomic.Value // *rpcHandler
+
 	endpoint string
 	host     string
 	port     int
@@ -66,6 +78,7 @@ func newHTTPServer() *httpServer {
 	h := &httpServer{handlerNames: make(map[string]string)}
 
 	h.httpHandler.Store((*rpcHandler)(nil))
+	h.wsHandler.Store((*rpcHandler)(nil))
 	return h
 }
 
@@ -110,10 +123,19 @@ func (h *httpServer) start() error {
 	listener, err := net.Listen("tcp", h.endpoint)
 	if err != nil {
 		h.disableRPC()
+		h.disableWS()
 		return err
 	}
 	h.listener = listener
 	go h.server.Serve(listener)
+
+	if h.wsAllowed() {
+		url := fmt.Sprintf("ws://%v", listener.Addr())
+		if h.wsConfig.prefix != "" {
+			url += h.wsConfig.prefix
+		}
+		log.Info("WebSocket enabled", "url", url)
+	}
 
 	if !h.rpcAllowed() {
 		return nil
@@ -142,6 +164,16 @@ func (h *httpServer) start() error {
 }
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// check if ws request and serve if ws enabled
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil && isWebsocket(r) {
+		if checkPath(r, h.wsConfig.prefix) {
+			ws.ServeHTTP(w, r)
+		}
+		return
+	}
+	// if http-rpc is enabled, try to serve request
+
 	rpc := h.httpHandler.Load().(*rpcHandler)
 	if rpc != nil {
 		muxHandler, pattern := h.mux.Handler(r)
@@ -156,6 +188,55 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
+}
+
+// enableWS turns on JSON-RPC over WebSocket on the server.
+func (h *httpServer) enableWS(apis []jsonrpc.API, config wsConfig) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.wsAllowed() {
+		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
+	}
+	// Create RPC server and handler.
+	srv := jsonrpc.NewServer()
+	if err := RegisterApisFromWhitelist(apis, config.Modules, srv, false); err != nil {
+		return err
+	}
+	h.wsConfig = config
+	h.wsHandler.Store(&rpcHandler{
+		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
+		server:  srv,
+	})
+	return nil
+}
+
+// stopWS disables JSON-RPC over WebSocket and also stops the server if it only serves WebSocket.
+func (h *httpServer) stopWS() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.disableWS() {
+		if !h.rpcAllowed() {
+			h.doStop()
+		}
+	}
+}
+
+// disableWS disables the WebSocket handler. This is internal, the caller must hold h.mu.
+func (h *httpServer) disableWS() bool {
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil {
+		h.wsHandler.Store((*rpcHandler)(nil))
+		ws.server.Stop()
+	}
+	return ws != nil
+}
+
+// isWebsocket checks the header of an http request for a websocket upgrade request.
+func isWebsocket(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
 }
 
 func checkPath(r *http.Request, path string) bool {
@@ -238,9 +319,22 @@ func (h *httpServer) rpcAllowed() bool {
 	return h.httpHandler.Load().(*rpcHandler) != nil
 }
 
+// wsAllowed returns true when JSON-RPC over WebSocket is enabled.
+func (h *httpServer) wsAllowed() bool {
+	return h.wsHandler.Load().(*rpcHandler) != nil
+}
+
 func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string) http.Handler {
 	handler := newVHostHandler(vhosts, srv)
 	return newGzipHandler(handler)
+}
+
+// NewWSHandlerStack returns a wrapped ws-related handler.
+func NewWSHandlerStack(srv http.Handler, jwtSecret []byte) http.Handler {
+	if len(jwtSecret) != 0 {
+		return newJWTHandler(jwtSecret, srv)
+	}
+	return srv
 }
 
 type virtualHostHandler struct {

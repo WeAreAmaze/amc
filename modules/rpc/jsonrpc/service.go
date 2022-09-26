@@ -29,9 +29,10 @@ import (
 )
 
 var (
-	contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
-	errorType   = reflect.TypeOf((*error)(nil)).Elem()
-	stringType  = reflect.TypeOf("")
+	contextType      = reflect.TypeOf((*context.Context)(nil)).Elem()
+	errorType        = reflect.TypeOf((*error)(nil)).Elem()
+	subscriptionType = reflect.TypeOf(Subscription{})
+	stringType       = reflect.TypeOf("")
 )
 
 type serviceRegistry struct {
@@ -40,16 +41,18 @@ type serviceRegistry struct {
 }
 
 type service struct {
-	name      string
-	callbacks map[string]*callback
+	name          string
+	callbacks     map[string]*callback
+	subscriptions map[string]*callback // available subscriptions/notifications
 }
 
 type callback struct {
-	fn       reflect.Value
-	rcvr     reflect.Value
-	argTypes []reflect.Type
-	hasCtx   bool
-	errPos   int
+	fn          reflect.Value
+	rcvr        reflect.Value
+	argTypes    []reflect.Type
+	hasCtx      bool
+	errPos      int
+	isSubscribe bool // true if this is a subscription callback
 }
 
 func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
@@ -70,13 +73,18 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 	svc, ok := r.services[name]
 	if !ok {
 		svc = service{
-			name:      name,
-			callbacks: make(map[string]*callback),
+			name:          name,
+			callbacks:     make(map[string]*callback),
+			subscriptions: make(map[string]*callback),
 		}
 		r.services[name] = svc
 	}
 	for name, cb := range callbacks {
-		svc.callbacks[name] = cb
+		if cb.isSubscribe {
+			svc.subscriptions[name] = cb
+		} else {
+			svc.callbacks[name] = cb
+		}
 	}
 	return nil
 }
@@ -91,6 +99,13 @@ func (r *serviceRegistry) callback(method string) *callback {
 	// todo
 	//log.Info("meth %+v", r.services[elem[0]].callbacks)
 	return r.services[elem[0]].callbacks[elem[1]]
+}
+
+// subscription returns a subscription callback in the given service.
+func (r *serviceRegistry) subscription(service, name string) *callback {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.services[service].subscriptions[name]
 }
 
 func suitableCallbacks(receiver reflect.Value) map[string]*callback {
@@ -113,7 +128,7 @@ func suitableCallbacks(receiver reflect.Value) map[string]*callback {
 
 func newCallback(receiver, fn reflect.Value) *callback {
 	fntype := fn.Type()
-	c := &callback{fn: fn, rcvr: receiver, errPos: -1}
+	c := &callback{fn: fn, rcvr: receiver, errPos: -1, isSubscribe: isPubSub(fntype)}
 	c.makeArgTypes()
 
 	outs := make([]reflect.Type, fntype.NumOut())
@@ -181,11 +196,39 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 	return results[0].Interface(), nil
 }
 
+// Is t context.Context or *context.Context?
+func isContextType(t reflect.Type) bool {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t == contextType
+}
+
 func isErrorType(t reflect.Type) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
 	return t.Implements(errorType)
+}
+
+// Is t Subscription or *Subscription?
+func isSubscriptionType(t reflect.Type) bool {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t == subscriptionType
+}
+
+// isPubSub tests whether the given method has as as first argument a context.Context and
+// returns the pair (Subscription, error).
+func isPubSub(methodType reflect.Type) bool {
+	// numIn(0) is the receiver type
+	if methodType.NumIn() < 2 || methodType.NumOut() != 2 {
+		return false
+	}
+	return isContextType(methodType.In(1)) &&
+		isSubscriptionType(methodType.Out(0)) &&
+		isErrorType(methodType.Out(1))
 }
 
 func formatName(name string) string {

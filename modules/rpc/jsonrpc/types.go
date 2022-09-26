@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/internal/avm/common"
 	"math"
+	"strconv"
 	"strings"
 )
 
@@ -31,7 +32,7 @@ type API struct {
 }
 
 type ServerCodec interface {
-	readBatch() (msgs *jsonrpcMessage, err error)
+	readBatch() (msgs []*jsonrpcMessage, isBatch bool, err error)
 	close()
 	jsonWriter
 }
@@ -173,4 +174,14 @@ func BlockNumberOrHashWithHash(hash common.Hash, canonical bool) BlockNumberOrHa
 		BlockHash:        &hash,
 		RequireCanonical: canonical,
 	}
+}
+
+func (bnh *BlockNumberOrHash) String() string {
+	if bnh.BlockNumber != nil {
+		return strconv.Itoa(int(*bnh.BlockNumber))
+	}
+	if bnh.BlockHash != nil {
+		return bnh.BlockHash.String()
+	}
+	return "nil"
 }

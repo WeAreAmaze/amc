@@ -32,7 +32,7 @@ import (
 
 type ChainContext interface {
 	// Engine retrieves the chain's consensus engine.
-	Engine() consensus.IEngine
+	Engine() consensus.Engine
 
 	// GetHeader returns the hash corresponding to their hash.
 	GetHeader(amc_types.Hash, amc_types.Int256) block.IHeader
@@ -42,7 +42,8 @@ func NewBlockContext(header block.IHeader, chain ChainContext, author *amc_types
 	var beneficiary *common.Address
 	h := header.(*block.Header)
 	if author == nil {
-		beneficiary = types.FromAmcAddress(chain.Engine().Author(h))
+		author, _ := chain.Engine().Author(h)
+		beneficiary = types.FromAmcAddress(author)
 	} else {
 		beneficiary = types.FromAmcAddress(*author)
 	}

@@ -23,11 +23,12 @@ import (
 	mvm_common "github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
+	"github.com/amazechain/amc/internal/consensus"
 	"math/big"
 )
 
-func RPCMarshalBlock(block block.IBlock, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(block.Header())
+func RPCMarshalBlock(block block.IBlock, inclTx bool, fullTx bool, engine consensus.Engine) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(block.Header(), engine)
 	fields["size"] = hexutil.Uint64(block.Size())
 
 	if inclTx {
@@ -79,10 +80,12 @@ func newRPCTransactionFromBlockIndex(b block.IBlock, index uint64) *RPCTransacti
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head block.IHeader) map[string]interface{} {
+func RPCMarshalHeader(head block.IHeader, engine consensus.Engine) map[string]interface{} {
 	//todo
 	header := head.(*block.Header)
 	b := [256]byte{}
+
+	author, _ := engine.Author(header)
 	result := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number64().ToBig()),
 		"hash":             mvm_types.FromAmcHash(header.Hash()),
@@ -90,8 +93,9 @@ func RPCMarshalHeader(head block.IHeader) map[string]interface{} {
 		"nonce":            header.Nonce,
 		"mixHash":          mvm_types.FromAmcHash(header.MixDigest),
 		"sha3Uncles":       mvm_common.Hash{},
-		"miner":            mvm_types.FromAmcAddress(header.Coinbase),
+		"miner":            mvm_types.FromAmcAddress(author),
 		"difficulty":       (*hexutil.Big)(header.Difficulty.ToBig()),
+		"totalDifficulty":  (*hexutil.Big)(big.NewInt(100)),
 		"extraData":        hexutil.Bytes(header.Extra),
 		"size":             hexutil.Uint64(header.Size()),
 		"gasLimit":         hexutil.Uint64(header.GasLimit),

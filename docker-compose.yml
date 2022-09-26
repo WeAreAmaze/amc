@@ -2,6 +2,7 @@ version: '3'
 services:
   bootnode:
     image: amazechain/amc:latest
+    container_name: bootnode
     command:
       - AmazeChain-linux-amd64
       - --data.dir
@@ -12,9 +13,15 @@ services:
       - 'CAMSeTB3AgEBBCBZandzyO1LLLNawa6diRUh/A7FTOkxLlHuaIaQJ2piDqAKBggqhkjOPQMBB6FEA0IABEhI/zTNfeaDp31XUoGwUACXZ1HswgWtJGxYoqq9CIxfEvMl3HnMn2ZVcSz2z590k/CpfnrsTLik/8dUiXBfh2U='
       - --log.level
       - info
+      - --http
       - --http.port
       - '20012'
       - --http.addr
+      - 172.18.0.2
+      - --ws
+      - --ws.port
+      - '20013'
+      - --ws.addr
       - 172.18.0.2
       - --engine.miner
     networks:
@@ -22,7 +29,9 @@ services:
         ipv4_address: 172.18.0.2
     volumes:
       - db_bootnode_1:/amc/data
-    ports: [ "20012:20012" ]
+    ports:
+      - "20012:20012"
+      - "20013:20013"
   node:
     image: amazechain/amc:latest
     command:
@@ -37,8 +46,9 @@ services:
       - '/ip4/172.18.0.3/tcp/61016'
       - --log.level
       - info
+      - --http
       - --http.port
-      - '20012'
+      - '20112'
       - --http.addr
       - 172.18.0.3
       - --engine.miner
@@ -49,6 +59,7 @@ services:
         ipv4_address: 172.18.0.3
     volumes:
       - db_node_1:/amc/data
+    ports: [ "20112:20112" ]
   node2:
     image: amazechain/amc:latest
     command:
@@ -63,8 +74,9 @@ services:
       - '/ip4/172.18.0.4/tcp/61016'
       - --log.level
       - info
+      - --http
       - --http.port
-      - '20012'
+      - '20212'
       - --http.addr
       - 172.18.0.4
       - --engine.miner
@@ -75,15 +87,73 @@ services:
         ipv4_address: 172.18.0.4
     volumes:
       - db_node_2:/amc/data
-#  downloader:
-#    image: amazechain/amc:latest
-#    depends_on:
-#      - node2
-#    networks:
-#      network1:
-#        ipv4_address: 172.18.0.5
-#    volumes:
-#      - db_downloader_1:/amc/data
+    ports: [ "20212:20212" ]
+  downloader:
+    image: amazechain/amc:latest
+    depends_on:
+      - node2
+    command:
+      - AmazeChain-linux-amd64
+      - --data.dir
+      - data
+      - --p2p.bootstrap
+      - '/ip4/172.18.0.2/tcp/61016/p2p/QmRFiu3yisZdfySiRLRhjDcD3ZLeteEo31R9mmKudDhP53'
+      - --p2p.listen
+      - '/ip4/172.18.0.5/tcp/61016'
+      - --log.level
+      - info
+      - --http
+      - --http.port
+      - '20312'
+      - --http.addr
+      - 172.18.0.5
+    networks:
+      network1:
+        ipv4_address: 172.18.0.5
+    volumes:
+      - db_downloader_1:/amc/data
+    ports: [ "20312:20312" ]
+
+  postgres:
+    image: postgres:12
+    restart: on-failure
+    container_name: postgres
+    depends_on:
+      - bootnode
+    volumes:
+      - postgres-data-volume:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    networks:
+      network1:
+        ipv4_address: 172.18.0.6
+  migrate:
+    image: amazechain/amc-explorer:v3
+    depends_on:
+      - postgres
+    env_file:
+      - deployments/config.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blockscout?ssl=false
+    command: mix do ecto.create, ecto.migrate
+    networks:
+      network1:
+        ipv4_address: 172.18.0.7
+  blockscout:
+    image: amazechain/amc-explorer:v3
+    container_name: explorer
+    restart: always
+    depends_on:
+      - postgres
+    ports: [ "4000:4000" ]
+    env_file:
+      - deployments/config.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blockscout?ssl=false
+    command: mix phx.server
+    networks:
+      network1:
+        ipv4_address: 172.18.0.8
 networks:
   network1:
     ipam:
@@ -99,7 +169,12 @@ volumes:
     driver: local
   db_downloader_1:
     driver: local
+  postgres-data-volume:
+    driver: local
 
 # ./AmazeChain --p2p.listen '/ip4/127.0.0.1/tcp/61016' --p2p.key 'CAMSeTB3AgEBBCBZandzyO1LLLNawa6diRUh/A7FTOkxLlHuaIaQJ2piDqAKBggqhkjOPQMBB6FEA0IABEhI/zTNfeaDp31XUoGwUACXZ1HswgWtJGxYoqq9CIxfEvMl3HnMn2ZVcSz2z590k/CpfnrsTLik/8dUiXBfh2U=' --engine.miner --log.level info  --data.dir amc1 --http.port 20012 --http.addr 192.168.0.192
+# 2 bootnode_1 AMCF61C62199512E8E85D7744D513B1B74BBE98AEA1
 # ./AmazeChain --p2p.listen '/ip4/127.0.0.1/tcp/0' --engine.key 'CAESQBaNTjZQnpMsr3xN9dvlJjJpOlFtCQvhq+4LseFJMwg0o8dQa4VIHaSJffujSmtzwP9Z4pt4u7b4lfr33ded/0o=' --engine.miner --log.level info  --data.dir amc2 --http.port 20112 --http.addr 192.168.0.192   --p2p.bootstrap '/ip4/127.0.0.1/tcp/61016/p2p/QmRFiu3yisZdfySiRLRhjDcD3ZLeteEo31R9mmKudDhP53'
+# 1 node2_1  AMC4456CAF0E5334AF340BC58CE548B191B66BC0DE4
 # ./AmazeChain --p2p.listen '/ip4/127.0.0.1/tcp/0' --engine.key 'CAESQMkmmtQ929lbMw6p7oi+uRszHLPxlZHE7rIpap2AWJxlOBKeFNR38jYntoAYnj6aKuP4zj8fuLwiDkC+24fuNO0=' --engine.miner --log.level info --data.dir  amc3 --http.port 20212 --http.addr 192.168.0.192   --p2p.bootstrap '/ip4/127.0.0.1/tcp/61016/p2p/QmRFiu3yisZdfySiRLRhjDcD3ZLeteEo31R9mmKudDhP53'
+# 3 node_1 AMCF7AD10E678664DD635060A60BD4685B27EC5D75D

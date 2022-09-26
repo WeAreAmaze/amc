@@ -1008,13 +1008,13 @@ func (pool *TxsPool) runReorg(done chan struct{}, reset *txspoolResetRequest, di
 		events[addr].Put(tx)
 	}
 	// todo
-	//if len(events) > 0 {
-	//	var txs []*transaction.Transaction
-	//	for _, set := range events {
-	//		txs = append(txs, set.Flatten()...)
-	//	}
-	//	pool.txEvent.Send(NewTxsEvent{txs})
-	//}
+	if len(events) > 0 {
+		var txs []*transaction.Transaction
+		for _, set := range events {
+			txs = append(txs, set.Flatten()...)
+		}
+		event.GlobalEvent.Send(&common.NewTxsEvent{Txs: txs})
+	}
 }
 
 // scheduleLoop
@@ -1179,12 +1179,12 @@ func (pool *TxsPool) Pending(enforceTips bool) map[types.Address][]*transaction.
 	return pending
 }
 
-//Has
+// Has
 func (pool *TxsPool) Has(hash types.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
-//GetTransaction
+// GetTransaction
 func (pool *TxsPool) GetTransaction() (txs []*transaction.Transaction, err error) {
 	//
 	pool.StatsPrint()
@@ -1225,7 +1225,7 @@ func (pool *TxsPool) Nonce(addr types.Address) uint64 {
 	return pool.pendingNonces.get(addr)
 }
 
-//StatsPrint
+// StatsPrint
 func (pool *TxsPool) StatsPrint() {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()

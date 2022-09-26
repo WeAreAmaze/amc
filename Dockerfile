@@ -1,6 +1,7 @@
 # Build
 FROM docker.io/library/golang:1.19-alpine3.15 AS builder
 
+
 # RUN apk add --no-cache gcc musl-dev linux-headers git make
 RUN apk add --no-cache build-base  linux-headers git bash ca-certificates  libstdc++
 

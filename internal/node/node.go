@@ -19,6 +19,7 @@ package node
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	consensus_pb "github.com/amazechain/amc/api/protocol/consensus_proto"
 	"github.com/amazechain/amc/api/protocol/types_pb"
@@ -34,12 +35,11 @@ import (
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/blockchain"
 	"github.com/amazechain/amc/internal/consensus"
-	"github.com/amazechain/amc/internal/consensus/poa"
-	"github.com/amazechain/amc/internal/consensus/solo"
+	"github.com/amazechain/amc/internal/consensus/apoa"
 	"github.com/amazechain/amc/internal/download"
 	"github.com/amazechain/amc/internal/kv"
 	"github.com/amazechain/amc/internal/kv/mdbx"
-	miner2 "github.com/amazechain/amc/internal/miner"
+	"github.com/amazechain/amc/internal/miner"
 	"github.com/amazechain/amc/internal/network"
 	"github.com/amazechain/amc/internal/pubsub"
 	"github.com/amazechain/amc/internal/txspool"
@@ -63,13 +63,13 @@ type Node struct {
 	config *conf.Config
 
 	//engine       consensus.IEngine
-	miner        *miner2.Miner
+	miner        *miner.Miner
 	pubsubServer common.IPubSub
 	genesisBlock block.IBlock
 	service      common.INetwork
 	peers        map[peer.ID]common.Peer
 	blocks       common.IBlockChain
-	engine       consensus.IEngine
+	engine       consensus.Engine
 	db           db.IDatabase
 	txspool      txs_pool.ITxsPool
 	txsFetcher   *txspool.TxsFetcher
@@ -89,6 +89,7 @@ type Node struct {
 
 	http          *httpServer
 	ipc           *ipcServer
+	ws            *httpServer
 	inprocHandler *jsonrpc.Server
 }
 
@@ -129,16 +130,16 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
-	genesisBlock, err = rawdb.LoadGenesis(chainDB)
+	genesisBlock, err = rawdb.GetGenesis(chainDB)
 	if err != nil {
 		log.Infof("genesis block")
 
-		genesisBlock, err = blockchain.NewGenesisBlockFromConfig(&cfg.GenesisBlockCfg, chainDB, changeDB)
+		genesisBlock, err = blockchain.NewGenesisBlockFromConfig(&cfg.GenesisBlockCfg, cfg.GenesisBlockCfg.Engine.EngineName, chainDB, changeDB)
 		if err != nil {
 			return nil, err
 		}
 
-		if err = rawdb.SaveGenesis(chainDB, genesisBlock); err != nil {
+		if err = rawdb.StoreGenesis(chainDB, genesisBlock); err != nil {
 			return nil, err
 		}
 		if cfg.GenesisBlockCfg.Miners != nil {
@@ -171,7 +172,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		node         Node
 		downloader   common.IDownloader
 		peers        = map[peer.ID]common.Peer{}
-		engine       consensus.IEngine
+		engine       consensus.Engine
 		//err        error
 	)
 
@@ -209,16 +210,28 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	log.Errorf("cfg info: %v", cfg.GenesisBlockCfg)
 
 	switch cfg.GenesisBlockCfg.Engine.EngineName {
-	case "SoloEngine":
-		engine, err = solo.NewSoloEngine(ctx, cfg.GenesisBlockCfg.Engine.MinerKey, false, genesisBlock, bc, pubsubServer, pool)
+	case "APoaEngine":
+		engine = apoa.New(&cfg.GenesisBlockCfg.Engine, chainDB)
+
+		//set miner key
+		minerKey, err := utils.StringToPrivate(cfg.GenesisBlockCfg.Engine.MinerKey)
 		if err != nil {
+			log.Errorf("failed resolver miner key, err: %v", err)
 			return nil, err
 		}
-	case "MPoaEngine":
-		engine, err = poa.NewMPoa(ctx, &cfg.GenesisBlockCfg.Engine, chainDB, bc, pool, pubsubServer)
-		if err != nil {
-			return nil, err
+		addr := types.PrivateToAddress(minerKey)
+		log.Infof("miner address: %s", addr.String())
+
+		//todo~
+		SignerFn := func(signer types.Address, mimeType string, message []byte) ([]byte, error) {
+			h := sha256.New()
+			h.Write(signer.Bytes())
+			h.Write([]byte(mimeType))
+			h.Write(message)
+			return h.Sum(nil), nil
 		}
+		engine.(*apoa.Apoa).Authorize(addr, SignerFn)
+
 	default:
 		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Engine.EngineName)
 	}
@@ -231,7 +244,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	_ = s.SetHandler(message.MsgDownloader, downloader.ConnHandler)
 	_ = s.SetHandler(message.MsgTransaction, txsFetcher.ConnHandler)
 
-	miner := miner2.NewMiner(ctx, &cfg.GenesisBlockCfg.Engine, bc, engine, nil)
+	miner := miner.NewMiner(ctx, &cfg.GenesisBlockCfg.Engine, bc, engine, pool, nil)
 
 	api := api.NewAPI(pubsubServer, s, peers, bc, chainDB, engine, pool, downloader)
 
@@ -251,9 +264,11 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		downloader:   downloader,
 		txspool:      pool,
 		txsFetcher:   txsFetcher,
+		engine:       engine,
 
 		inprocHandler: jsonrpc.NewServer(),
 		http:          newHTTPServer(),
+		ws:            newHTTPServer(),
 		ipc:           newIPCServer(&cfg.NodeCfg),
 		api:           api,
 	}
@@ -299,6 +314,7 @@ func (n *Node) Start() error {
 
 	if n.config.NodeCfg.HTTP {
 
+		n.rpcAPIs = append(n.rpcAPIs, n.engine.APIs(n.blocks)...)
 		n.rpcAPIs = append(n.rpcAPIs, n.api.Apis()...)
 		if err := n.startRPC(); err != nil {
 			log.Error("failed start jsonrpc service", zap.Error(err))
@@ -432,8 +448,8 @@ func (n *Node) startRPC() error {
 		//todo
 		config := httpConfig{
 			CorsAllowedOrigins: []string{},
-			Vhosts:             []string{},
-			Modules:            []string{"eth", "web3", "debug", "net"},
+			Vhosts:             []string{"*"},
+			Modules:            []string{"eth", "web3", "debug", "net", "apoa", "txpool"},
 			prefix:             "",
 		}
 		port, _ := strconv.Atoi(n.config.NodeCfg.HTTPPort)
@@ -443,12 +459,37 @@ func (n *Node) startRPC() error {
 		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
 			return err
 		}
+		if err := n.http.start(); err != nil {
+			return err
+		}
 	}
-	return n.http.start()
+
+	// Configure WebSocket.
+	if n.config.NodeCfg.WS {
+		port, _ := strconv.Atoi(n.config.NodeCfg.WSPort)
+		if err := n.ws.setListenAddr(n.config.NodeCfg.WSHost, port); err != nil {
+			return err
+		}
+		//todo
+		config := wsConfig{
+			Modules:   []string{"eth", "web3", "debug", "net", "apoa", "txpool"},
+			Origins:   []string{"*"},
+			prefix:    "",
+			jwtSecret: []byte{},
+		}
+		if err := n.ws.enableWS(n.rpcAPIs, config); err != nil {
+			return err
+		}
+		if err := n.ws.start(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (n *Node) stopRPC() {
 	n.http.stop()
+	n.ws.stop()
 	n.ipc.stop()
 	n.stopInProc()
 }

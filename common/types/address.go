@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"golang.org/x/crypto/sha3"
 	"strings"
@@ -150,6 +151,11 @@ func (a Address) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(a.Bytes())
+}
+
+// MarshalText returns the hex representation of a.
+func (a Address) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(a[:]).MarshalText()
 }
 
 func (a *Address) UnmarshalJSON(data []byte) error {

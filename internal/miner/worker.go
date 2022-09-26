@@ -21,6 +21,7 @@ import (
 	"github.com/amazechain/amc/common"
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/transaction"
+	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm"
@@ -102,8 +103,10 @@ const (
 )
 
 type worker struct {
-	engine   consensus.IEngine
-	chain    common.IBlockChain
+	engine  consensus.Engine
+	chain   common.IBlockChain
+	txsPool txs_pool.ITxsPool
+
 	coinbase types.Address
 	conf     *conf.ConsensusConfig
 
@@ -128,11 +131,12 @@ type worker struct {
 	newTaskHook func(*task)
 }
 
-func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusConfig, engine consensus.IEngine, bc common.IBlockChain, isLocalBlock func(header *block2.Header) bool, init bool) *worker {
+func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusConfig, engine consensus.Engine, bc common.IBlockChain, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block2.Header) bool, init bool) *worker {
 	c, cancel := context.WithCancel(ctx)
 	worker := &worker{
 		engine:       engine,
 		chain:        bc,
+		txsPool:      txsPool,
 		conf:         conf,
 		mu:           sync.RWMutex{},
 		startCh:      make(chan struct{}, 1),
@@ -263,7 +267,7 @@ func (w *worker) taskLoop() error {
 			w.pendingTasks[sealHash] = task
 			w.mu.Unlock()
 
-			if err := w.engine.Seal(task.block, w.resultCh, stopCh); err != nil {
+			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 				w.mu.Lock()
 				delete(w.pendingTasks, sealHash)
 				w.mu.Unlock()
@@ -337,9 +341,10 @@ func (w *worker) workLoop(period time.Duration) error {
 		w.mu.Unlock()
 	}
 
+	//?
 	isMiner := func(b block2.IBlock) bool {
-		return w.engine.GetMiner(b) == w.coinbase
-		//return true
+		author, _ := w.engine.Author(b.Header())
+		return author != w.coinbase
 	}
 
 	for {
@@ -368,7 +373,7 @@ func (w *worker) workLoop(period time.Duration) error {
 func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
 	// todo fillTx
 	env.txs = []*transaction.Transaction{}
-	txs, err := w.engine.TxPool().GetTransaction()
+	txs, err := w.txsPool.GetTransaction()
 	if err != nil {
 		log.Warnf("get transaction error, err:%v", err)
 		return err
@@ -424,7 +429,7 @@ func (w *worker) prepareWork(params *generateParams) (*environment, error) {
 
 	log.Debugf("worker prepared Work current number: %s new block: %s gas limit: %d", parent.Number64().String(), header.Number.String(), header.GasLimit)
 
-	if err := w.engine.Prepare(header); err != nil {
+	if err := w.engine.Prepare(w.chain, header); err != nil {
 		return nil, err
 	}
 

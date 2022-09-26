@@ -36,6 +36,14 @@ type StateDB struct {
 	changeDB kv.RwDB
 	root     types.Hash
 	blockNr  types.Int256
+
+	// DB error.
+	// State objects are used by the consensus core and VM which are
+	// unable to deal with database-level errors. Any error that occurs
+	// during a database read is memoized here and will eventually be returned
+	// by StateDB.Commit.
+	dbErr error
+
 	//cache
 	stateObjects      map[types.Address]*stateObject
 	stateObjectsDirty map[types.Address]struct{} // State objects modified in the current execution
@@ -469,4 +477,8 @@ func (s *StateDB) GetLogs(hash types.Hash, blockHash types.Hash) []*block.Log {
 		l.BlockHash = blockHash
 	}
 	return logs
+}
+
+func (s *StateDB) Error() error {
+	return s.dbErr
 }

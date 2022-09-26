@@ -42,7 +42,22 @@ const (
 	subscribeTimeout   = 5 * time.Second
 )
 
+const (
+	// Subscriptions are removed when the subscriber cannot keep up.
+	//
+	// This can be worked around by supplying a channel with sufficiently sized buffer,
+	// but this can be inconvenient and hard to explain in the docs. Another issue with
+	// buffered channels is that the buffer is static even though it might not be needed
+	// most of the time.
+	//
+	// The approach taken here is to maintain a per-subscription linked list buffer
+	// shrinks on demand. If the buffer reaches the size below, the subscription is
+	// dropped.
+	maxClientSubscriptionBuffer = 20000
+)
+
 type Client struct {
+	idgen    func() ID // for subscriptions
 	isHTTP   bool
 	services *serviceRegistry
 
@@ -73,7 +88,7 @@ type clientConn struct {
 
 func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.WithValue(context.Background(), clientContextKey{}, c)
-	handler := newHandler(ctx, conn, c.services)
+	handler := newHandler(ctx, conn, c.idgen, c.services)
 	return &clientConn{conn, handler}
 }
 
@@ -83,7 +98,8 @@ func (cc *clientConn) close(err error, inflightReq *requestOp) {
 }
 
 type readOp struct {
-	msg *jsonrpcMessage
+	msgs  []*jsonrpcMessage
+	batch bool
 }
 
 type requestOp struct {
@@ -135,15 +151,16 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 	if err != nil {
 		return nil, err
 	}
-	c := initClient(conn, new(serviceRegistry))
+	c := initClient(conn, randomIDGenerator(), new(serviceRegistry))
 	c.reconnectFunc = connect
 	return c, nil
 }
 
-func initClient(conn ServerCodec, services *serviceRegistry) *Client {
+func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
 	_, isHTTP := conn.(*httpConn)
 	c := &Client{
 		isHTTP:      isHTTP,
+		idgen:       idgen,
 		services:    services,
 		writeConn:   conn,
 		close:       make(chan struct{}),
@@ -339,7 +356,11 @@ func (c *Client) dispatch(codec ServerCodec) {
 			return
 
 		case op := <-c.readOp:
-			conn.handler.handleMsg(op.msg)
+			if op.batch {
+				conn.handler.handleBatch(op.msgs)
+			} else {
+				conn.handler.handleMsg(op.msgs[0])
+			}
 
 		case err := <-c.readErr:
 			log.Debug("RPC connection read error", "err", err)
@@ -387,7 +408,7 @@ func (c *Client) drainRead() {
 
 func (c *Client) read(codec ServerCodec) {
 	for {
-		msgs, err := codec.readBatch()
+		msgs, batch, err := codec.readBatch()
 		if _, ok := err.(*json.SyntaxError); ok {
 			codec.writeJSON(context.Background(), errorMessage(&parseError{err.Error()}))
 		}
@@ -395,6 +416,6 @@ func (c *Client) read(codec ServerCodec) {
 			c.readErr <- err
 			return
 		}
-		c.readOp <- readOp{msgs}
+		c.readOp <- readOp{msgs, batch}
 	}
 }

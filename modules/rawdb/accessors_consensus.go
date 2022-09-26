@@ -26,6 +26,22 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 )
 
+func GetPoaSnapshot(db db.IDatabase, hash types.Hash) ([]byte, error) {
+	r, err := db.OpenReader(poaSnapshot)
+	if err != nil {
+		return nil, err
+	}
+	return r.Get(hash.Bytes())
+}
+
+func StorePoaSnapshot(db db.IDatabase, hash types.Hash, data []byte) error {
+	w, err := db.OpenWriter(signersDB)
+	if err != nil {
+		return err
+	}
+	return w.Put(hash.Bytes(), data)
+}
+
 func StoreSigners(db db.IDatabase, data []byte) error {
 	w, err := db.OpenWriter(signersDB)
 	if err != nil {

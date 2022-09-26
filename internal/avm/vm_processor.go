@@ -19,7 +19,7 @@ import (
 
 type VMProcessor struct {
 	bc     common.IBlockChain
-	engine consensus.IEngine
+	engine consensus.Engine
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -50,7 +50,7 @@ func (V VMProcessor) Endpoint() []string {
 	panic("implement me")
 }
 
-func NewVMProcessor(ctx context.Context, bc common.IBlockChain, engine consensus.IEngine) *VMProcessor {
+func NewVMProcessor(ctx context.Context, bc common.IBlockChain, engine consensus.Engine) *VMProcessor {
 	vp := &VMProcessor{
 		bc:     bc,
 		engine: engine,
@@ -61,12 +61,13 @@ func NewVMProcessor(ctx context.Context, bc common.IBlockChain, engine consensus
 	return vp
 }
 
-func (p *VMProcessor) Processor(b block.IBlock, db *statedb.StateDB) (block.Receipts, []*types.Log, error) {
+func (p *VMProcessor) Processor(b block.IBlock, db *statedb.StateDB) (block.Receipts, []*block.Log, error) {
 	var (
 		header   = b.Header().(*block.Header)
 		gp       = new(common.GasPool).AddGas(b.GasLimit())
 		usedGas  = new(uint64)
 		receipts block.Receipts
+		allLogs  []*block.Log
 	)
 
 	snap := db.Snapshot()
@@ -91,10 +92,11 @@ func (p *VMProcessor) Processor(b block.IBlock, db *statedb.StateDB) (block.Rece
 			db.RevertToSnapshot(snap)
 			return nil, nil, err
 		}
+		allLogs = append(allLogs, receipt.Logs...)
 		receipts = append(receipts, receipt)
 	}
 
-	return receipts, nil, nil
+	return receipts, allLogs, nil
 }
 
 func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *amc_types.Address, gp *common.GasPool, db common.IStateDB, blockNumber *big.Int, blockHash amc_types.Hash, tx *transaction.Transaction, usedGas *uint64, evm *vm.EVM) (*block.Receipt, error) {

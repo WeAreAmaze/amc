@@ -66,12 +66,12 @@ var DefaultConfig = conf.Config{
 	GenesisBlockCfg: conf.GenesisBlockConfig{
 		ChainID: 0,
 		Engine: conf.ConsensusConfig{
-			EngineName: "MPoaEngine",
+			EngineName: "APoaEngine",
 			BlsKey:     "bls",
 			MinerKey:   "CAESQFGaSBuerRHhigLhgPWQmd1R+1OB8kmXhd3tMyoMu5YL6KaU6PVjKzzJlkZzuh1TsUyzSqTMYZi6w6hQ2AGp/JU=",
-			Period:     1,
+			Period:     8,
 			GasCeil:    30000000,
-			MPoa: conf.MPoaConfig{
+			APoa: conf.APoaConfig{
 				Epoch:              30000,
 				CheckpointInterval: 0,
 				InmemorySnapshots:  0,
@@ -84,10 +84,10 @@ var DefaultConfig = conf.Config{
 		Number:     0,
 		Timestamp:  toLocation(),
 		Alloc: []conf.Allocate{
-			//conf.Allocate{
-			//	Address: "AMCEb8aE6c1A31CeA7B4AfdD247211C863A1e7FB6D6",
-			//	Balance: "1000000000000000000",
-			//},
+			conf.Allocate{
+				Address: "AMCEb8aE6c1A31CeA7B4AfdD247211C863A1e7FB6D6",
+				Balance: "1000000000000000000",
+			},
 		},
 	},
 }

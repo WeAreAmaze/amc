@@ -36,16 +36,20 @@ images:
 up:
 	@echo "docker compose up $(APP_NAME) ..."
 	docker-compose  --project-name $(APP_NAME) up -d
-	@echo "Compile done!"
-
+	docker-compose  --project-name $(APP_NAME) logs -f
 down:
 	@echo "docker compose down $(APP_NAME) ..."
 	docker-compose  --project-name $(APP_NAME) down
-	@echo "done!"
-data-clean:
-	@echo "docker volume rm $(APP_NAME) ..."
 	docker volume ls -q | grep 'amazechain' | xargs -I % docker volume rm %
 	@echo "done!"
+stop:
+	@echo "docker compose stop $(APP_NAME) ..."
+	docker-compose  --project-name $(APP_NAME) stop
+	@echo "done!"
+start:
+	@echo "docker compose stop $(APP_NAME) ..."
+	docker-compose  --project-name $(APP_NAME) start
+	docker-compose  --project-name $(APP_NAME) logs -f
 clean:
 	go clean
 	@rm -rf  build

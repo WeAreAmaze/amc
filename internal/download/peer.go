@@ -93,7 +93,7 @@ func (p *peersInfo) drop(id peer.ID) {
 	delete(p.info, id)
 }
 
-//peerInfoBroadcastLoop
+// peerInfoBroadcastLoop
 func (p *peersInfo) peerInfoBroadcast(Number types.Int256) {
 	log.Debugf("start to broadcast peer info , number is :%v , peer count is %v", Number.Uint64(), len(p.peers))
 	for _, peer := range p.peers {
@@ -102,7 +102,9 @@ func (p *peersInfo) peerInfoBroadcast(Number types.Int256) {
 			SyncType: sync_proto.SyncType_PeerInfoBroadcast,
 			Payload: &sync_proto.SyncTask_SyncPeerInfoBroadcast{
 				SyncPeerInfoBroadcast: &sync_proto.SyncPeerInfoBroadcast{
-					Number: Number,
+					Number:     Number,
+					Difficulty: types.NewInt64(0),
+					//todo
 				},
 			},
 		}
@@ -113,6 +115,12 @@ func (p *peersInfo) peerInfoBroadcast(Number types.Int256) {
 		if err != nil {
 			log.Error("failed to sync peer info", zap.String("peer id", peer.ID().String()), zap.Error(err))
 		}
+	}
+}
+
+func (p *peersInfo) state() {
+	for _, peer := range p.peers {
+		log.Debugf("peer id %s: number %d", peer.ID().String(), peer.CurrentHeight.Uint64())
 	}
 }
 

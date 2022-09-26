@@ -30,12 +30,13 @@ type CodecOption int
 
 type Server struct {
 	services serviceRegistry
+	idgen    func() ID
 	run      int32
 	codecs   mapset.Set
 }
 
 func NewServer() *Server {
-	server := &Server{codecs: mapset.NewSet(), run: 1}
+	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1}
 	rpcService := &RPCService{server}
 	server.RegisterName(JSONRPCApi, rpcService)
 	return server
@@ -55,7 +56,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	s.codecs.Add(codec)
 	defer s.codecs.Remove(codec)
 
-	c := initClient(codec, &s.services)
+	c := initClient(codec, s.idgen, &s.services)
 	<-codec.closed()
 	c.Close()
 }
@@ -65,18 +66,22 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 
-	h := newHandler(ctx, codec, &s.services)
+	h := newHandler(ctx, codec, s.idgen, &s.services)
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 
-	req, err := codec.readBatch()
+	reqs, batch, err := codec.readBatch()
 	if err != nil {
 		if err != io.EOF {
 			codec.writeJSON(ctx, errorMessage(&invalidMessageError{"parse error"}))
 		}
 		return
 	}
-	h.handleMsg(req)
+	if batch {
+		h.handleBatch(reqs)
+	} else {
+		h.handleMsg(reqs[0])
+	}
 }
 
 func (s *Server) Stop() {

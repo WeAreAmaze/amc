@@ -19,14 +19,15 @@ package pubsub
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
+
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/log"
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/host"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"sync"
-	"sync/atomic"
 )
 
 var (

@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -93,6 +94,7 @@ func (h Hash) Bytes() []byte {
 
 func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
+	//return hexutil.Encode(h[:])
 }
 
 func (h Hash) HexBytes() []byte {
@@ -102,7 +104,7 @@ func (h Hash) HexBytes() []byte {
 
 func (h *Hash) SetBytes(b []byte) error {
 	if len(b) != HashLength {
-		return fmt.Errorf("Invalid bytes len %v", string(b))
+		return fmt.Errorf("invalid bytes len %d", len(b))
 	}
 
 	copy(h[:], b[:HashLength])
@@ -135,14 +137,6 @@ func (h *Hash) Unmarshal(data []byte) error {
 	return h.SetBytes(data)
 }
 
-func (h Hash) MarshalJSON() ([]byte, error) {
-	if len(h.Bytes()) <= 0 {
-		return nil, fmt.Errorf("hash is nil")
-	}
-
-	return json.Marshal(h.Bytes())
-}
-
 func (h *Hash) Size() int {
 	return len(h.Bytes())
 }
@@ -157,6 +151,35 @@ func (h *Hash) UnmarshalJSON(data []byte) error {
 	return h.Unmarshal(*v)
 }
 
+// TerminalString implements log.TerminalStringer, formatting a string for console
+// output during logging.
+func (h Hash) TerminalString() string {
+	return fmt.Sprintf("%x..%x", h[:3], h[29:])
+}
+
 func (h Hash) Equal(other Hash) bool {
 	return bytes.Equal(h.Bytes(), other.Bytes())
+}
+
+// MarshalText returns the hex representation of h.
+func (h Hash) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(h[:]).MarshalText()
+}
+
+// HashDifference returns a new set which is the difference between a and b.
+func HashDifference(a, b []Hash) []Hash {
+	keep := make([]Hash, 0, len(a))
+
+	remove := make(map[Hash]struct{})
+	for _, hash := range b {
+		remove[hash] = struct{}{}
+	}
+
+	for _, hash := range a {
+		if _, ok := remove[hash]; !ok {
+			keep = append(keep, hash)
+		}
+	}
+
+	return keep
 }

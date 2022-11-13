@@ -24,7 +24,6 @@ import (
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
-	metricsv2 "github.com/amazechain/amc/internal/metrics"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/utils"
@@ -42,7 +41,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 )
 
 const (
@@ -127,7 +125,7 @@ func NewService(ctx context.Context, config *conf.NetWorkConfig, peers common.Pe
 		return nil, err
 	}
 
-	log.Infof("local peer id:%s", h.ID())
+	log.Info("local peer", "peer id", h.ID())
 
 	h.SetStreamHandler(MSGProtocol, s.handleStream)
 	s.host = h
@@ -151,11 +149,12 @@ func (s *Service) Start() error {
 		return err
 	}
 
-	log.Debug("start connect bootstrap peers")
-	s.setupBootsStrap()
-	go s.nodeManager(s.addCh)
+	if len(s.BootstrapPeers) > 0 {
+		log.Debug("start connect bootstrap peers")
+		s.setupBootsStrap()
+	}
 
-	go metricsv2.Log(metrics.DefaultRegistry, 60*time.Second, metricsLog{})
+	go s.nodeManager(s.addCh)
 
 	return nil
 }
@@ -165,6 +164,7 @@ func (s *Service) PeerCount() int {
 }
 
 func (s *Service) nodeManager(peerCh chan peer.AddrInfo) {
+
 	defer close(peerCh)
 	for {
 		select {
@@ -225,6 +225,7 @@ func (s *Service) checkBootsStrap(id string) bool {
 }
 
 func (s *Service) setupBootsStrap() {
+
 	var wg sync.WaitGroup
 	for _, sAddr := range s.BootstrapPeers {
 		peerAddr, err := multiaddr.NewMultiaddr(sAddr)
@@ -245,9 +246,9 @@ func (s *Service) setupBootsStrap() {
 		go func() {
 			defer wg.Done()
 			if err := s.host.Connect(s.ctx, *peerInfo); err != nil {
-				log.Warn(err)
+				log.Warn("Connection bootnode failed", "err", err)
 			} else {
-				log.Info("Connection established with bootstrap node:", *peerInfo)
+				log.Infof("Connection established with bootnode ", "ID", peerInfo.ID, "address", peerInfo.Addrs)
 			}
 		}()
 	}
@@ -292,6 +293,7 @@ func (s *Service) checkNode(id peer.ID) bool {
 }
 
 func (s *Service) handleStream(stream network.Stream) {
+
 	if !s.checkNode(stream.Conn().RemotePeer()) {
 		log.Infof("receive [%s] stream, protocol = %s", stream.ID(), stream.Protocol())
 		p := s.host.Peerstore().PeerInfo(stream.Conn().RemotePeer())

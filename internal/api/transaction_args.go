@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math/big"
+
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
@@ -28,7 +30,6 @@ import (
 	"github.com/amazechain/amc/internal/avm/common/math"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
-	"math/big"
 )
 
 // TransactionArgs represents
@@ -76,7 +77,7 @@ func (args *TransactionArgs) from() types.Address {
 	if args.From == nil {
 		return types.Address{}
 	}
-	from := mvm_types.ToAmcAddress(*args.From)
+	from := *mvm_types.ToAmcAddress(args.From)
 	return from
 }
 
@@ -123,7 +124,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, api *API) error {
 		}
 		pendingBlockNr := jsonrpc.BlockNumberOrHashWithNumber(jsonrpc.PendingBlockNumber)
 		//todo gasCap
-		estimated, err := DoEstimateGas(ctx, api, callArgs, pendingBlockNr)
+		estimated, err := DoEstimateGas(ctx, api, callArgs, pendingBlockNr, 50000000)
 		if err != nil {
 			return err
 		}
@@ -166,10 +167,10 @@ func (args *TransactionArgs) toTransaction(globalGasCap uint64, baseFee *big.Int
 	switch {
 	// todo other type
 	default:
-		to := mvm_types.ToAmcAddress(*args.To)
+		to := mvm_types.ToAmcAddress(args.To)
 		data = &transaction.LegacyTx{
 			From:     &addr,
-			To:       &to,
+			To:       to,
 			Nonce:    nonce,
 			Gas:      gas,
 			GasPrice: GasPrice,
@@ -203,13 +204,13 @@ func newRPCTransaction(tx *transaction.Transaction, blockHash types.Hash, blockN
 	hash, _ := tx.Hash()
 	result := &RPCTransaction{
 		Type:     hexutil.Uint64(tx.Type()),
-		From:     *mvm_types.FromAmcAddress(from),
+		From:     *mvm_types.FromAmcAddress(&from),
 		Gas:      hexutil.Uint64(tx.Gas()),
 		GasPrice: (*hexutil.Big)(tx.GasPrice().ToBig()),
 		Hash:     mvm_types.FromAmcHash(hash),
 		Input:    hexutil.Bytes(tx.Data()),
 		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       mvm_types.FromAmcAddress(*tx.To()),
+		To:       mvm_types.FromAmcAddress(tx.To()),
 		Value:    (*hexutil.Big)(tx.Value().ToBig()),
 		V:        (*hexutil.Big)(v.ToBig()),
 		R:        (*hexutil.Big)(r.ToBig()),

@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/accounts"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/db"
 	"github.com/amazechain/amc/common/transaction"
@@ -31,6 +32,8 @@ import (
 	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	"github.com/amazechain/amc/internal/avm/crypto"
 	"github.com/amazechain/amc/internal/avm/params"
+	"github.com/amazechain/amc/internal/avm/rlp"
+	mvm_types "github.com/amazechain/amc/internal/avm/types"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
@@ -56,8 +59,8 @@ const (
 var (
 	epochLength = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
 
-	extraVanity = 32                  // Fixed number of extra-data prefix bytes reserved for signer vanity
-	extraSeal   = types.AddressLength // Fixed number of extra-data suffix bytes reserved for signer seal
+	extraVanity = 32                     // Fixed number of extra-data prefix bytes reserved for signer vanity
+	extraSeal   = crypto.SignatureLength // Fixed number of extra-data suffix bytes reserved for signer seal
 
 	nonceAuthVote = hexutil.MustDecode("0xffffffffffffffff") // Magic nonce number to vote on adding a new signer
 	nonceDropVote = hexutil.MustDecode("0x0000000000000000") // Magic nonce number to vote on removing a signer.
@@ -140,7 +143,7 @@ var (
 
 // SignerFn hashes and signs the data to be signed by a backing account.
 // todo types.address to  account
-type SignerFn func(signer types.Address, mimeType string, message []byte) ([]byte, error)
+type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
 
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, error) {
@@ -156,18 +159,20 @@ func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, er
 	}
 	signature := header.Extra[len(header.Extra)-extraSeal:]
 
-	// todo
-	// Recover the public key and the Ethereum address
-	//pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
-	//if err != nil {
-	//	return types.Address{}, err
-	//}
-	//var signer types.Address
-	//copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	var signer types.Address
-	if err := signer.Unmarshal(signature); err != nil {
+	//Recover the public key and the Ethereum(AMC) address
+	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
+	if err != nil {
 		return types.Address{}, err
 	}
+	var signer types.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	//
+	if header.Number.IsZero() {
+		return types.Address{0}, nil
+	}
+
+	//log.Trace("sign recover", "hash", header.Hash(), "address", signer)
 
 	sigcache.Add(hash, signer)
 	return signer, nil
@@ -416,7 +421,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 				if err := snap.store(c.db); err != nil {
 					return nil, err
 				}
-				log.Infof("Stored checkpoint snapshot to disk number: %d hash:%s", number, hash.String())
+				log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
 				break
 			}
 		}
@@ -595,7 +600,7 @@ func (c *Apoa) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header blo
 	c.Finalize(chain, header, state, txs, uncles)
 
 	// Assemble and return the final block for sealing
-	return block.NewBlock(header, txs), nil
+	return block.NewBlockFromReceipt(header, txs, uncles, receipts), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
@@ -625,7 +630,7 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 	}
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()
-	signer, _ := c.signer, c.signFn
+	signer, signFn := c.signer, c.signFn
 	c.lock.RUnlock()
 
 	// Bail out if we're unauthorized to sign a block
@@ -634,6 +639,7 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		return err
 	}
 	if _, authorized := snap.Signers[signer]; !authorized {
+		log.Infof("err signer: %s, ", signer.String())
 		return errUnauthorizedSigner
 	}
 	// If we're amongst the recent signers, wait for the next block
@@ -649,19 +655,22 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
 	if header.Difficulty.Compare(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
+		//wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
+		//rand.Seed(time.Now().UnixNano())
+		//delay += time.Duration(rand.Int63n(int64(wiggle-wiggleTime))) + wiggleTime
 		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
-		rand.Seed(time.Now().UnixNano())
-		delay += time.Duration(rand.Int63n(int64(wiggle-wiggleTime))) + wiggleTime
+		delay += time.Duration(rand.Int63n(int64(wiggle)))
 
 		log.Infof("wiggle %s , time %s, number %d", common.PrettyDuration(wiggle), common.PrettyDuration(delay), header.Number.Uint64())
 		log.Debugf("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
 	// Sign all the things!
-	//sighash, err := signFn(signer, "application/x-clique-header", ApoaProto(header))
-	//if err != nil {
-	//	return err
-	//}
-	copy(header.Extra[len(header.Extra)-extraSeal:], signer.Bytes())
+	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, ApoaProto(header))
+	if err != nil {
+		return err
+	}
+
+	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
 	// Wait until sealing is terminated or delay timeout.
 	log.Debugf("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
@@ -740,7 +749,29 @@ func ApoaProto(header block.IHeader) []byte {
 	return b.Bytes()
 }
 
-func encodeSigHeader(w io.Writer, header block.IHeader) {
-	message := header.ToProtoMessage()
-	w.Write([]byte(message.String()))
+func encodeSigHeader(w io.Writer, iHeader block.IHeader) {
+	header := mvm_types.FromAmcHeader(iHeader)
+	enc := []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
+		header.MixDigest,
+		header.Nonce,
+	}
+	if header.BaseFee != nil {
+		enc = append(enc, header.BaseFee)
+	}
+	if err := rlp.Encode(w, enc); err != nil {
+		panic("can't encode: " + err.Error())
+	}
 }

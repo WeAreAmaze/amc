@@ -24,6 +24,7 @@ import (
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
+	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"golang.org/x/sync/errgroup"
 	"time"
@@ -61,6 +62,7 @@ func NewMiner(ctx context.Context, conf *conf.ConsensusConfig, bc common.IBlockC
 }
 
 func (m *Miner) Start() {
+	log.Info("start miner", "coinbase", m.coinbase)
 	m.group.Go(func() error {
 		return m.runLoop()
 	})

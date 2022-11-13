@@ -19,14 +19,14 @@ package blockchain
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/db"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/kv"
 	"github.com/amazechain/amc/modules/statedb"
-	"github.com/amazechain/amc/utils"
-	"math/big"
 )
 
 type GenesisBlock struct {
@@ -64,11 +64,10 @@ func NewGenesisBlockFromConfig(config *conf.GenesisBlockConfig, engineName strin
 		var signers []types.Address
 
 		for _, miner := range config.Miners {
-			public, err := utils.StringToPublic(miner)
+			addr, err := types.HexToString(miner)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("invalid miner:  %s", miner)
 			}
-			addr := types.PublicToAddress(public)
 			signers = append(signers, addr)
 		}
 		// Sort the signers and embed into the extra-data section

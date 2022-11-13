@@ -18,7 +18,7 @@ package main
 
 import (
 	"github.com/amazechain/amc/version"
-	cli "github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -136,10 +136,10 @@ var consensusFlag = []cli.Flag{
 		Destination: &DefaultConfig.NodeCfg.Miner,
 	},
 	&cli.StringFlag{
-		Name:        "engine.key",
-		Usage:       "consensus private key",
-		Value:       "CAESQFGaSBuerRHhigLhgPWQmd1R+1OB8kmXhd3tMyoMu5YL6KaU6PVjKzzJlkZzuh1TsUyzSqTMYZi6w6hQ2AGp/JU=",
-		Destination: &DefaultConfig.GenesisBlockCfg.Engine.MinerKey,
+		Name:        "engine.etherbase",
+		Usage:       "consensus etherbase",
+		Value:       "",
+		Destination: &DefaultConfig.GenesisBlockCfg.Engine.Etherbase,
 	},
 }
 
@@ -226,11 +226,132 @@ var loggerFlag = []cli.Flag{
 	},
 }
 
-var settingFlag = []cli.Flag{
-	&cli.StringFlag{
+var (
+	DataDirFlag = &cli.StringFlag{
 		Name:        "data.dir",
 		Usage:       "data save dir",
 		Value:       "./amc/",
 		Destination: &DefaultConfig.NodeCfg.DataDir,
-	},
-}
+	}
+)
+
+var (
+	// Account settings
+	UnlockedAccountFlag = &cli.StringFlag{
+		Name:  "account.unlock",
+		Usage: "Comma separated list of accounts to unlock",
+		Value: "",
+	}
+	PasswordFileFlag = &cli.PathFlag{
+		Name:        "account.password",
+		Usage:       "Password file to use for non-interactive password input",
+		Destination: &DefaultConfig.NodeCfg.PasswordFile,
+	}
+	LightKDFFlag = &cli.BoolFlag{
+		Name:  "account.lightkdf",
+		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	}
+	KeyStoreDirFlag = &cli.PathFlag{
+		Name:        "account.keystore",
+		Usage:       "Directory for the keystore (default = inside the datadir)",
+		TakesFile:   true,
+		Destination: &DefaultConfig.NodeCfg.KeyStoreDir,
+	}
+	InsecureUnlockAllowedFlag = &cli.BoolFlag{
+		Name:        "account.allow.insecure.unlock",
+		Usage:       "Allow insecure account unlocking when account-related RPCs are exposed by http",
+		Value:       false,
+		Destination: &DefaultConfig.NodeCfg.InsecureUnlockAllowed,
+	}
+
+	// MetricsEnabledFlag Metrics flags
+	MetricsEnabledFlag = &cli.BoolFlag{
+		Name:  "metrics",
+		Usage: "Enable metrics collection and reporting",
+	}
+
+	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
+		Name:        "metrics.influxdb",
+		Usage:       "Enable metrics export/push to an external InfluxDB database",
+		Value:       false,
+		Destination: &DefaultConfig.MetricsCfg.EnableInfluxDB,
+	}
+	MetricsInfluxDBEndpointFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.endpoint",
+		Usage:       "InfluxDB API endpoint to report metrics to",
+		Value:       DefaultConfig.MetricsCfg.InfluxDBEndpoint,
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBEndpoint,
+	}
+
+	MetricsInfluxDBDatabaseFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.database",
+		Usage:       "InfluxDB database name to push reported metrics to",
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBDatabase,
+	}
+	MetricsInfluxDBUsernameFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.username",
+		Usage:       "Username to authorize access to the database",
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBUsername,
+	}
+	MetricsInfluxDBPasswordFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.password",
+		Usage:       "Password to authorize access to the database",
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBPassword,
+	}
+
+	MetricsInfluxDBTagsFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.tags",
+		Usage:       "Comma-separated InfluxDB tags (key/values) attached to all measurements",
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBTags,
+	}
+	//
+	//MetricsEnableInfluxDBV2Flag = &cli.BoolFlag{
+	//	Name:  "metrics.influxdbv2",
+	//	Usage: "Enable metrics export/push to an external InfluxDB v2 database",
+	//}
+
+	MetricsInfluxDBTokenFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.token",
+		Usage:       "Token to authorize access to the database (v2 only)",
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBToken,
+	}
+
+	MetricsInfluxDBBucketFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.bucket",
+		Usage:       "InfluxDB bucket name to push reported metrics to (v2 only)",
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBBucket,
+	}
+
+	MetricsInfluxDBOrganizationFlag = &cli.StringFlag{
+		Name:        "metrics.influxdb.organization",
+		Usage:       "InfluxDB organization name (v2 only)",
+		Destination: &DefaultConfig.MetricsCfg.InfluxDBOrganization,
+	}
+)
+
+var (
+	settingFlag = []cli.Flag{
+		DataDirFlag,
+	}
+	accountFlag = []cli.Flag{
+		PasswordFileFlag,
+		KeyStoreDirFlag,
+		LightKDFFlag,
+		InsecureUnlockAllowedFlag,
+		UnlockedAccountFlag,
+	}
+
+	metricsFlags = []cli.Flag{
+		MetricsEnabledFlag,
+		MetricsEnableInfluxDBFlag,
+		MetricsInfluxDBEndpointFlag,
+		MetricsInfluxDBTokenFlag,
+		MetricsInfluxDBBucketFlag,
+		MetricsInfluxDBOrganizationFlag,
+		MetricsInfluxDBTagsFlag,
+
+		MetricsInfluxDBPasswordFlag,
+		MetricsInfluxDBUsernameFlag,
+		MetricsInfluxDBDatabaseFlag,
+	}
+)

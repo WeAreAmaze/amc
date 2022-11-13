@@ -133,12 +133,12 @@ func (s *StateDB) createObject(addr types.Address) (newobj, prev *stateObject) {
 	return newobj, nil
 }
 
-//IntermediateRoot root
+// IntermediateRoot root
 func (s *StateDB) IntermediateRoot() types.Hash {
 	return s.GenerateRootHash()
 }
 
-//Commit commit all data
+// Commit commit all data
 func (s *StateDB) Commit(blockNr types.Int256) (root types.Hash, err error) {
 	root = s.GenerateRootHash()
 

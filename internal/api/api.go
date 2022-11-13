@@ -19,7 +19,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
+	"math/big"
+	"time"
+
+	"github.com/amazechain/amc/accounts"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/db"
@@ -41,9 +47,6 @@ import (
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"github.com/amazechain/amc/modules/statedb"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"math"
-	"math/big"
-	"time"
 )
 
 const (
@@ -62,19 +65,22 @@ type API struct {
 	engine     consensus.Engine
 	txspool    txs_pool.ITxsPool
 	downloader common.IDownloader
+
+	accountManager *accounts.Manager
 }
 
 // NewAPI creates a new protocol API.
-func NewAPI(pubsub common.IPubSub, p2pserver common.INetwork, peers map[peer.ID]common.Peer, bc common.IBlockChain, db db.IDatabase, engine consensus.Engine, txspool txs_pool.ITxsPool, downloader common.IDownloader) *API {
+func NewAPI(pubsub common.IPubSub, p2pserver common.INetwork, peers map[peer.ID]common.Peer, bc common.IBlockChain, db db.IDatabase, engine consensus.Engine, txspool txs_pool.ITxsPool, downloader common.IDownloader, accountManager *accounts.Manager) *API {
 	return &API{
-		db:         db,
-		pubsub:     pubsub,
-		p2pserver:  p2pserver,
-		peers:      peers,
-		bc:         bc,
-		engine:     engine,
-		txspool:    txspool,
-		downloader: downloader,
+		db:             db,
+		pubsub:         pubsub,
+		p2pserver:      p2pserver,
+		peers:          peers,
+		bc:             bc,
+		engine:         engine,
+		txspool:        txspool,
+		downloader:     downloader,
+		accountManager: accountManager,
 	}
 }
 
@@ -168,9 +174,19 @@ func NewAmcAPI(api *API) *AmcAPI {
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *AmcAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
+	LightClientGPO.Default = big.NewInt(params.GWei)
+	oracle := NewOracle(s.api.BlockChain(), LightClientGPO)
+	tipcap, err := oracle.SuggestTipCap(ctx, s.api.GetChainConfig())
+	if err != nil {
+		return nil, err
+	}
+	if head := s.api.BlockChain().CurrentBlock().Header(); head.BaseFee64() != types.NewInt64(0) {
+		tipcap.Add(tipcap, head.BaseFee64().ToBig())
+	}
+	return (*hexutil.Big)(tipcap), nil
 	//todo hardcode 13Gwei
-	tipcap := 13000000000
-	return (*hexutil.Big)(new(big.Int).SetUint64(uint64(tipcap))), nil
+	//tipcap := 13000000000
+	//return (*hexutil.Big)(new(big.Int).SetUint64(uint64(tipcap))), nil
 }
 
 type feeHistoryResult struct {
@@ -263,7 +279,7 @@ func (s *BlockChainAPI) GetBalance(ctx context.Context, address mvm_common.Addre
 	if state == nil {
 		return nil, nil
 	}
-	balance := state.GetBalance(mvm_types.ToAmcAddress(address))
+	balance := state.GetBalance(*mvm_types.ToAmcAddress(&address))
 	return (*hexutil.Big)(balance.ToBig()), nil
 }
 
@@ -279,7 +295,7 @@ func (s *BlockChainAPI) GetCode(ctx context.Context, address mvm_common.Address,
 	if state == nil {
 		return nil, nil
 	}
-	code := state.GetCode(mvm_types.ToAmcAddress(address))
+	code := state.GetCode(*mvm_types.ToAmcAddress(&address))
 	return code, nil
 }
 
@@ -291,7 +307,7 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address mvm_common.Add
 	if state == nil {
 		return nil, nil
 	}
-	res := state.GetState(mvm_types.ToAmcAddress(address), mvm_types.ToAmcHash(mvm_common.HexToHash(key)))
+	res := state.GetState(*mvm_types.ToAmcAddress(&address), mvm_types.ToAmcHash(mvm_common.HexToHash(key)))
 	hash := mvm_types.FromAmcHash(res)
 	return hash[:], state.Error()
 }
@@ -363,16 +379,16 @@ func (diff *StateOverride) Apply(state *statedb.StateDB) error {
 	for addr, account := range *diff {
 		// Override account nonce.
 		if account.Nonce != nil {
-			state.SetNonce(mvm_types.ToAmcAddress(addr), uint64(*account.Nonce))
+			state.SetNonce(*mvm_types.ToAmcAddress(&addr), uint64(*account.Nonce))
 		}
 		// Override account(contract) code.
 		if account.Code != nil {
-			state.SetCode(mvm_types.ToAmcAddress(addr), *account.Code)
+			state.SetCode(*mvm_types.ToAmcAddress(&addr), *account.Code)
 		}
 		// Override account balance.
 		if account.Balance != nil {
 			balance, _ := types.FromBig((*big.Int)(*account.Balance))
-			state.SetBalance(mvm_types.ToAmcAddress(addr), balance)
+			state.SetBalance(*mvm_types.ToAmcAddress(&addr), balance)
 		}
 		if account.StatsPrint != nil && account.StateDiff != nil {
 			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.String())
@@ -382,12 +398,12 @@ func (diff *StateOverride) Apply(state *statedb.StateDB) error {
 			for k, v := range *account.StatsPrint {
 				statesPrint[mvm_types.ToAmcHash(k)] = mvm_types.ToAmcHash(v)
 			}
-			state.SetStorage(mvm_types.ToAmcAddress(addr), statesPrint)
+			state.SetStorage(*mvm_types.ToAmcAddress(&addr), statesPrint)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range *account.StateDiff {
-				state.SetState(mvm_types.ToAmcAddress(addr), mvm_types.ToAmcHash(key), mvm_types.ToAmcHash(value))
+				state.SetState(*mvm_types.ToAmcAddress(&addr), mvm_types.ToAmcHash(key), mvm_types.ToAmcHash(value))
 			}
 		}
 	}
@@ -397,8 +413,22 @@ func (diff *StateOverride) Apply(state *statedb.StateDB) error {
 func DoCall(ctx context.Context, api *API, args TransactionArgs, blockNrOrHash jsonrpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*avm.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	header := api.BlockChain().CurrentBlock().Header()
-	state := api.BlockChain().StateAt(header.Hash()).(*statedb.StateDB)
+	var header block.IHeader
+	var err error
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		if blockNr < jsonrpc.EarliestBlockNumber {
+			header = api.BlockChain().CurrentBlock().Header()
+		} else {
+			header, err = api.BlockChain().GetHeaderByNumber(types.NewInt64(uint64(blockNr.Int64())))
+		}
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		header, err = api.BlockChain().GetHeaderByHash(mvm_types.ToAmcHash(hash))
+	}
+	if err != nil {
+		return nil, err
+	}
+	state := api.State(blockNrOrHash).(*statedb.StateDB)
 
 	if err := overrides.Apply(state); err != nil {
 		return nil, err
@@ -487,8 +517,8 @@ func (e *revertError) ErrorData() interface{} {
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash jsonrpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
 
-	b, _ := json.Marshal(args)
-	log.Info("TransactionArgs %s", string(b))
+	//b, _ := json.Marshal(args)
+	//log.Info("TransactionArgs %s", string(b))
 
 	result, err := DoCall(ctx, s.api, args, blockNrOrHash, overrides, rpcEVMTimeout, rpcGasCap)
 	if err != nil {
@@ -501,8 +531,220 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 	return result.Return(), result.Err
 }
 
-func DoEstimateGas(ctx context.Context, n *API, args TransactionArgs, blockNrOrHash jsonrpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	return hexutil.Uint64(baseFee), nil
+func BlockByNumber(ctx context.Context, number jsonrpc.BlockNumber, n *API) (block.IBlock, error) {
+	// todo
+	// Pending block is only known by the miner
+	if number == jsonrpc.PendingBlockNumber {
+		iblock := n.BlockChain().CurrentBlock()
+		return iblock, nil
+	}
+	// Otherwise resolve and return the block
+	if number == jsonrpc.LatestBlockNumber {
+		iblock := n.BlockChain().CurrentBlock()
+		return iblock, nil
+	}
+	iblock, err := n.BlockChain().GetBlockByNumber(types.NewInt64(uint64(number)))
+	if err != nil {
+		return nil, err
+	}
+	return iblock, nil
+}
+
+func BlockByNumberOrHash(ctx context.Context, blockNrOrHash jsonrpc.BlockNumberOrHash, api *API) (block.IBlock, error) {
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		if blockNr == jsonrpc.PendingBlockNumber {
+			return api.BlockChain().CurrentBlock(), nil
+		}
+		return BlockByNumber(ctx, blockNr, api)
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		iblock, err := api.BlockChain().GetBlockByHash(types.Hash(hash))
+		if err != nil {
+			return nil, err
+		}
+		if iblock == nil {
+			return nil, errors.New("header found, but block body is missing")
+		}
+
+		//todo
+		//header := iblock.Header()
+		//if header == nil {
+		//	return nil, errors.New("header for hash not found")
+		//}
+		//iblock, err = n.BlockChain().GetBlockByNumber(header.Number64())
+		//if err != nil {
+		//	return nil, err
+		//}
+		//if blockNrOrHash.RequireCanonical && iblock.Hash() != types.Hash(hash) {
+		//	return nil, errors.New("hash is not currently canonical")
+		//}
+		//iblock, err = n.BlockChain().GetBlockByNumber(n.BlockChain().GetHeader(types.Hash(hash), header.Number64()).Number64())
+		//if err != nil {
+		//	return nil, err
+		//}
+		return iblock, nil
+	}
+	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func StateAndHeaderByNumber(ctx context.Context, n *API, number jsonrpc.BlockNumber) (*common.IStateDB, *block.IHeader, error) {
+	var header block.IHeader
+	var err error
+	if number == jsonrpc.PendingBlockNumber {
+		header = n.BlockChain().CurrentBlock().Header()
+	} else {
+		header, err = n.BlockChain().GetHeaderByNumber(types.NewInt64(uint64(number)))
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if header == nil {
+		return nil, nil, errors.New("header not found")
+	}
+	stateDb := n.BlockChain().StateAt(header.Hash())
+	return &stateDb, &header, nil
+}
+
+func StateAndHeaderByNumberOrHash(ctx context.Context, n *API, blockNrOrHash jsonrpc.BlockNumberOrHash) (*common.IStateDB, *block.IHeader, error) {
+	if blockNr, ok := blockNrOrHash.Number(); ok {
+		return StateAndHeaderByNumber(ctx, n, blockNr)
+	}
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		header, err := n.BlockChain().GetHeaderByHash(types.Hash(hash))
+		if err != nil {
+			return nil, nil, err
+		}
+		if header == nil {
+			return nil, nil, errors.New("header for hash not found")
+		}
+		//todo
+		//if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
+		//	return nil, nil, errors.New("hash is not currently canonical")
+		//}
+		stateDb := n.BlockChain().StateAt(header.Hash())
+		return &stateDb, &header, err
+	}
+	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func DoEstimateGas(ctx context.Context, n *API, args TransactionArgs, blockNrOrHash jsonrpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
+	// Binary search the gas requirement, as it may be higher than the amount used
+	var (
+		lo  = params.TxGas - 1
+		hi  uint64
+		cap uint64
+	)
+	// Use zero address if sender unspecified.
+	if args.From == nil {
+		args.From = new(mvm_common.Address)
+	}
+	// Determine the highest gas limit can be used during the estimation.
+	if args.Gas != nil && uint64(*args.Gas) >= params.TxGas {
+		hi = uint64(*args.Gas)
+	} else {
+		// Retrieve the block to act as the gas ceiling
+		iblock, err := BlockByNumberOrHash(ctx, blockNrOrHash, n)
+		if err != nil {
+			return 0, err
+		}
+		if iblock == nil {
+			return 0, errors.New("block not found")
+		}
+		hi = iblock.GasLimit()
+	}
+
+	var feeCap *big.Int
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	} else if args.GasPrice != nil {
+		feeCap = args.GasPrice.ToInt()
+	} else if args.MaxFeePerGas != nil {
+		feeCap = args.MaxFeePerGas.ToInt()
+	} else {
+		feeCap = common.Big0
+	}
+	// Recap the highest gas limit with account's available balance.
+	if feeCap.BitLen() != 0 {
+		statedb := n.State(blockNrOrHash)
+		if statedb == nil {
+			return 0, errors.New("cannot load stateDB")
+		}
+		balance := statedb.GetBalance(*mvm_types.ToAmcAddress(args.From)) // from can't be nil
+		available := new(big.Int).Set(balance.ToBig())
+		if args.Value != nil {
+			if args.Value.ToInt().Cmp(available) >= 0 {
+				return 0, errors.New("insufficient funds for transfer")
+			}
+			available.Sub(available, args.Value.ToInt())
+		}
+		allowance := new(big.Int).Div(available, feeCap)
+
+		// If the allowance is larger than maximum uint64, skip checking
+		if allowance.IsUint64() && hi > allowance.Uint64() {
+			transfer := args.Value
+			if transfer == nil {
+				transfer = new(hexutil.Big)
+			}
+			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
+				"sent", transfer.ToInt(), "maxFeePerGas", feeCap, "fundable", allowance)
+			hi = allowance.Uint64()
+		}
+	}
+	// Recap the highest gas allowance with specified gascap.
+	if gasCap != 0 && hi > gasCap {
+		log.Warn("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
+		hi = gasCap
+	}
+	cap = hi
+
+	// Create a helper to check if a gas allowance results in an executable transaction
+	executable := func(gas uint64) (bool, *avm.ExecutionResult, error) {
+		args.Gas = (*hexutil.Uint64)(&gas)
+		result, err := DoCall(ctx, n, args, blockNrOrHash, nil, 0, gasCap)
+		if err != nil {
+			if errors.Is(err, avm.ErrIntrinsicGas) {
+				return true, nil, nil // Special case, raise gas limit
+			}
+			return true, nil, err // Bail out
+		}
+		return result.Failed(), result, nil
+	}
+	// Execute the binary search and hone in on an executable gas limit
+	for lo+1 < hi {
+		mid := (hi + lo) / 2
+		failed, _, err := executable(mid)
+
+		// If the error is not nil(consensus error), it means the provided message
+		// call or transaction will never be accepted no matter how much gas it is
+		// assigened. Return the error directly, don't struggle any more.
+		if err != nil {
+			return 0, err
+		}
+		if failed {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	// Reject the transaction as invalid if it still fails at the highest allowance
+	if hi == cap {
+		failed, result, err := executable(hi)
+		if err != nil {
+			return 0, err
+		}
+		if failed {
+			if result != nil && !errors.Is(result.Err, vm.ErrOutOfGas) {
+				if len(result.Revert()) > 0 {
+					return 0, newRevertError(result)
+				}
+				return 0, result.Err
+			}
+			// Otherwise, the specified gas cap is too low
+			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+		}
+	}
+	return hexutil.Uint64(hi), nil
+	//return hexutil.Uint64(baseFee), nil
 }
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the
@@ -512,7 +754,7 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.api, args, bNrOrHash)
+	return DoEstimateGas(ctx, s.api, args, bNrOrHash, 50000000)
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -574,7 +816,7 @@ func NewTransactionAPI(api *API, nonceLock *AddrLocker) *TransactionAPI {
 func (s *TransactionAPI) GetTransactionCount(ctx context.Context, address mvm_common.Address, blockNrOrHash jsonrpc.BlockNumberOrHash) (*hexutil.Uint64, error) {
 
 	if blockNr, ok := blockNrOrHash.Number(); ok && blockNr == jsonrpc.PendingBlockNumber {
-		nonce := s.api.TxsPool().Nonce(mvm_types.ToAmcAddress(address))
+		nonce := s.api.TxsPool().Nonce(*mvm_types.ToAmcAddress(&address))
 		return (*hexutil.Uint64)(&nonce), nil
 	}
 
@@ -582,7 +824,7 @@ func (s *TransactionAPI) GetTransactionCount(ctx context.Context, address mvm_co
 	if state == nil {
 		return nil, nil
 	}
-	nonce := state.GetNonce(mvm_types.ToAmcAddress(address))
+	nonce := state.GetNonce(*mvm_types.ToAmcAddress(&address))
 	return (*hexutil.Uint64)(&nonce), nil
 
 }
@@ -631,8 +873,8 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash mvm_com
 		"blockNumber":       hexutil.Uint64(blockNumber.Uint64()),
 		"transactionHash":   hash,
 		"transactionIndex":  hexutil.Uint64(index),
-		"from":              mvm_types.FromAmcAddress(from),
-		"to":                mvm_types.FromAmcAddress(*tx.To()),
+		"from":              mvm_types.FromAmcAddress(&from),
+		"to":                mvm_types.FromAmcAddress(tx.To()),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
@@ -664,7 +906,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash mvm_com
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if !receipt.ContractAddress.IsNull() {
-		fields["contractAddress"] = mvm_types.FromAmcAddress(receipt.ContractAddress)
+		fields["contractAddress"] = mvm_types.FromAmcAddress(&receipt.ContractAddress)
 	}
 
 	json, _ := json.Marshal(fields)
@@ -740,6 +982,14 @@ func SubmitTransaction(ctx context.Context, api *API, tx *transaction.Transactio
 
 // SendTransaction Send Transaction
 func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionArgs) (mvm_common.Hash, error) {
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: args.from()}
+
+	//wallet, err := s.b.AccountManager().Find(account)
+	wallet, err := s.api.accountManager.Find(account)
+	if err != nil {
+		return mvm_common.Hash{}, err
+	}
 
 	if args.Nonce == nil {
 		s.nonceLock.LockAddr(args.from())
@@ -752,8 +1002,12 @@ func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionAr
 	header := s.api.BlockChain().CurrentBlock().Header()
 	tx := args.toTransaction(baseFee, header.BaseFee64().ToBig())
 
+	signed, err := wallet.SignTx(account, tx, s.api.GetChainConfig().ChainID)
+	if err != nil {
+		return mvm_common.Hash{}, err
+	}
 	// todo sign?
-	signed := tx
+	//signed := tx
 	return SubmitTransaction(ctx, s.api, signed)
 }
 
@@ -790,29 +1044,6 @@ type DebugAPI struct {
 // NewDebugAPI creates a new instance of DebugAPI.
 func NewDebugAPI(api *API) *DebugAPI {
 	return &DebugAPI{api: api}
-}
-
-// AddBalance debug func
-func (debug *DebugAPI) AddBalance(ctx context.Context, address mvm_common.Address, amount *hexutil.Big) (*hexutil.Big, error) {
-	log.Debugf("add balance %s %s", address.String(), amount.String())
-
-	addr := mvm_types.ToAmcAddress(address)
-	//todo
-	state := debug.api.State(jsonrpc.BlockNumberOrHashWithNumber(jsonrpc.PendingBlockNumber))
-	// 1. force create account
-	if !state.Exist(addr) {
-		state.CreateAccount(addr)
-	}
-
-	value, _ := types.FromBig(amount.ToInt())
-	// 2. add balance
-	state.AddBalance(addr, value)
-
-	//3. get balance
-	balance := state.GetBalance(addr)
-
-	//4. commit todo ?
-	return (*hexutil.Big)(balance.ToBig()), nil
 }
 
 // SetHead rewinds the head of the blockchain to a previous block.
@@ -876,7 +1107,7 @@ func (s *TxsPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction 
 		for _, tx := range txs {
 			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader)
 		}
-		content["pending"][mvm_types.FromAmcAddress(account).Hex()] = dump
+		content["pending"][mvm_types.FromAmcAddress(&account).Hex()] = dump
 	}
 	// Flatten the queued transactions
 	for account, txs := range queue {
@@ -884,7 +1115,7 @@ func (s *TxsPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction 
 		for _, tx := range txs {
 			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader)
 		}
-		content["queued"][mvm_types.FromAmcAddress(account).Hex()] = dump
+		content["queued"][mvm_types.FromAmcAddress(&account).Hex()] = dump
 	}
 	return content
 }

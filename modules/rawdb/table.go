@@ -17,8 +17,11 @@
 package rawdb
 
 const (
-	headerDB      = "header"
-	bodyDB        = "body"
+	headerDB        = "header"                 // hash -> header
+	HeaderCanonical = "CanonicalHeader"        // block_num_u64 -> header hash
+	HeaderTD        = "HeadersTotalDifficulty" // hash -> td
+
+	bodyDB        = "body" // hash -> body
 	txsDB         = "transactions"
 	accountsDB    = "accounts"
 	latestStateDB = "latestState"
@@ -28,7 +31,7 @@ const (
 	currentBlock     = "currentBlock"
 	signersDB        = "signersDB"
 	recentSignersDB  = "RecentSignersDB"
-	hashNumberDB     = "HashNumberDB"
+	hashNumberDB     = "HashNumberDB" // hash -> block_number
 	stateDB          = "StateDB"
 	difficultyDB     = "DifficultyDB"
 	transactionIndex = "TransactionIndexDB"

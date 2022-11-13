@@ -17,6 +17,8 @@
 package block
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common/types"
@@ -32,6 +34,27 @@ const (
 )
 
 type Receipts []*Receipt
+
+// Len returns the number of receipts in this list.
+func (rs Receipts) Len() int { return len(rs) }
+
+// EncodeIndex encodes the i'th receipt to w.
+func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
+	r := rs[i]
+
+	logs := make([]*storedLog, len(r.Logs))
+
+	for k, log := range r.Logs {
+		logs[k] = &storedLog{
+			Address: log.Address,
+			Topics:  log.Topics,
+			Data:    log.Data,
+		}
+	}
+	data := &storedReceipt{r.Status, r.CumulativeGasUsed, logs}
+	byte, _ := json.Marshal(data)
+	w.Write(byte)
+}
 
 func (rs *Receipts) FromProtoMessage(receipts *types_pb.Receipts) error {
 	for _, receipt := range receipts.Receipts {
@@ -156,4 +179,17 @@ func (r *Receipt) fromProtoMessage(message proto.Message) error {
 	r.TransactionIndex = uint(pReceipt.TransactionIndex)
 
 	return nil
+}
+
+// storedReceipt is the consensus encoding of a receipt.
+type storedReceipt struct {
+	PostStateOrStatus uint64
+	CumulativeGasUsed uint64
+	Logs              []*storedLog
+}
+
+type storedLog struct {
+	Address types.Address
+	Topics  []types.Hash
+	Data    []byte
 }

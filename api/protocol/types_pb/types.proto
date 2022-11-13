@@ -59,7 +59,7 @@ message Transaction {
   string value = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
   bytes data = 8;
   bytes sing = 9;
-  string to = 10 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  string to = 10 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = true];
   string from = 11 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
   uint64 chainID = 12;
   bytes hash = 13 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];

@@ -22,16 +22,16 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/amazechain/amc/common/db"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/bitmapdb"
 	"github.com/amazechain/amc/internal/kv"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
-	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
-//GetAccount get account
+// GetAccount get account
 func GetAccount(db db.IDatabase, changeDB kv.RoDB, blockNr types.Int256, addr types.Address) ([]byte, error) {
 	r, err := db.OpenReader(accountsDB)
 	if err != nil {
@@ -49,7 +49,7 @@ func GetAccount(db db.IDatabase, changeDB kv.RoDB, blockNr types.Int256, addr ty
 	return r.Get(addr.Bytes())
 }
 
-//StoreAccount store account
+// StoreAccount store account
 func StoreAccount(db db.IDatabase, changeDB kv.RwDB, blockNr types.Int256, addr types.Address, data []byte) error {
 	w, err := db.OpenWriter(accountsDB)
 	if err != nil {
@@ -63,7 +63,7 @@ func StoreAccount(db db.IDatabase, changeDB kv.RwDB, blockNr types.Int256, addr 
 	return w.Put(addr.Bytes(), data)
 }
 
-//writeIndex
+// writeIndex
 func writeIndexAndChangeSet(changeDB kv.RwDB, blockNr types.Int256, addr types.Address, data []byte) error {
 	txn, err := changeDB.BeginRw(context.Background())
 	if err != nil {
@@ -105,7 +105,7 @@ func writeIndexAndChangeSet(changeDB kv.RwDB, blockNr types.Int256, addr types.A
 	return nil
 }
 
-//findIndexAndChangeSet
+// findIndexAndChangeSet
 func findIndexAndChangeSet(changeDB kv.RoDB, blockNr types.Int256, addr types.Address) ([]byte, error) {
 
 	var (
@@ -120,10 +120,10 @@ func findIndexAndChangeSet(changeDB kv.RoDB, blockNr types.Int256, addr types.Ad
 	)
 
 	defer func() {
-		log.Debugf("search key: %x, find key: %x, find value %x", searchKey, findKey, findValue)
+		//log.Tracef("search key: %x, find key: %x, find value %x", searchKey, findKey, findValue)
 		if bitmapFoundOK {
-			log.Debugf("find bitmap: %s, len: %d", bitmapIndex.String(), bitmapIndex.GetCardinality())
-			log.Debugf("find changeSet value prefix:%x, for addr %x", findChangeSetKey, addr.Bytes())
+			log.Tracef("find bitmap: %s, len: %d", bitmapIndex.String(), bitmapIndex.GetCardinality())
+			log.Tracef("find changeSet value prefix:%x, for addr %x", findChangeSetKey, addr.Bytes())
 		}
 	}()
 

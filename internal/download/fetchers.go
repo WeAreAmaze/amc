@@ -17,16 +17,17 @@
 package download
 
 import (
+	"math/rand"
+	"time"
+
 	"github.com/amazechain/amc/api/protocol/sync_proto"
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
 	"github.com/gogo/protobuf/proto"
-	"math/rand"
-	"time"
 )
 
-//fetchHeaders
+// fetchHeaders
 func (d *Downloader) fetchHeaders(from types.Int256, latest types.Int256) error {
 
 	// 1. create task
@@ -117,7 +118,7 @@ func (d *Downloader) fetchHeaders(from types.Int256, latest types.Int256) error 
 	return nil
 }
 
-//fetchHeaders
+// fetchHeaders
 func (d *Downloader) fetchBodies(latest types.Int256) error {
 
 	log.Debug("Starting body downloads")

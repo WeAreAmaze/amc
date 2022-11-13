@@ -11,7 +11,6 @@ import (
 	"github.com/amazechain/amc/internal/avm/types"
 	"github.com/amazechain/amc/internal/avm/vm"
 	"github.com/amazechain/amc/internal/consensus"
-	log "github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/statedb"
 	"github.com/amazechain/amc/utils"
 	"math/big"
@@ -61,7 +60,10 @@ func NewVMProcessor(ctx context.Context, bc common.IBlockChain, engine consensus
 	return vp
 }
 
-func (p *VMProcessor) Processor(b block.IBlock, db *statedb.StateDB) (block.Receipts, []*block.Log, error) {
+func (p *VMProcessor) SetEngine(engine consensus.Engine) {
+	p.engine = engine
+}
+func (p *VMProcessor) Processor(b block.IBlock, db *statedb.StateDB) (block.Receipts, []*block.Log, uint64, error) {
 	var (
 		header   = b.Header().(*block.Header)
 		gp       = new(common.GasPool).AddGas(b.GasLimit())
@@ -70,11 +72,10 @@ func (p *VMProcessor) Processor(b block.IBlock, db *statedb.StateDB) (block.Rece
 		allLogs  []*block.Log
 	)
 
-	snap := db.Snapshot()
 	blockContext := NewBlockContext(b.Header(), p.bc, nil)
 	ethDb := NewDBStates(db)
+	snap := ethDb.Snapshot()
 
-	log.Debugf("block gas limit: %d", *gp)
 	//todo blockchain info  Debug: true, Tracer: vm.NewMarkdownLogger(os.Stdout)
 
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, ethDb, params.AmazeChainConfig, vm.Config{})
@@ -82,28 +83,31 @@ func (p *VMProcessor) Processor(b block.IBlock, db *statedb.StateDB) (block.Rece
 		msg := types.AsMessage(tx, header.BaseFee.ToBig(), false)
 		txHash, err := tx.Hash()
 		if err != nil {
-			db.RevertToSnapshot(snap)
-			return nil, nil, err
+			ethDb.RevertToSnapshot(snap)
+			return nil, nil, 0, err
 		}
 		ethDb.Prepare(types.FromAmcHash(txHash), i)
 
-		receipt, err := applyTransaction(msg, params.AmazeChainConfig, p.bc, nil, gp, db, header.Number.ToBig(), header.Hash(), tx, usedGas, vmenv)
+		receipt, err := applyTransaction(msg, params.AmazeChainConfig, p.bc, nil, gp, ethDb, header.Number.ToBig(), header.Hash(), tx, usedGas, vmenv)
 		if err != nil {
-			db.RevertToSnapshot(snap)
-			return nil, nil, err
+			ethDb.RevertToSnapshot(snap)
+			return nil, nil, 0, err
 		}
 		allLogs = append(allLogs, receipt.Logs...)
 		receipts = append(receipts, receipt)
 	}
 
-	return receipts, allLogs, nil
+	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
+	//var uncles []block.IHeader
+	p.engine.Finalize(p.bc, b.Header(), db, b.Transactions(), nil)
+
+	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *amc_types.Address, gp *common.GasPool, db common.IStateDB, blockNumber *big.Int, blockHash amc_types.Hash, tx *transaction.Transaction, usedGas *uint64, evm *vm.EVM) (*block.Receipt, error) {
+func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainContext, author *amc_types.Address, gp *common.GasPool, db *DBStates, blockNumber *big.Int, blockHash amc_types.Hash, tx *transaction.Transaction, usedGas *uint64, evm *vm.EVM) (*block.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
-	ethDb := NewDBStates(db)
-	evm.Reset(txContext, ethDb)
+	evm.Reset(txContext, db)
 
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
@@ -134,18 +138,19 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
-		receipt.ContractAddress = types.ToAmcAddress(crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce()))
+		contractAddress := crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
+		receipt.ContractAddress = *types.ToAmcAddress(&contractAddress)
 	}
 
 	// Set the receipt logs and create the bloom filter.
 	hash, _ := tx.Hash()
-	receipt.Logs = types.ToAmcLogs(ethDb.GetLogs(types.FromAmcHash(hash), types.FromAmcHash(blockHash)))
+	receipt.Logs = types.ToAmcLogs(db.GetLogs(types.FromAmcHash(hash), types.FromAmcHash(blockHash)))
 	//todo  log bloom
 	//bloom, _ := amc_types.NewBloom(100)
 	//receipt.Bloom = *bloom
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber, _ = amc_types.FromBig(blockNumber)
-	receipt.TransactionIndex = uint(ethDb.TxIndex())
+	receipt.TransactionIndex = uint(db.TxIndex())
 	return receipt, err
 }
 
@@ -153,10 +158,10 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *amc_types.Address, gp *common.GasPool, state common.IStateDB, header *block.Header, tx *transaction.Transaction, usedGas *uint64, cfg vm.Config) (*block.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *amc_types.Address, gp *common.GasPool, state *DBStates, header *block.Header, tx *transaction.Transaction, usedGas *uint64, cfg vm.Config) (*block.Receipt, error) {
 	msg := types.AsMessage(tx, header.BaseFee.ToBig(), false)
 	// Create a new context to be used in the EVM environment
 	blockContext := NewBlockContext(header, bc, author)
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, NewDBStates(state), config, cfg)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, state, config, cfg)
 	return applyTransaction(msg, config, bc, author, gp, state, header.Number.ToBig(), header.Hash(), tx, usedGas, vmenv)
 }

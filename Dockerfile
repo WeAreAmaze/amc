@@ -12,10 +12,29 @@ RUN go mod tidy && go build  -o ./build/bin/AmazeChain-linux-amd64 ./cmd/amc
 
 
 FROM docker.io/library/alpine:3.15
-
-RUN apk add --no-cache ca-certificates curl libstdc++ tzdata
+#libstdc++
+RUN apk add --no-cache ca-certificates curl tzdata
 # copy compiled artifacts from builder
 COPY --from=builder /amc/build/bin/* /usr/local/bin/
 
+# Setup user and group
+#
+# from the perspective of the container, uid=1000, gid=1000 is a sensible choice, but if caller creates a .env
+# (example in repo root), these defaults will get overridden when make calls docker-compose
+ARG UID=1000
+ARG GID=1000
+RUN adduser -D -u $UID -g $GID amc
+
+
+ENV AMCDATA /home/amc/data
+# this 777 will be replaced by 700 at runtime (allows semi-arbitrary "--user" values)
+RUN mkdir -p "$AMCDATA" && chown -R amc:amc "$AMCDATA" && chmod 777 "$AMCDATA"
+VOLUME /home/amc/data
+
+USER amc
+WORKDIR /home/amc
+
+RUN echo $UID
+
 EXPOSE 20012
-WORKDIR /amc
+EXPOSE 20013

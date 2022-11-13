@@ -19,8 +19,9 @@ package conf
 import (
 	"bufio"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"os"
+
+	"gopkg.in/yaml.v2"
 )
 
 type Config struct {
@@ -30,6 +31,8 @@ type Config struct {
 	DatabaseCfg     DatabaseConfig     `json:"database" yaml:"database"`
 	PprofCfg        PprofConfig        `json:"pprof" yaml:"pprof"`
 	GenesisBlockCfg GenesisBlockConfig `json:"genesis" yaml:"genesis"`
+	AccountCfg      AccountConfig      `json:"account" yaml:"account"`
+	MetricsCfg      MetricsConfig      `json:"metrics" yaml:"metrics"`
 }
 
 func SaveConfigToFile(file string, config Config) error {
@@ -47,7 +50,6 @@ func SaveConfigToFile(file string, config Config) error {
 	//return toml.NewEncoder(fd).Encode(blockchain)
 }
 
-//
 func LoadConfigFromFile(file string, config *Config) error {
 	if len(file) <= 0 {
 		return fmt.Errorf("failed to load blockchain from file, file is nil")

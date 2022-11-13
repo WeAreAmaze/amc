@@ -43,9 +43,9 @@ func NewBlockContext(header block.IHeader, chain ChainContext, author *amc_types
 	h := header.(*block.Header)
 	if author == nil {
 		author, _ := chain.Engine().Author(h)
-		beneficiary = types.FromAmcAddress(author)
+		beneficiary = types.FromAmcAddress(&author)
 	} else {
-		beneficiary = types.FromAmcAddress(*author)
+		beneficiary = types.FromAmcAddress(author)
 	}
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,

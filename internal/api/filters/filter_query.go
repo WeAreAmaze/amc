@@ -76,7 +76,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 					if err != nil {
 						return fmt.Errorf("invalid address at index %d: %v", i, err)
 					}
-					args.Addresses = append(args.Addresses, mvm_types.ToAmcAddress(addr))
+					args.Addresses = append(args.Addresses, *mvm_types.ToAmcAddress(&addr))
 				} else {
 					return fmt.Errorf("non-string address at index %d", i)
 				}
@@ -86,7 +86,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			if err != nil {
 				return fmt.Errorf("invalid address: %v", err)
 			}
-			args.Addresses = []types.Address{mvm_types.ToAmcAddress(addr)}
+			args.Addresses = []types.Address{*mvm_types.ToAmcAddress(&addr)}
 		default:
 			return errors.New("invalid addresses in query")
 		}

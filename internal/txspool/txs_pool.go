@@ -19,6 +19,12 @@ package txspool
 import (
 	"context"
 	"fmt"
+	"math"
+	"sort"
+	"sync"
+	"time"
+	"unsafe"
+
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/prque"
@@ -27,11 +33,6 @@ import (
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
-	"math"
-	"sort"
-	"sync"
-	"time"
-	"unsafe"
 )
 
 const (
@@ -571,6 +572,7 @@ func (pool *TxsPool) validateTx(tx *transaction.Transaction, local bool) error {
 
 // validateSender verify todo
 func (pool *TxsPool) validateSender(tx *transaction.Transaction) bool {
+
 	return true
 }
 
@@ -1187,7 +1189,6 @@ func (pool *TxsPool) Has(hash types.Hash) bool {
 // GetTransaction
 func (pool *TxsPool) GetTransaction() (txs []*transaction.Transaction, err error) {
 	//
-	pool.StatsPrint()
 	pending := pool.Pending(false)
 	heads := make([]*transaction.Transaction, 0, len(txs))
 	for _, accTxs := range pending {

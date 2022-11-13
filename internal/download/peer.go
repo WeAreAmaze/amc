@@ -18,6 +18,9 @@ package download
 
 import (
 	"context"
+	"math/rand"
+	"sync"
+
 	"github.com/amazechain/amc/api/protocol/sync_proto"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
@@ -26,8 +29,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.uber.org/zap"
-	"math/rand"
-	"sync"
 )
 
 // peerInfo

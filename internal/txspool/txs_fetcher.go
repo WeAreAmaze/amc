@@ -19,6 +19,9 @@ package txspool
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"time"
+
 	"github.com/amazechain/amc/api/protocol/sync_proto"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common"
@@ -29,8 +32,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.uber.org/zap"
-	"math/rand"
-	"time"
 )
 
 const (

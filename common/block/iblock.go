@@ -29,6 +29,7 @@ type IHeader interface {
 	ToProtoMessage() proto.Message
 	FromProtoMessage(message proto.Message) error
 	Marshal() ([]byte, error)
+	StateRoot() types.Hash
 }
 
 type IBody interface {
@@ -56,3 +57,5 @@ type IBlock interface {
 	//ToProtoMessage() proto.Message
 	//FromProtoMessage(message proto.Message) error
 }
+
+type Blocks []IBlock

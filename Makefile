@@ -1,12 +1,25 @@
 BUILD_TIME := $(shell date +"%Y-%m-%d %H:%M:%S")
-GIT_COMMIT := $(shell git show -s --pretty=format:%h)
+#GIT_COMMIT := $(shell git show -s --pretty=format:%h)
 GO_VERSION := $(shell go version)
 BUILD_PATH := ./build/bin/
-APP_NAME := AmazeChain
+APP_NAME := amazechain
 APP_PATH := ./cmd/amc
 SHELL := /bin/bash
-LDFLAGS := -ldflags "-w -s -X github.com/amazechain/amc/version.BuildNumber=${GIT_COMMIT} -X 'github.com/amazechain/amc/version.BuildTime=${BUILD_TIME}' -X 'github.com/amazechain/amc/version.GoVersion=${GO_VERSION}'"
+#LDFLAGS := -ldflags "-w -s -X github.com/amazechain/amc/version.BuildNumber=${GIT_COMMIT} -X 'github.com/amazechain/amc/version.BuildTime=${BUILD_TIME}' -X 'github.com/amazechain/amc/version.GoVersion=${GO_VERSION}'"
 
+GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
+GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+GIT_TAG    ?= $(shell git describe --tags '--match=v*' --dirty)
+PACKAGE = github.com/amazechain/amc
+GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
+GOBUILD = go build -v $(GO_FLAGS)
+
+
+# if using volume-mounting data dir, then must exist on host OS
+DOCKER_UID ?= $(shell id -u)
+DOCKER_GID ?= $(shell id -g)
+
+# --build-arg UID=${DOCKER_UID} --build-arg GID=${DOCKER_GID}
 
 ## go-version:                        print and verify go version
 go-version:
@@ -25,7 +38,8 @@ deps: go-version
 
 amc: deps
 	@echo "start build $(APP_NAME)..."
-	go build -v ${LDFLAGS} -o $(BUILD_PATH)$(APP_NAME)  ${APP_PATH}
+	#go build -v ${LDFLAGS} -o $(BUILD_PATH)$(APP_NAME)  ${APP_PATH}
+	$(GOBUILD) -o $(BUILD_PATH)$(APP_NAME)  ${APP_PATH}
 	@echo "Compile done!"
 
 images:

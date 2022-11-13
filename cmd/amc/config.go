@@ -17,9 +17,15 @@
 package main
 
 import (
+	"embed"
+	"encoding/json"
+	"fmt"
 	"github.com/amazechain/amc/conf"
 	"time"
 )
+
+//go:embed allocs
+var allocs embed.FS
 
 const (
 	genesisTime  = "2022/01/01 00:00:00"
@@ -63,12 +69,18 @@ var DefaultConfig = conf.Config{
 		MaxDB:      100,
 		MaxReaders: 1000,
 	},
+	MetricsCfg: conf.MetricsConfig{
+		InfluxDBEndpoint:     "",
+		InfluxDBToken:        "",
+		InfluxDBBucket:       "",
+		InfluxDBOrganization: "",
+	},
+
 	GenesisBlockCfg: conf.GenesisBlockConfig{
 		ChainID: 0,
 		Engine: conf.ConsensusConfig{
 			EngineName: "APoaEngine",
 			BlsKey:     "bls",
-			MinerKey:   "CAESQFGaSBuerRHhigLhgPWQmd1R+1OB8kmXhd3tMyoMu5YL6KaU6PVjKzzJlkZzuh1TsUyzSqTMYZi6w6hQ2AGp/JU=",
 			Period:     8,
 			GasCeil:    30000000,
 			APoa: conf.APoaConfig{
@@ -79,16 +91,11 @@ var DefaultConfig = conf.Config{
 				InMemory:           false,
 			},
 		},
-		Miners:     []string{"CAESIOimlOj1Yys8yZZGc7odU7FMs0qkzGGYusOoUNgBqfyV", "CAESIDgSnhTUd/I2J7aAGJ4+mirj+M4/H7i8Ig5AvtuH7jTt", "CAESIKPHUGuFSB2kiX37o0prc8D/WeKbeLu2+JX6993Xnf9K"},
-		Validators: []string{"QmecK5hh6iYLGrdSc8rdMb5bkd9nYVFTx2MkxYcEyQ782r"},
+		Miners:     []string{"AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21"},
+		Validators: []string{"AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21", "AMC3CA698823AE0474EE80D2F4BF29EC649474F4040", "AMC781ACBE8BECB693098D36875D48E967C92DB3A4E"},
 		Number:     0,
 		Timestamp:  toLocation(),
-		Alloc: []conf.Allocate{
-			conf.Allocate{
-				Address: "AMCEb8aE6c1A31CeA7B4AfdD247211C863A1e7FB6D6",
-				Balance: "1000000000000000000",
-			},
-		},
+		Alloc:      readPrealloc("allocs/amc.json"),
 	},
 }
 
@@ -98,4 +105,19 @@ func toLocation() int64 {
 	} else {
 		return stamp.Unix()
 	}
+}
+
+func readPrealloc(filename string) []conf.Allocate {
+	f, err := allocs.Open(filename)
+	if err != nil {
+		panic(fmt.Sprintf("Could not open genesis preallocation for %s: %v", filename, err))
+	}
+	defer f.Close()
+	decoder := json.NewDecoder(f)
+	ga := []conf.Allocate{}
+	err = decoder.Decode(&ga)
+	if err != nil {
+		panic(fmt.Sprintf("Could not parse genesis preallocation for %s: %v", filename, err))
+	}
+	return ga
 }

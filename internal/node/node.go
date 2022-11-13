@@ -19,8 +19,18 @@ package node
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"fmt"
+	"github.com/amazechain/amc/internal/metrics/influxdb"
+	"github.com/amazechain/amc/log"
+	"github.com/rcrowley/go-metrics"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/amazechain/amc/accounts"
+	"github.com/amazechain/amc/accounts/keystore"
 	consensus_pb "github.com/amazechain/amc/api/protocol/consensus_proto"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common"
@@ -43,18 +53,15 @@ import (
 	"github.com/amazechain/amc/internal/network"
 	"github.com/amazechain/amc/internal/pubsub"
 	"github.com/amazechain/amc/internal/txspool"
-	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
+	"github.com/amazechain/amc/params"
 	"github.com/amazechain/amc/utils"
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.uber.org/zap"
-	"strconv"
-	"sync"
-	"time"
 )
 
 type Node struct {
@@ -91,6 +98,14 @@ type Node struct {
 	ipc           *ipcServer
 	ws            *httpServer
 	inprocHandler *jsonrpc.Server
+
+	//n.config.GenesisBlockCfg.Engine.Etherbase
+	etherbase types.Address
+	lock      sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	accman     *accounts.Manager
+	keyDir     string // key store directory
+	keyDirTemp bool   // If true, key directory will be removed by Stop
 }
 
 func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
@@ -113,11 +128,11 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		}
 	}
 
-	log.Infof("node address: %s", types.PrivateToAddress(privateKey))
+	log.Info("new node", "address", types.PrivateToAddress(privateKey))
 
 	chainDB, err := amcdb.OpenDB(ctx, &cfg.NodeCfg, &cfg.DatabaseCfg)
 	if err != nil {
-		log.Errorf("failed to open db %v, err: %v", cfg.DatabaseCfg, err)
+		log.Error("failed to open db", "db", cfg.DatabaseCfg, "err", err)
 
 		return nil, err
 	}
@@ -125,14 +140,20 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	// todo
 	changeDB, err := mdbx.NewMDBX().Path(fmt.Sprintf("%s/changeSet", cfg.NodeCfg.DataDir)).Label(kv.ChainDB).DBVerbosity(kv.DBVerbosityLvl(2)).Open()
 	if err != nil {
-		log.Errorf("failed to open kv db %v, err: %v", cfg.DatabaseCfg, err)
+		log.Error("failed to open kv db %v, err: %v", cfg.DatabaseCfg, err)
 
+		return nil, err
+	}
+
+	if err = changeDB.Update(context.Background(), func(tx kv.RwTx) (err error) {
+		return params.SetAmcVersion(tx, params.VersionKeyCreated)
+	}); err != nil {
 		return nil, err
 	}
 
 	genesisBlock, err = rawdb.GetGenesis(chainDB)
 	if err != nil {
-		log.Infof("genesis block")
+		log.Info("genesis block")
 
 		genesisBlock, err = blockchain.NewGenesisBlockFromConfig(&cfg.GenesisBlockCfg, cfg.GenesisBlockCfg.Engine.EngineName, chainDB, changeDB)
 		if err != nil {
@@ -146,11 +167,10 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 			miners := consensus_pb.PBSigners{}
 			for _, miner := range cfg.GenesisBlockCfg.Miners {
-				public, err := utils.StringToPublic(miner)
+				addr, err := types.HexToString(miner)
 				if err != nil {
 					return nil, err
 				}
-				addr := types.PublicToAddress(public)
 				miners.Signer = append(miners.Signer, &consensus_pb.PBSigner{
 					Public:  miner,
 					Address: addr,
@@ -207,34 +227,13 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 	txsFetcher := txspool.NewTxsFetcher(ctx, pool.GetTx, pool.AddRemotes, pool.Pending, s, peers, bloom)
 
-	log.Errorf("cfg info: %v", cfg.GenesisBlockCfg)
-
 	switch cfg.GenesisBlockCfg.Engine.EngineName {
 	case "APoaEngine":
 		engine = apoa.New(&cfg.GenesisBlockCfg.Engine, chainDB)
-
-		//set miner key
-		minerKey, err := utils.StringToPrivate(cfg.GenesisBlockCfg.Engine.MinerKey)
-		if err != nil {
-			log.Errorf("failed resolver miner key, err: %v", err)
-			return nil, err
-		}
-		addr := types.PrivateToAddress(minerKey)
-		log.Infof("miner address: %s", addr.String())
-
-		//todo~
-		SignerFn := func(signer types.Address, mimeType string, message []byte) ([]byte, error) {
-			h := sha256.New()
-			h.Write(signer.Bytes())
-			h.Write([]byte(mimeType))
-			h.Write(message)
-			return h.Sum(nil), nil
-		}
-		engine.(*apoa.Apoa).Authorize(addr, SignerFn)
-
 	default:
 		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Engine.EngineName)
 	}
+
 	bc.SetEngine(engine)
 
 	c, cancel := context.WithCancel(ctx)
@@ -246,7 +245,13 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 	miner := miner.NewMiner(ctx, &cfg.GenesisBlockCfg.Engine, bc, engine, pool, nil)
 
-	api := api.NewAPI(pubsubServer, s, peers, bc, chainDB, engine, pool, downloader)
+	keyDir, isEphem, err := getKeyStoreDir(&cfg.NodeCfg)
+	if err != nil {
+		return nil, err
+	}
+	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/amc)
+	// are required to add the backends later on.
+	accman := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.NodeCfg.InsecureUnlockAllowed})
 
 	node = Node{
 		ctx:          c,
@@ -270,8 +275,21 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		http:          newHTTPServer(),
 		ws:            newHTTPServer(),
 		ipc:           newIPCServer(&cfg.NodeCfg),
-		api:           api,
+		etherbase:     types.HexToAddress(cfg.GenesisBlockCfg.Engine.Etherbase),
+
+		accman:     accman,
+		keyDir:     keyDir,
+		keyDirTemp: isEphem,
 	}
+
+	// Apply flags.
+	//SetNodeConfig(ctx, &cfg)
+	// Node doesn't by default populate account manager backends
+	if err = setAccountManagerBackends(&node, &cfg.NodeCfg); err != nil {
+		log.Errorf("Failed to set account manager backends: %v", err)
+	}
+
+	node.api = api.NewAPI(pubsubServer, s, peers, bc, chainDB, engine, pool, downloader, node.AccountManager())
 
 	return &node, nil
 }
@@ -293,17 +311,27 @@ func (n *Node) Start() error {
 	}
 
 	if n.config.NodeCfg.Miner {
-		//if err := n.engine.Start(); err != nil {
-		//	n.log.Errorf("failed setup engine service, err: %v", err)
-		//	return err
-		//}
 
-		minerKey, err := utils.StringToPrivate(n.config.GenesisBlockCfg.Engine.MinerKey)
+		// Configure the local mining address
+		eb, err := n.Etherbase()
 		if err != nil {
-			log.Errorf("failed resolver miner key, err: %v", err)
-			return err
+			log.Error("Cannot start mining without etherbase", "err", err)
+			return fmt.Errorf("etherbase missing: %v", err)
 		}
-		n.miner.SetCoinbase(types.PrivateToAddress(minerKey))
+		var poa *apoa.Apoa
+		if c, ok := n.engine.(*apoa.Apoa); ok {
+			poa = c
+		}
+		if poa != nil {
+			wallet, err := n.accman.Find(accounts.Account{Address: eb})
+			if wallet == nil || err != nil {
+				log.Error("Etherbase account unavailable locally", "err", err)
+				return fmt.Errorf("signer missing: %v", err)
+			}
+			poa.Authorize(eb, wallet.SignData)
+		}
+
+		n.miner.SetCoinbase(eb)
 		n.miner.Start()
 	}
 
@@ -321,6 +349,8 @@ func (n *Node) Start() error {
 			return err
 		}
 	}
+
+	n.SetupMetrics(n.config.MetricsCfg)
 
 	if err := n.txsFetcher.Start(); err != nil {
 		log.Error("failed start txsFetcher service", zap.Error(err))
@@ -547,4 +577,112 @@ func (n *Node) Close() {
 		close(n.shutDown)
 		_ = n.db.Close()
 	}
+}
+
+// AccountManager retrieves the account manager used by the protocol stack.
+func (n *Node) AccountManager() *accounts.Manager {
+	return n.accman
+}
+
+// getKeyStoreDir retrieves the key directory and will create
+// and ephemeral one if necessary.
+func getKeyStoreDir(conf *conf.NodeConfig) (string, bool, error) {
+	keydir, err := conf.KeyDirConfig()
+	if err != nil {
+		return "", false, err
+	}
+	isEphemeral := false
+	if keydir == "" {
+		// There is no datadir.
+		keydir, err = os.MkdirTemp("", "go-ethereum-keystore")
+		isEphemeral = true
+	}
+
+	if err != nil {
+		return "", false, err
+	}
+	if err := os.MkdirAll(keydir, 0700); err != nil {
+		return "", false, err
+	}
+
+	return keydir, isEphemeral, nil
+}
+
+func setAccountManagerBackends(stack *Node, conf *conf.NodeConfig) error {
+	am := stack.AccountManager()
+	keydir := stack.KeyStoreDir()
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if conf.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
+	}
+
+	// For now, we're using EITHER external signer OR local signers.
+	// If/when we implement some form of lockfile for USB and keystore wallets,
+	// we can have both, but it's very confusing for the user to see the same
+	// accounts in both externally and locally, plus very racey.
+	am.AddBackend(keystore.NewKeyStore(keydir, scryptN, scryptP))
+
+	return nil
+}
+
+// KeyStoreDir retrieves the key directory
+func (n *Node) KeyStoreDir() string {
+	return n.keyDir
+}
+
+func (n *Node) SetupMetrics(config conf.MetricsConfig) {
+
+	if config.EnableInfluxDB {
+		var (
+			endpoint     = config.InfluxDBEndpoint
+			bucket       = config.InfluxDBBucket
+			token        = config.InfluxDBToken
+			organization = config.InfluxDBOrganization
+			tagsMap      = SplitTagsFlag(config.InfluxDBTags)
+		)
+
+		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "amc.", tagsMap)
+	}
+}
+
+func (s *Node) Etherbase() (eb types.Address, err error) {
+	s.lock.RLock()
+	etherbase := s.etherbase
+	s.lock.RUnlock()
+
+	if etherbase != (types.Address{}) {
+		return etherbase, nil
+	}
+	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			etherbase := accounts[0].Address
+
+			s.lock.Lock()
+			s.etherbase = etherbase
+			s.lock.Unlock()
+
+			log.Info("Etherbase automatically configured", "address", etherbase)
+			return etherbase, nil
+		}
+	}
+	return types.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+}
+
+func SplitTagsFlag(tagsFlag string) map[string]string {
+	tags := strings.Split(tagsFlag, ",")
+	tagsMap := map[string]string{}
+
+	for _, t := range tags {
+		if t != "" {
+			kv := strings.Split(t, "=")
+
+			if len(kv) == 2 {
+				tagsMap[kv[0]] = kv[1]
+			}
+		}
+	}
+
+	return tagsMap
 }

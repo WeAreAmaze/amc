@@ -19,7 +19,7 @@ package conf
 type ConsensusConfig struct {
 	EngineName string     `json:"name" yaml:"name"`
 	BlsKey     string     `json:"bls" yaml:"bls"`
-	MinerKey   string     `json:"miner" yaml:"miner"`
+	Etherbase  string     `json:"etherbase" yaml:"etherbase"`
 	Period     uint64     `json:"period" yaml:"period"`
 	APoa       APoaConfig `json:"poa" yaml:"poa"`
 	GasFloor   uint64     `json:"gasFloor" yaml:"gasFloor"` // Target gas floor for mined blocks.

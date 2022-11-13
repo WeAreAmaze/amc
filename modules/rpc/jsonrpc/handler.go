@@ -240,9 +240,9 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			//log.Warn("Served "+msg.Method, ctx)
+			log.Warnf("Served "+msg.Method, ctx)
 		} else {
-			log.Debugf("Served "+msg.Method, ctx)
+			log.Tracef("Served "+msg.Method, ctx)
 		}
 		return resp
 	case msg.hasValidID():

@@ -10,7 +10,6 @@ import (
 	"github.com/amazechain/amc/internal/avm/crypto"
 	"github.com/amazechain/amc/internal/avm/params"
 	"github.com/amazechain/amc/internal/avm/rlp"
-	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
 	"golang.org/x/crypto/sha3"
 	"math/big"
@@ -31,21 +30,24 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func ToAmcAddress(addr common.Address) types.Address {
+func ToAmcAddress(addr *common.Address) *types.Address {
+	if addr == nil {
+		return nil
+	}
 	nullAddress := common.Address{}
 	if bytes.Equal(addr[:], nullAddress[:]) {
-		return types.Address{0}
+		return &types.Address{0}
 	}
 	var a types.Address
 	copy(a[:], addr[:])
-	return a
+	return &a
 }
 
 func ToAmcAccessList(accessList AccessList) transaction.AccessList {
 	var txAccessList transaction.AccessList
 	for _, accessTuple := range accessList {
 		txAccessTuple := new(transaction.AccessTuple)
-		txAccessTuple.Address = ToAmcAddress(accessTuple.Address)
+		txAccessTuple.Address = *ToAmcAddress(&accessTuple.Address)
 		for _, hash := range accessTuple.StorageKeys {
 			txAccessTuple.StorageKeys = append(txAccessTuple.StorageKeys, ToAmcHash(hash))
 		}
@@ -54,8 +56,8 @@ func ToAmcAccessList(accessList AccessList) transaction.AccessList {
 	return txAccessList
 }
 
-func FromAmcAddress(address types.Address) *common.Address {
-	if address.IsNull() {
+func FromAmcAddress(address *types.Address) *common.Address {
+	if address == nil {
 		return nil
 	}
 	var a common.Address
@@ -86,7 +88,7 @@ func ToAmcLog(log *Log) *block.Log {
 	}
 
 	return &block.Log{
-		Address:     ToAmcAddress(log.Address),
+		Address:     *ToAmcAddress(&log.Address),
 		Topics:      topics,
 		Data:        log.Data,
 		BlockNumber: types.NewInt64(log.BlockNumber),
@@ -109,7 +111,7 @@ func FromAmcLog(log *block.Log) *Log {
 	}
 
 	return &Log{
-		Address:     *FromAmcAddress(log.Address),
+		Address:     *FromAmcAddress(&log.Address),
 		Topics:      topics,
 		Data:        log.Data,
 		BlockNumber: log.BlockNumber.Uint64(),
@@ -304,11 +306,11 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 
 	switch tx.Type() {
 	case LegacyTxType:
-		log.Debugf("tx type is LegacyTxType")
+		log.Debug("tx type is LegacyTxType")
 	case AccessListTxType:
-		log.Debugf("tx type is AccessListTxType")
+		log.Debug("tx type is AccessListTxType")
 	case DynamicFeeTxType:
-		log.Debugf("tx type is DynamicFeeTxType")
+		log.Debug("tx type is DynamicFeeTxType")
 	}
 
 	gasPrice, ok := types.FromBig(tx.GasPrice())
@@ -316,9 +318,9 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 		return nil, fmt.Errorf("cannot convert big int to int256")
 	}
 
-	to := types.Address{0}
+	var to *types.Address
 	if tx.To() != nil {
-		to = ToAmcAddress(*tx.To())
+		to = ToAmcAddress(tx.To())
 	}
 
 	value, ok := types.FromBig(tx.Value())
@@ -326,20 +328,24 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 		return nil, fmt.Errorf("cannot convert big int to int256")
 	}
 
-	log.Debugf("tx %+v", tx.inner)
-
 	signer := MakeSigner(chainConfig, blockNumber)
 	from, err := Sender(signer, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	return transaction.NewTransaction(tx.Nonce(), ToAmcAddress(from), to, value, tx.Gas(), gasPrice, tx.Data()), err
+	amcTx := transaction.NewTransaction(tx.Nonce(), *ToAmcAddress(&from), to, value, tx.Gas(), gasPrice, tx.Data())
+	v, r, s := tx.RawSignatureValues()
+	v256, _ := types.FromBig(v)
+	r256, _ := types.FromBig(r)
+	s256, _ := types.FromBig(s)
+	amcTx.WithSignatureValues(v256, r256, s256)
+	return amcTx, nil
 }
 
-func FromAmcHeader(iHeader block.IHeader, engine consensus.Engine) *Header {
+func FromAmcHeader(iHeader block.IHeader) *Header {
 	header := iHeader.(*block.Header)
-	author, _ := engine.Author(iHeader)
+	//author, _ := engine.Author(iHeader)
 
 	var baseFee *big.Int
 	if !header.BaseFee.IsZero() {
@@ -348,7 +354,7 @@ func FromAmcHeader(iHeader block.IHeader, engine consensus.Engine) *Header {
 	return &Header{
 		ParentHash:  FromAmcHash(header.ParentHash),
 		UncleHash:   common.Hash{},
-		Coinbase:    *FromAmcAddress(author),
+		Coinbase:    *FromAmcAddress(&header.Coinbase),
 		Root:        FromAmcHash(header.Root),
 		TxHash:      FromAmcHash(header.TxHash),
 		ReceiptHash: FromAmcHash(header.ReceiptHash),

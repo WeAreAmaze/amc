@@ -81,7 +81,7 @@ func (api *API) GetSigners(number *jsonrpc.BlockNumber) ([]common.Address, error
 	signers := snap.signers()
 	ethSigners := make([]common.Address, len(signers))
 	for i, signer := range signers {
-		ethSigners[i] = *mvm_types.FromAmcAddress(signer)
+		ethSigners[i] = *mvm_types.FromAmcAddress(&signer)
 	}
 	return ethSigners, nil
 }
@@ -99,7 +99,7 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	signers := snap.signers()
 	ethSigners := make([]common.Address, len(signers))
 	for i, signer := range signers {
-		ethSigners[i] = *mvm_types.FromAmcAddress(signer)
+		ethSigners[i] = *mvm_types.FromAmcAddress(&signer)
 	}
 	return ethSigners, nil
 }
@@ -111,7 +111,7 @@ func (api *API) Proposals() map[common.Address]bool {
 
 	proposals := make(map[common.Address]bool)
 	for address, auth := range api.apoa.proposals {
-		proposals[*mvm_types.FromAmcAddress(address)] = auth
+		proposals[*mvm_types.FromAmcAddress(&address)] = auth
 	}
 	return proposals
 }
@@ -122,7 +122,7 @@ func (api *API) Propose(address common.Address, auth bool) {
 	api.apoa.lock.Lock()
 	defer api.apoa.lock.Unlock()
 
-	api.apoa.proposals[mvm_types.ToAmcAddress(address)] = auth
+	api.apoa.proposals[*mvm_types.ToAmcAddress(&address)] = auth
 }
 
 // Discard drops a currently running proposal, stopping the signer from casting
@@ -131,7 +131,7 @@ func (api *API) Discard(address common.Address) {
 	api.apoa.lock.Lock()
 	defer api.apoa.lock.Unlock()
 
-	delete(api.apoa.proposals, mvm_types.ToAmcAddress(address))
+	delete(api.apoa.proposals, *mvm_types.ToAmcAddress(&address))
 }
 
 type status struct {

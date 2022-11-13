@@ -17,7 +17,10 @@
 package rawdb
 
 import (
+	"encoding/binary"
+	"errors"
 	"fmt"
+
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/db"
@@ -26,12 +29,19 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
+const NumberLength = 8
+
 func GetGenesis(db db.IDatabase) (block.IBlock, error) {
-	header, _, err := GetHeader(db, types.NewInt64(0))
+	gHash, err := ReadCanonicalHash(db, 0)
+	if nil != err {
+		return nil, err
+	}
+
+	header, _, err := GetHeader(db, gHash)
 	if err != nil {
 		return nil, err
 	}
-	body, err := GetBody(db, types.NewInt64(0))
+	body, err := GetBody(db, gHash)
 
 	if err != nil {
 		return nil, err
@@ -43,21 +53,26 @@ func GetGenesis(db db.IDatabase) (block.IBlock, error) {
 }
 
 func StoreGenesis(db db.IDatabase, genesisBlock block.IBlock) error {
+	// write g td
+	gtd := genesisBlock.Difficulty()
+	if err := WriteTd(db, genesisBlock.Hash(), gtd); nil != err {
+		return err
+	}
+	// write hash
+	if err := WriteCanonicalHash(db, genesisBlock.Hash(), genesisBlock.Number64().Uint64()); nil != err {
+		return err
+	}
 	return StoreBlock(db, genesisBlock)
 }
 
-func GetHeader(db db.IDatabase, number types.Int256) (block.IHeader, types.Hash, error) {
-	key, err := number.MarshalText()
-	if err != nil {
-		return nil, types.Hash{}, err
-	}
+func GetHeader(db db.IDatabase, hash types.Hash) (block.IHeader, types.Hash, error) {
 
 	r, err := db.OpenReader(headerDB)
 	if err != nil {
 		return nil, types.Hash{}, err
 	}
 
-	v, err := r.Get(key)
+	v, err := r.Get(hash.Bytes())
 	if err != nil {
 		return nil, types.Hash{}, err
 	}
@@ -84,11 +99,6 @@ func StoreHeader(db db.IDatabase, iheader block.IHeader) error {
 		return fmt.Errorf("failed header types")
 	}
 
-	key, err := header.Number.MarshalText()
-	if err != nil {
-		return err
-	}
-
 	v, err := header.Marshal()
 	if err != nil {
 		return err
@@ -101,10 +111,7 @@ func StoreHeader(db db.IDatabase, iheader block.IHeader) error {
 		return err
 	}
 
-	_ = w.Put(key, v)
-	_ = w.Put(h[:], key)
-
-	return nil
+	return w.Put(h[:], v)
 }
 
 func GetHeaderByHash(db db.IDatabase, hash types.Hash) (block.IHeader, types.Hash, error) {
@@ -113,12 +120,7 @@ func GetHeaderByHash(db db.IDatabase, hash types.Hash) (block.IHeader, types.Has
 		return nil, types.Hash{}, err
 	}
 
-	key, err := r.Get(hash[:])
-	if err != nil {
-		return nil, types.Hash{}, err
-	}
-
-	v, err := r.Get(key)
+	v, err := r.Get(hash[:])
 	if err != nil {
 		return nil, types.Hash{}, err
 	}
@@ -157,7 +159,7 @@ func StoreBlock(db db.IDatabase, block block.IBlock) error {
 		return err
 	}
 
-	if err := StoreBody(db, block.Number64(), block.Body()); err != nil {
+	if err := StoreBody(db, block.Hash(), block.Body()); err != nil {
 		return err
 	}
 
@@ -174,18 +176,14 @@ func StoreBlock(db db.IDatabase, block block.IBlock) error {
 	return nil
 }
 
-func GetBody(db db.IDatabase, number types.Int256) (block.IBody, error) {
-	key, err := number.MarshalText()
-	if err != nil {
-		return nil, err
-	}
+func GetBody(db db.IDatabase, hash types.Hash) (block.IBody, error) {
 
 	r, err := db.OpenReader(bodyDB)
 	if err != nil {
 		return nil, err
 	}
 
-	v, err := r.Get(key)
+	v, err := r.Get(hash.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -203,11 +201,8 @@ func GetBody(db db.IDatabase, number types.Int256) (block.IBody, error) {
 	return &body, err
 }
 
-func StoreBody(db db.IDatabase, number types.Int256, body block.IBody) error {
-	key, err := number.MarshalText()
-	if err != nil {
-		return err
-	}
+func StoreBody(db db.IDatabase, hash types.Hash, body block.IBody) error {
+
 	if body == nil {
 		return nil
 	}
@@ -224,7 +219,7 @@ func StoreBody(db db.IDatabase, number types.Int256, body block.IBody) error {
 		return err
 	}
 
-	return w.Put(key, v)
+	return w.Put(hash.Bytes(), v)
 }
 
 func GetLatestBlock(db db.IDatabase) (block.IBlock, error) {
@@ -234,6 +229,7 @@ func GetLatestBlock(db db.IDatabase) (block.IBlock, error) {
 		return nil, err
 	}
 	v, err := r.Get(key[:])
+
 	if err != nil {
 		return nil, err
 	}
@@ -273,11 +269,16 @@ func GetTransaction(db db.IDatabase, txHash types.Hash) (*transaction.Transactio
 	if err != nil {
 		return nil, types.Hash{}, types.NewInt64(0), 0, nil
 	}
-	body, err := GetBody(db, blockNumber)
+
+	hash, err := ReadCanonicalHash(db, blockNumber.Uint64())
+	if nil != err {
+		return nil, types.Hash{}, types.NewInt64(0), 0, err
+	}
+	body, err := GetBody(db, hash)
 	if err != nil {
 		return nil, types.Hash{}, types.NewInt64(0), 0, nil
 	}
-	_, headerHash, err := GetHeader(db, blockNumber)
+	_, headerHash, err := GetHeader(db, hash)
 	if err != nil {
 		return nil, types.Hash{}, types.NewInt64(0), 0, nil
 	}
@@ -303,6 +304,14 @@ func StoreTransactionIndex(db db.IDatabase, blockNumber types.Int256, txHash typ
 	}
 
 	return r.Put(txHash.HexBytes(), v)
+}
+
+func DeleteTransactionIndex(db db.IDatabase, txHash types.Hash) error {
+	r, err := db.OpenWriter(transactionIndex)
+	if err != nil {
+		return err
+	}
+	return r.Delete(txHash.Bytes())
 }
 
 // GetTransactionIndex get block number by txHash
@@ -351,16 +360,15 @@ func GetHashNumber(db db.IDatabase, hash types.Hash) (types.Int256, error) {
 	}
 
 	v, err := r.Get(hash.HexBytes())
-
 	if err != nil {
 		return types.NewInt64(0), err
 	}
 
 	int256, err := types.FromHex(string(v))
-
 	if err != nil {
 		return types.NewInt64(0), err
 	}
+
 	return int256, nil
 }
 
@@ -409,13 +417,107 @@ func StoreReceipts(db db.IDatabase, hash types.Hash, receipts block.Receipts) er
 	return w.Put(hash.HexBytes(), v)
 }
 
-func ReadTd(db db.IDatabase, hash types.Hash) types.Int256 {
-	return types.Int256{}
-}
-
 func WriteTD(db db.IDatabase, hash types.Hash, td types.Int256) error {
 	return nil
 }
 
 func DeleteTD(db db.IDatabase, hash types.Hash) {
+}
+
+// ReadCanonicalHash retrieves the hash assigned to a canonical block number.
+func ReadCanonicalHash(db db.IDatabase, number uint64) (types.Hash, error) {
+	r, err := db.OpenReader(HeaderCanonical)
+	if err != nil {
+		return types.Hash{}, err
+	}
+
+	data, err := r.Get(EncodeBlockNumber(number))
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("failed ReadCanonicalHash: %w, number=%d", err, number)
+	}
+	if len(data) == 0 {
+		return types.Hash{}, nil
+	}
+	var hash types.Hash
+	copy(hash[:], data[:])
+	return hash, nil
+}
+
+// WriteCanonicalHash stores the hash assigned to a canonical block number.
+func WriteCanonicalHash(db db.IDatabase, hash types.Hash, number uint64) error {
+	w, err := db.OpenWriter(HeaderCanonical)
+	if err != nil {
+		return err
+	}
+
+	return w.Put(EncodeBlockNumber(number), hash.Bytes())
+}
+
+// EncodeBlockNumber encodes a block number as big endian uint64
+func EncodeBlockNumber(number uint64) []byte {
+	enc := make([]byte, NumberLength)
+	binary.BigEndian.PutUint64(enc, number)
+	return enc
+}
+
+var ErrInvalidSize = errors.New("bit endian number has an invalid size")
+
+func DecodeBlockNumber(number []byte) (uint64, error) {
+	if len(number) != NumberLength {
+		return 0, fmt.Errorf("%w: %d", ErrInvalidSize, len(number))
+	}
+	return binary.BigEndian.Uint64(number), nil
+}
+
+// DeleteCanonicalHash removes the number to hash canonical mapping.
+func DeleteCanonicalHash(db db.IDatabase, number uint64) error {
+	w, err := db.OpenWriter(HeaderCanonical)
+	if err != nil {
+		return err
+	}
+	return w.Delete(EncodeBlockNumber(number))
+}
+
+// ReadTd retrieves a block's total difficulty corresponding to the hash.
+func ReadTd(db db.IDatabase, hash types.Hash) (types.Int256, error) {
+	r, err := db.OpenReader(HeaderTD)
+	if nil != err {
+		return types.Int256{}, err
+	}
+	data, err := r.Get(hash[:])
+	if err != nil {
+		return types.Int256{}, fmt.Errorf("failed ReadTd: %w", err)
+	}
+	if len(data) == 0 {
+		return types.Int256{}, nil
+	}
+	td := new(types.Int256)
+	if err := td.UnmarshalText(data); nil != err {
+		return types.Int256{}, err
+	}
+	return *td, nil
+}
+
+//// HeaderKey = num (uint64 big endian) + hash
+//func HeaderKey(hash types.Hash) []byte {
+//	k := make([]byte, types.HashLength)
+//	copy(k[:], hash[:])
+//	return k
+//}
+
+// WriteTd stores the total difficulty of a block into the database.
+func WriteTd(db db.IDatabase, hash types.Hash, td types.Int256) error {
+	data, err := td.Marshal()
+	if err != nil {
+		return fmt.Errorf("failed to RLP encode block total difficulty: %w", err)
+	}
+
+	w, err := db.OpenWriter(HeaderTD)
+	if nil != err {
+		return err
+	}
+	if err := w.Put(hash[:], data); err != nil {
+		return fmt.Errorf("failed to store block total difficulty: %w", err)
+	}
+	return nil
 }

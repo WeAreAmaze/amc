@@ -17,11 +17,12 @@
 package download
 
 import (
+	"math/rand"
+	"time"
+
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
-	"math/rand"
-	"time"
 )
 
 func (d *Downloader) processHeaders() error {
@@ -147,7 +148,7 @@ func (d *Downloader) processChain() error {
 				//var inserted bool
 
 				block.FromProtoMessage(blockMsg)
-				if _, err := d.bc.InsertBlock([]block2.IBlock{&block}, true); err != nil {
+				if _, err := d.bc.InsertChain([]block2.IBlock{&block}); err != nil {
 					//inserted = false
 					log.Errorf("downloader failed to inster new block in blockchain, err:%v", err)
 				} else {

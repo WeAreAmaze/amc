@@ -22,8 +22,8 @@ import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/log"
 	"github.com/gogo/protobuf/proto"
+	"github.com/amazechain/amc/log"
 )
 
 // responseHeaders

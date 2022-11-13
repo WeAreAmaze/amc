@@ -19,21 +19,26 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/amazechain/amc/conf"
-	"github.com/amazechain/amc/internal/node"
 	"github.com/amazechain/amc/log"
-	"github.com/amazechain/amc/log/zap"
-	"github.com/urfave/cli/v2"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/amazechain/amc/accounts"
+
+	"github.com/amazechain/amc/accounts/keystore"
+	"github.com/amazechain/amc/cmd/utils"
+
+	"github.com/amazechain/amc/conf"
+	"github.com/amazechain/amc/internal/node"
+	"github.com/urfave/cli/v2"
 )
 
 func appRun(ctx *cli.Context) error {
-
 	if len(cfgFile) > 0 {
 		if err := conf.LoadConfigFromFile(cfgFile, &DefaultConfig); err != nil {
 			return err
@@ -48,13 +53,14 @@ func appRun(ctx *cli.Context) error {
 			DefaultConfig.NetworkCfg.LocalPeerKey = privateKey
 		}
 	}
-	zapLog, err := Init(&DefaultConfig.NodeCfg, &DefaultConfig.LoggerCfg)
-	if err != nil {
-		return err
-	}
+
+	log.Init(DefaultConfig.NodeCfg, DefaultConfig.LoggerCfg)
+	//log.SetLogger(log.WithContext(c, log.With(zap.NewLogger(zapLog), "caller", log.DefaultCaller)))
 
 	c, cancel := context.WithCancel(context.Background())
-	log.SetLogger(log.WithContext(c, log.With(zap.NewLogger(zapLog), "caller", log.DefaultCaller)))
+
+	// initializing the node and providing the current git commit there
+	//log.WithFields(logrus.Fields{"git_branch": version.GitBranch, "git_tag": version.GitTag, "git_commit": version.GitCommit}).Info("Build info")
 
 	//todo
 	//log.Infof("blockchain %v", DefaultConfig)
@@ -72,15 +78,15 @@ func appRun(ctx *cli.Context) error {
 
 		go func() {
 			if err := http.ListenAndServe(fmt.Sprintf(":%d", DefaultConfig.PprofCfg.Port), nil); err != nil {
-				log.Errorf("failed to setup go pprof, err: %v", err)
+				log.Error("failed to setup go pprof", "err", err)
 				os.Exit(0)
 			}
 		}()
 	}
 
 	n, err := node.NewNode(c, &DefaultConfig)
-
 	if err != nil {
+		log.Error("Failed start Node", "err", err)
 		return err
 	}
 
@@ -88,6 +94,46 @@ func appRun(ctx *cli.Context) error {
 		cancel()
 		return err
 	}
+
+	// Unlock any account specifically requested
+	unlockAccounts(ctx, n, &DefaultConfig)
+
+	// Register wallet event handlers to open and auto-derive wallets
+	events := make(chan accounts.WalletEvent, 16)
+	n.AccountManager().Subscribe(events)
+
+	go func() {
+		// Open any wallets already attached
+		for _, wallet := range n.AccountManager().Wallets() {
+			if err := wallet.Open(""); err != nil {
+				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
+			}
+		}
+		// Listen for wallet event till termination
+		for event := range events {
+			switch event.Kind {
+			case accounts.WalletArrived:
+				if err := event.Wallet.Open(""); err != nil {
+					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
+				}
+			case accounts.WalletOpened:
+				status, _ := event.Wallet.Status()
+				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+
+				var derivationPaths []accounts.DerivationPath
+				if event.Wallet.URL().Scheme == "ledger" {
+					derivationPaths = append(derivationPaths, accounts.LegacyLedgerBaseDerivationPath)
+				}
+				derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
+
+				event.Wallet.SelfDerive(derivationPaths, nil)
+
+			case accounts.WalletDropped:
+				log.Info("Old wallet dropped", "url", event.Wallet.URL())
+				event.Wallet.Close()
+			}
+		}
+	}()
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -115,4 +161,48 @@ func appWait(cancelFunc context.CancelFunc, group *sync.WaitGroup) {
 	log.Info("app quit ...")
 	cancelFunc()
 	group.Done()
+}
+
+// unlockAccounts unlocks any account specifically requested.
+func unlockAccounts(ctx *cli.Context, stack *node.Node, cfg *conf.Config) {
+	var unlocks []string
+	inputs := strings.Split(ctx.String(UnlockedAccountFlag.Name), ",")
+	for _, input := range inputs {
+		if trimmed := strings.TrimSpace(input); trimmed != "" {
+			unlocks = append(unlocks, trimmed)
+		}
+	}
+
+	// Short circuit if there is no account to unlock.
+	if len(unlocks) == 0 {
+		return
+	}
+	// If insecure account unlocking is not allowed if node's APIs are exposed to external.
+	// Print warning log to user and skip unlocking.
+	if !cfg.NodeCfg.InsecureUnlockAllowed && cfg.NodeCfg.ExtRPCEnabled() {
+		utils.Fatalf("Account unlock with HTTP access is forbidden!")
+	}
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	passwords := MakePasswordList(ctx)
+	for i, account := range unlocks {
+		unlockAccount(ks, account, i, passwords)
+	}
+}
+
+// MakePasswordList reads password lines from the file specified by the global --password flag.
+func MakePasswordList(ctx *cli.Context) []string {
+	path := ctx.Path(PasswordFileFlag.Name)
+	if path == "" {
+		return nil
+	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		log.Error("Failed to read password ", "file", err)
+	}
+	lines := strings.Split(string(text), "\n")
+	// Sanitise DOS line endings.
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	return lines
 }

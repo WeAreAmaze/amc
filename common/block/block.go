@@ -53,6 +53,10 @@ func (b *Block) Transactions() []*transaction.Transaction {
 	return nil
 }
 
+func (b *Block) StateRoot() types.Hash {
+	return b.header.Root
+}
+
 func (b *Block) Hash() types.Hash {
 	return b.Header().Hash()
 }
@@ -84,7 +88,15 @@ func (b *Block) Size() types.StorageSize {
 	return types.StorageSize(c)
 }
 
+// NewBlock creates a new block. The input data is copied,
+// changes to header and to the field values will not affect the
+// block.
+//
+// The values of TxHash, UncleHash, ReceiptHash and Bloom in header
+// are ignored and set to values derived from the given txs, uncles
+// and receipts.
 func NewBlock(h IHeader, txs []*transaction.Transaction) IBlock {
+
 	block := &Block{
 		header:       h.(*Header),
 		body:         &Body{Txs: txs},
@@ -94,22 +106,20 @@ func NewBlock(h IHeader, txs []*transaction.Transaction) IBlock {
 	return block
 }
 
-func NewBlockFromReceipt(h IHeader, txs []*transaction.Transaction, receipts []*Receipt) IBlock {
-	b := &Block{header: CopyHeader(h.(*Header))}
-	if len(txs) == 0 {
-		b.header.TxHash = types.Hash{0}
-	} else {
-		// todo calculate txs hash
-	}
-	b.body = &Body{Txs: txs}
+func NewBlockFromReceipt(h IHeader, txs []*transaction.Transaction, uncles []IHeader, receipts []*Receipt) IBlock {
 
-	if len(receipts) == 0 {
-		b.header.ReceiptHash = types.Hash{0}
-	} else {
-		// todo calculate receipts Hash
+	block := &Block{
+		header:       CopyHeader(h.(*Header)),
+		body:         &Body{Txs: txs},
+		ReceiveAt:    time.Now(),
+		ReceivedFrom: nil,
 	}
 
-	return b
+	block.header.TxHash = types.DeriveSha(transaction.Transactions(txs))
+
+	block.header.ReceiptHash = types.DeriveSha(Receipts(receipts))
+
+	return block
 }
 
 func (b *Block) Header() IHeader {

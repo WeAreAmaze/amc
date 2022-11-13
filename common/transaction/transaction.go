@@ -17,13 +17,15 @@
 package transaction
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/amazechain/amc/api/protocol/types_pb"
-	"github.com/amazechain/amc/common/types"
-	log "github.com/amazechain/amc/log"
-	"github.com/gogo/protobuf/proto"
+	"math/big"
 	"sync/atomic"
 	"time"
+
+	"github.com/amazechain/amc/api/protocol/types_pb"
+	"github.com/amazechain/amc/common/types"
+	"github.com/gogo/protobuf/proto"
 )
 
 var (
@@ -63,6 +65,21 @@ type TxData interface {
 	//Size() int
 }
 
+// Transactions implements DerivableList for transactions.
+type Transactions []*Transaction
+
+// Len returns the length of s.
+func (s Transactions) Len() int { return len(s) }
+
+// EncodeIndex encodes the i'th transaction to w. Note that this does not check for errors
+// because we assume that *Transaction will only ever contain valid txs that were either
+// constructed by decoding or via public API in this package.
+func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
+	tx := s[i]
+	proto, _ := tx.Marshal()
+	w.Write(proto)
+}
+
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
@@ -94,13 +111,16 @@ func FromProtoMessage(message proto.Message) (*Transaction, error) {
 	switch pbTx.Type {
 	case LegacyTxType:
 		var itx LegacyTx
-		itx.To = &pbTx.To
+		itx.To = pbTx.To
 		itx.From = &pbTx.From
 		itx.Sign = pbTx.Sing
 		itx.Nonce = pbTx.Nonce
 		itx.Gas = pbTx.Gas
 		itx.GasPrice = pbTx.GasPrice
 		itx.Value = pbTx.Value
+		itx.V = pbTx.V
+		itx.R = pbTx.R
+		itx.S = pbTx.S
 		itx.Data = pbTx.Data
 		inner = &itx
 	case AccessListTxType:
@@ -110,8 +130,11 @@ func FromProtoMessage(message proto.Message) (*Transaction, error) {
 		altt.Gas = pbTx.Gas
 		altt.GasPrice = pbTx.GasPrice
 		altt.Value = pbTx.Value
+		altt.V = pbTx.V
+		altt.R = pbTx.R
+		altt.S = pbTx.S
 		altt.Data = pbTx.Data
-		altt.To = &pbTx.To
+		altt.To = pbTx.To
 		altt.From = &pbTx.From
 		altt.Sign = pbTx.Sing
 		inner = &altt
@@ -123,8 +146,11 @@ func FromProtoMessage(message proto.Message) (*Transaction, error) {
 		dftt.GasFeeCap = pbTx.FeePerGas
 		dftt.GasTipCap = pbTx.PriorityFeePerGas
 		dftt.Value = pbTx.Value
+		dftt.V = pbTx.V
+		dftt.R = pbTx.R
+		dftt.S = pbTx.S
 		dftt.Data = pbTx.Data
-		dftt.To = &pbTx.To
+		dftt.To = pbTx.To
 		dftt.From = &pbTx.From
 		dftt.Sign = pbTx.Sing
 		inner = &dftt
@@ -145,7 +171,7 @@ func (tx *Transaction) ToProtoMessage() proto.Message {
 		pbTx.GasPrice = tx.GasPrice()
 		pbTx.Value = tx.Value()
 		pbTx.Data = tx.Data()
-		pbTx.To = *tx.To()
+		pbTx.To = tx.To()
 		pbTx.From, _ = tx.From()
 		pbTx.Sing = t.Sign
 	case *LegacyTx:
@@ -154,7 +180,7 @@ func (tx *Transaction) ToProtoMessage() proto.Message {
 		pbTx.GasPrice = tx.GasPrice()
 		pbTx.Value = tx.Value()
 		pbTx.Data = tx.Data()
-		pbTx.To = *tx.To()
+		pbTx.To = tx.To()
 		pbTx.From, _ = tx.From()
 		pbTx.Sing = t.Sign
 	case *DynamicFeeTx:
@@ -164,12 +190,14 @@ func (tx *Transaction) ToProtoMessage() proto.Message {
 		pbTx.GasPrice = tx.GasPrice()
 		pbTx.Value = tx.Value()
 		pbTx.Data = tx.Data()
-		pbTx.To = *tx.To()
+		pbTx.To = tx.To()
 		pbTx.From, _ = tx.From()
 		pbTx.Sing = t.Sign
 		pbTx.FeePerGas = t.GasFeeCap
 		pbTx.PriorityFeePerGas = t.GasTipCap
 	}
+
+	pbTx.V, pbTx.R, pbTx.S = tx.RawSignatureValues()
 
 	return &pbTx
 }
@@ -186,6 +214,12 @@ func (tx *Transaction) RawSignatureValues() (v, r, s types.Int256) {
 	return tx.inner.rawSignatureValues()
 }
 
+// WithSignature todo
+func (tx *Transaction) WithSignatureValues(v, r, s types.Int256) (*Transaction, error) {
+	tx.inner.setSignatureValues(types.NewInt64(100100100), v, r, s)
+	return tx, nil
+}
+
 func (tx Transaction) Marshal() ([]byte, error) {
 	var pbTx types_pb.Transaction
 	pbTx.Type = uint64(tx.inner.txType())
@@ -198,7 +232,7 @@ func (tx Transaction) Marshal() ([]byte, error) {
 		pbTx.GasPrice = tx.GasPrice()
 		pbTx.Value = tx.Value()
 		pbTx.Data = tx.Data()
-		pbTx.To = *tx.To()
+		pbTx.To = tx.To()
 		pbTx.From, _ = tx.From()
 		pbTx.Sing = t.Sign
 	case *LegacyTx:
@@ -207,7 +241,7 @@ func (tx Transaction) Marshal() ([]byte, error) {
 		pbTx.GasPrice = tx.GasPrice()
 		pbTx.Value = tx.Value()
 		pbTx.Data = tx.Data()
-		pbTx.To = *tx.To()
+		pbTx.To = tx.To()
 		pbTx.From, _ = tx.From()
 		pbTx.Sing = t.Sign
 	case *DynamicFeeTx:
@@ -217,12 +251,14 @@ func (tx Transaction) Marshal() ([]byte, error) {
 		pbTx.GasPrice = tx.GasPrice()
 		pbTx.Value = tx.Value()
 		pbTx.Data = tx.Data()
-		pbTx.To = *tx.To()
+		pbTx.To = tx.To()
 		pbTx.From, _ = tx.From()
 		pbTx.Sing = t.Sign
 		pbTx.FeePerGas = t.GasFeeCap
 		pbTx.PriorityFeePerGas = t.GasTipCap
 	}
+
+	pbTx.R, pbTx.S, pbTx.V = tx.RawSignatureValues()
 
 	return proto.Marshal(&pbTx)
 }
@@ -342,15 +378,30 @@ func (tx *Transaction) Hash() (types.Hash, error) {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(types.Hash), nil
 	}
-	buf, err := tx.Marshal()
-	if err != nil {
-		log.Errorf("tx Marshal error: %v", err)
-		return types.Hash{}, err
+
+	v, r, s := tx.RawSignatureValues()
+	var inner = &rlpTx{
+		Nonce:    tx.Nonce(),
+		GasPrice: tx.GasPrice().ToBig(),
+		Gas:      tx.Gas(),
+		To:       tx.To(),
+		Value:    tx.Value().ToBig(),
+		Data:     tx.Data(),
+		V:        v.ToBig(),
+		R:        r.ToBig(),
+		S:        s.ToBig(),
 	}
 
-	hash := types.BytesToHash(buf)
-	tx.hash.Store(hash)
-	return hash, nil
+	var h types.Hash
+	if tx.Type() == LegacyTxType {
+
+		h = types.Hash(rlpHash(inner))
+	} else {
+		h = types.Hash(prefixedRlpHash(tx.Type(), inner))
+	}
+
+	tx.hash.Store(h)
+	return h, nil
 }
 
 // EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
@@ -388,6 +439,41 @@ func (tx *Transaction) EffectiveGasTip(baseFee types.Int256) (types.Int256, erro
 	return types.Int256Min(tx.GasTipCap(), gasFeeCap.Sub(baseFee)), err
 }
 
+func isProtectedV(V *big.Int) bool {
+	if V.BitLen() <= 8 {
+		v := V.Uint64()
+		return v != 27 && v != 28 && v != 1 && v != 0
+	}
+	// anything not 27 or 28 is considered protected
+	return true
+}
+
+// Protected says whether the transaction is replay-protected.
+func (tx *Transaction) Protected() bool {
+	switch tx := tx.inner.(type) {
+	case *LegacyTx:
+		return tx.V.ToBig() != nil && isProtectedV(tx.V.ToBig())
+	default:
+		return true
+	}
+}
+
+// WithSignature returns a new transaction with the given signature.
+// This signature needs to be in the [R || S || V] format where V is 0 or 1.
+func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, error) {
+	r, s, v, err := signer.SignatureValues(tx, sig)
+	if err != nil {
+		return nil, err
+	}
+	cpy := tx.inner.copy()
+	chainID, _ := types.FromBig(signer.ChainID())
+	v1, _ := types.FromBig(v)
+	r1, _ := types.FromBig(r)
+	s1, _ := types.FromBig(s)
+	cpy.setSignatureValues(chainID, v1, r1, s1)
+	return &Transaction{inner: cpy, time: tx.time}, nil
+}
+
 //type Transaction struct {
 //	to        types.Address
 //	from      types.Address
@@ -420,4 +506,15 @@ func copyAddressPtr(a *types.Address) *types.Address {
 	}
 	cpy := *a
 	return &cpy
+}
+
+// for hash
+type rlpTx struct {
+	Nonce    uint64         // nonce of sender account
+	GasPrice *big.Int       // wei per gas
+	Gas      uint64         // gas limit
+	To       *types.Address `rlp:"nil"` // nil means contract creation
+	Value    *big.Int       // wei amount
+	Data     []byte         // contract invocation input data
+	V, R, S  *big.Int       // signature values
 }

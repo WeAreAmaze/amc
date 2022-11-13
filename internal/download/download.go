@@ -19,19 +19,20 @@ package download
 import (
 	"context"
 	"fmt"
-	"github.com/amazechain/amc/api/protocol/sync_proto"
-	"github.com/amazechain/amc/api/protocol/types_pb"
-	"github.com/amazechain/amc/common"
-	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/log"
-	event "github.com/amazechain/amc/modules/event/v2"
-	"github.com/gogo/protobuf/proto"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"go.uber.org/zap"
 	"hash"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/amazechain/amc/api/protocol/sync_proto"
+	"github.com/amazechain/amc/api/protocol/types_pb"
+	"github.com/amazechain/amc/common"
+	"github.com/amazechain/amc/common/types"
+	event "github.com/amazechain/amc/modules/event/v2"
+	"github.com/gogo/protobuf/proto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/amazechain/amc/log"
+	"go.uber.org/zap"
 )
 
 var (

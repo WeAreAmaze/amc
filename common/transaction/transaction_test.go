@@ -32,7 +32,7 @@ func TestNewLegacyTx(t *testing.T) {
 
 	addr := types.PublicToAddress(pub)
 
-	tx := NewTransaction(1, addr, types.NewInt64(10000), 21000, types.NewInt64(10000000), []byte("hello"))
+	tx := NewTransaction(1, addr, addr, types.NewInt64(10000), 21000, types.NewInt64(10000000), []byte("hello"))
 	t.Logf("tx: %v", tx)
 
 	buf1, err := json.Marshal(tx)
@@ -66,7 +66,7 @@ func TestTDin(t *testing.T) {
 
 	addr := types.PublicToAddress(pub)
 
-	tx := NewTransaction(1, addr, types.NewInt64(10000), 21000, types.NewInt64(10000000), []byte("hello"))
+	tx := NewTransaction(1, addr, addr, types.NewInt64(10000), 21000, types.NewInt64(10000000), []byte("hello"))
 	t.Logf("tx: %v", tx)
 
 	b, err := tx.Marshal()

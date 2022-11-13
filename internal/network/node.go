@@ -20,20 +20,21 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/amazechain/amc/log"
+	"io"
+	"sync"
+	"time"
+
 	"github.com/amazechain/amc/api/protocol/msg_proto"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/log"
 	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	libpeer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"io"
-	"sync"
-	"time"
 )
 
 var (
@@ -120,7 +121,7 @@ func NewNode(ctx context.Context, h host.Host, s *Service, peer libpeer.AddrInfo
 	} else {
 		stream, err = node.NewStream(node.ctx, peer.ID, config.Protocol)
 		if err != nil {
-			log.Error("failed to created stream to peer", peer.String(), err)
+			log.Error("failed to created stream to peer", "peer ID", peer.String(), "peer addr", peer.Addrs, "err", err)
 			return nil, err
 		}
 	}

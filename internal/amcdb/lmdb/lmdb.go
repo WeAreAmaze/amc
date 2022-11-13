@@ -19,15 +19,16 @@ package lmdb
 import (
 	"context"
 	"fmt"
-	"github.com/amazechain/amc/common/db"
-	"github.com/amazechain/amc/conf"
-	log "github.com/amazechain/amc/log"
-	"github.com/amazechain/amc/utils"
-	"github.com/c2h5oh/datasize"
-	"github.com/torquem-ch/mdbx-go/mdbx"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/amazechain/amc/common/db"
+	"github.com/amazechain/amc/conf"
+	"github.com/amazechain/amc/log"
+	"github.com/amazechain/amc/utils"
+	"github.com/c2h5oh/datasize"
+	"github.com/torquem-ch/mdbx-go/mdbx"
 )
 
 var (
@@ -87,7 +88,6 @@ func NewLMDB(c context.Context, nodeConfig *conf.NodeConfig, config *conf.Databa
 		file = fmt.Sprintf("%s/%s/%s", nodeConfig.DataDir, config.DBPath, config.DBName)
 	}
 
-	log.Debugf("data dir %s", file)
 	if !utils.Exists(file) {
 		if err := utils.MkdirAll(file, os.ModePerm); err != nil {
 			return nil, err

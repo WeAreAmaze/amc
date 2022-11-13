@@ -194,7 +194,7 @@ func (filterApi *FilterAPI) NewHeads(ctx context.Context) (*jsonrpc.Subscription
 		for {
 			select {
 			case h := <-headers:
-				notifier.Notify(rpcSub.ID, mvm_types.FromAmcHeader(h, filterApi.api.Engine()))
+				notifier.Notify(rpcSub.ID, mvm_types.FromAmcHeader(h))
 			case <-rpcSub.Err():
 				headersSub.Unsubscribe()
 				return

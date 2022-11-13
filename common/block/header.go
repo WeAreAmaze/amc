@@ -85,6 +85,10 @@ func (h *Header) Number64() types.Int256 {
 	return h.Number
 }
 
+func (h *Header) StateRoot() types.Hash {
+	return h.Root
+}
+
 func (h *Header) BaseFee64() types.Int256 {
 	return h.BaseFee
 }

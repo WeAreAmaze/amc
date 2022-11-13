@@ -20,10 +20,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/amazechain/amc/log"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-discovery"
-	kademliaDHT "github.com/libp2p/go-libp2p-kad-dht"
 	"time"
+
+	"github.com/libp2p/go-libp2p-core/peer"
+	discovery "github.com/libp2p/go-libp2p-discovery"
+	kademliaDHT "github.com/libp2p/go-libp2p-kad-dht"
 )
 
 type KadDHT struct {

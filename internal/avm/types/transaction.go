@@ -40,13 +40,13 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 	}
 }
 
-//// AsMessage returns the transaction as a core.Message.
+// // AsMessage returns the transaction as a core.Message.
 func AsMessage(tx *transaction.Transaction, baseFee *big.Int, isFake bool) Message {
 	f, _ := tx.From()
 
 	from := &common.Address{}
 	if !f.IsNull() {
-		from = FromAmcAddress(f)
+		from = FromAmcAddress(&f)
 	}
 
 	msg := Message{
@@ -55,7 +55,7 @@ func AsMessage(tx *transaction.Transaction, baseFee *big.Int, isFake bool) Messa
 		gasPrice:  tx.GasPrice().ToBig(),
 		gasFeeCap: tx.GasFeeCap().ToBig(),
 		gasTipCap: tx.GasTipCap().ToBig(),
-		to:        FromAmcAddress(*tx.To()),
+		to:        FromAmcAddress(tx.To()),
 		amount:    tx.Value().ToBig(),
 		data:      tx.Data(),
 		isFake:    isFake,
@@ -69,7 +69,7 @@ func AsMessage(tx *transaction.Transaction, baseFee *big.Int, isFake bool) Messa
 	if tx.AccessList() != nil {
 		for _, v := range tx.AccessList() {
 			var at AccessTuple
-			at.Address = *FromAmcAddress(v.Address)
+			at.Address = *FromAmcAddress(&v.Address)
 			for _, h := range v.StorageKeys {
 				at.StorageKeys = append(at.StorageKeys, FromAmcHash(h))
 			}

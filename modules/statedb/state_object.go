@@ -108,7 +108,7 @@ func newObject(db *StateDB, address types.Address, data StateAccount) *stateObje
 		db:           db,
 		data:         data,
 		dirtyStorage: make(Storage),
-		fakeStorage:  make(Storage),
+		//fakeStorage:  make(Storage), when use SetStorage to init fakeStorage
 	}
 }
 
@@ -128,11 +128,13 @@ func (s *stateObject) ToProtoMessage() proto.Message {
 	bpAccount.CodeHash = s.data.CodeHash
 	bpAccount.Suicided = s.suicided
 	bpAccount.Code = s.code
+	bpAccount.State = make([]*state.HashMap, 0, len(s.dirtyStorage))
 	for k, v := range s.dirtyStorage {
 		bpAccount.State = append(bpAccount.State, &state.HashMap{
 			Key:   k,
 			Value: v,
 		})
+		//log.Infof("save addr %s, state key: %s, value %s", s.address.String(), k.String(), v.String())
 	}
 
 	return &bpAccount
@@ -158,13 +160,12 @@ func (s *stateObject) FromProtoMessage(db *StateDB, addr types.Address, message 
 		CodeHash: account.CodeHash,
 	}
 	s.db = db
-	//s.dirtyStorage = Storage(account.State)
 	s.suicided = account.Suicided
 	s.code = account.Code
 	s.dirtyStorage = make(Storage)
-	s.fakeStorage = make(Storage)
 	for i, _ := range account.State {
 		s.dirtyStorage[account.State[i].Key] = account.State[i].Value
+		//log.Infof("load addr %s, state key: %s, value %s", addr.String(), account.State[i].Key.String(), account.State[i].Value.String())
 	}
 	return nil
 }
@@ -252,7 +253,7 @@ func (s *stateObject) updateRoot(db db.IDatabase) {
 
 }
 
-//AddBalance add balance
+// AddBalance add balance
 func (s *stateObject) AddBalance(amount types.Int256) {
 	if amount.Sign() == 0 {
 		if s.empty() {
@@ -298,7 +299,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 // Attribute accessors
 //
 
-//Address Returns the address of the contract/account
+// Address Returns the address of the contract/account
 func (s *stateObject) Address() types.Address {
 	return s.address
 }

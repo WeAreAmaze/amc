@@ -20,9 +20,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/log"
-	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"io"
 	"io/ioutil"
 	"net"
@@ -32,6 +30,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/amazechain/amc/conf"
+	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 )
 
 type httpConfig struct {

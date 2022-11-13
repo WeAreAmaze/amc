@@ -21,7 +21,7 @@ import "fmt"
 var (
 	MajorVersionNumber = 0
 	MinorVersionNumber = 8
-	RevisionNumber     = 1
+	RevisionNumber     = 2
 
 	BuildNumber string
 	BuildTime   string

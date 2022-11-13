@@ -21,14 +21,15 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/amazechain/amc/internal/kv"
-	"github.com/amazechain/amc/log"
 	"os"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/amazechain/amc/internal/kv"
+	"github.com/amazechain/amc/log"
 
 	"github.com/c2h5oh/datasize"
 	stack2 "github.com/go-stack/stack"
@@ -197,7 +198,8 @@ func (opts MdbxOpts) Open() (kv.RwDB, error) {
 				return nil, err
 			}
 		} else {
-			if err = env.SetGeometry(-1, -1, int(opts.mapSize), int(opts.growthStep), -1, int(opts.pageSize)); err != nil {
+			//todo just for testing , next we will change pageSize == int(opts.pageSize)
+			if err = env.SetGeometry(-1, -1, int(opts.mapSize), int(opts.growthStep), -1, 65536); err != nil {
 				return nil, err
 			}
 		}

@@ -93,7 +93,7 @@ func RPCMarshalHeader(head block.IHeader, engine consensus.Engine) map[string]in
 		"nonce":            header.Nonce,
 		"mixHash":          mvm_types.FromAmcHash(header.MixDigest),
 		"sha3Uncles":       mvm_common.Hash{},
-		"miner":            mvm_types.FromAmcAddress(author),
+		"miner":            mvm_types.FromAmcAddress(&author),
 		"difficulty":       (*hexutil.Big)(header.Difficulty.ToBig()),
 		"totalDifficulty":  (*hexutil.Big)(big.NewInt(100)),
 		"extraData":        hexutil.Bytes(header.Extra),

@@ -18,8 +18,9 @@ package network
 
 import (
 	"context"
-	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
+
+	"github.com/amazechain/amc/common/types"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -45,6 +46,7 @@ func (m *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	case <-m.ctx.Done():
 		return
 	default:
+
 		if pi.ID == m.h.ID() {
 			log.Warnf("is self peer remote=%s == self=%s", pi.ID.ShortString(), m.h.ID().ShortString())
 			return

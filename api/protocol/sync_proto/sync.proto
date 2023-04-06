@@ -20,8 +20,6 @@ option go_package = "github.com/amazechain/amc/api/protocol/sync_proto";
 
 import "types_pb/types.proto";
 
-import "gogoproto/gogo.proto";
-
 message SyncProtocol {
 
 }
@@ -47,20 +45,20 @@ message Value {
 }
 
 message SyncBlockRequest {
-  repeated string number  = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  repeated types_pb.H256 number  = 1;
 }
 
 message SyncBlockResponse {
-  repeated types.pb.PBlock blocks = 1;
+  repeated types_pb.Block blocks = 1;
 }
 
 message SyncHeaderRequest {
-  bytes number = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  bytes amount = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  types_pb.H256  number = 1;
+  types_pb.H256 amount = 3;
 }
 
 message SyncHeaderResponse {
-  repeated types.pb.PBHeader headers = 1;
+  repeated types_pb.Header headers = 1;
 }
 
 message SyncTransactionRequest {
@@ -68,12 +66,12 @@ message SyncTransactionRequest {
 }
 
 message SyncTransactionResponse {
-  repeated types.pb.Transaction transactions = 1;
+  repeated types_pb.Transaction transactions = 1;
 }
 
 message SyncPeerInfoBroadcast {
-  string Difficulty = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  string Number = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  types_pb.H256 Difficulty = 1;
+  types_pb.H256 Number = 2;
 }
 
 

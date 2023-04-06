@@ -22,7 +22,6 @@ import (
 	"github.com/amazechain/amc/api/protocol/msg_proto"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
-	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
@@ -41,6 +40,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
@@ -59,10 +59,10 @@ func (l metricsLog) Printf(format string, v ...interface{}) {
 }
 
 type Service struct {
-	*conf.NetWorkConfig
-	dht    *kaddht.IpfsDHT
-	ctx    context.Context
-	cancel context.CancelFunc
+	networkConfig *conf.NetWorkConfig
+	dht           *kaddht.IpfsDHT
+	ctx           context.Context
+	cancel        context.CancelFunc
 
 	host host.Host
 
@@ -91,7 +91,7 @@ func NewService(ctx context.Context, config *conf.NetWorkConfig, peers common.Pe
 	c, cancel := context.WithCancel(ctx)
 
 	s := Service{
-		NetWorkConfig: config,
+		networkConfig: config,
 		ctx:           c,
 		cancel:        cancel,
 		nodes:         peers,
@@ -104,33 +104,35 @@ func NewService(ctx context.Context, config *conf.NetWorkConfig, peers common.Pe
 
 	var peerKey crypto.PrivKey
 	var err error
-	if len(s.LocalPeerKey) <= 0 {
+	if len(s.networkConfig.LocalPeerKey) <= 0 {
 		peerKey, _, err = crypto.GenerateEd25519Key(rand.Reader)
 		if err != nil {
 			log.Error("create peer key failed", err)
 			return nil, err
 		}
 	} else {
-		peerKey, err = utils.StringToPrivate(s.LocalPeerKey)
+		peerKey, err = utils.StringToPrivate(s.networkConfig.LocalPeerKey)
 		if err != nil {
 			log.Errorf("Failed parse string to private key %v", err)
 			return nil, err
 		}
 	}
 
-	h, err := libp2p.New(libp2p.Identity(peerKey), libp2p.ListenAddrStrings(s.ListenersAddress...), libp2p.Security(tls.ID, tls.New))
-
+	h, err := libp2p.New(libp2p.Identity(peerKey), libp2p.ListenAddrStrings(s.networkConfig.ListenersAddress...), libp2p.Security(tls.ID, tls.New))
 	if err != nil {
-		log.Error("create p2p host failed", err)
+		log.Error("create p2p host failed", "err", err)
 		return nil, err
 	}
-
-	log.Info("local peer", "peer id", h.ID())
 
 	h.SetStreamHandler(MSGProtocol, s.handleStream)
 	s.host = h
 
 	return &s, nil
+}
+
+func (s *Service) Bootstrapped() bool {
+	//return s.networkConfig.Bootstrapped
+	return len(s.networkConfig.BootstrapPeers) == 0
 }
 
 func (s *Service) Host() host.Host {
@@ -139,7 +141,27 @@ func (s *Service) Host() host.Host {
 
 func (s *Service) Start() error {
 
-	kadDHT, err := NewKadDht(s.ctx, s, s.Bootstrapped)
+	peersInfo := make([]peer.AddrInfo, 0)
+	for _, bootstrapPeer := range s.networkConfig.BootstrapPeers {
+		peerAddr, err := multiaddr.NewMultiaddr(bootstrapPeer)
+		if err != nil {
+			log.Warnf("failed parse string to muaddr %v, err %v", bootstrapPeer, err)
+			continue
+		}
+		peerInfo, err := peer.AddrInfoFromP2pAddr(peerAddr)
+		if err != nil {
+			log.Warnf("failed get peer info from muaddr %v, err  %v", peerAddr.String(), err)
+			continue
+		}
+
+		if peerInfo.ID == s.host.ID() {
+			continue
+		}
+		peersInfo = append(peersInfo, *peerInfo)
+		s.boots = append(s.boots, peerAddr)
+	}
+
+	kadDHT, err := NewKadDht(s.ctx, s, s.networkConfig.Bootstrapped, peersInfo...)
 	if err != nil {
 		log.Errorf("failed to new kadDht %v", err)
 		return err
@@ -149,10 +171,13 @@ func (s *Service) Start() error {
 		return err
 	}
 
-	if len(s.BootstrapPeers) > 0 {
+	if len(peersInfo) > 0 {
 		log.Debug("start connect bootstrap peers")
-		s.setupBootsStrap()
+		s.connectBootsStraps(peersInfo)
 	}
+
+	hash, blockNr, _ := s.peerInfo()
+	log.Info("local peer", "PeerId", s.host.ID(), "PeerAddress", s.host.Addrs(), "BlockNr", blockNr.Uint64(), "genesisHash", hash)
 
 	go s.nodeManager(s.addCh)
 
@@ -163,9 +188,13 @@ func (s *Service) PeerCount() int {
 	return len(s.nodes)
 }
 
+// nodeManager node insert
 func (s *Service) nodeManager(peerCh chan peer.AddrInfo) {
 
+	stateTimer := time.NewTicker(60 * time.Second)
+	defer stateTimer.Stop()
 	defer close(peerCh)
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -173,6 +202,7 @@ func (s *Service) nodeManager(peerCh chan peer.AddrInfo) {
 		case p, ok := <-peerCh:
 			if ok {
 				if !s.checkNode(p.ID) {
+					log.Debug("discover new peer", "PeerID", p.ID, "PeerAddress", p.Addrs)
 					if node, err := NewNode(s.ctx, s.host, s, p, s.handlers); err == nil {
 						hash, number, err := s.peerInfo()
 						if err != nil {
@@ -181,21 +211,17 @@ func (s *Service) nodeManager(peerCh chan peer.AddrInfo) {
 						}
 						var h msg_proto.ProtocolHandshakeMessage
 						if err := node.ProtocolHandshake(&h, AppProtocol, hash, number, true); err != nil {
+							log.Warn("cannot Handshake", "PeerID", p.ID, "PeerAddress", p.Addrs, "ProtocolID", AppProtocol, "err", err)
 							_ = node.Close()
 						} else {
-							gHash := types.Hash{}
-							if err := gHash.SetString(h.GenesisHash); err != nil {
-								_ = node.Close()
-								log.Warnf("failed to get genesis hash by id(%v), err:%v", p.ID, err)
+							if cPeer, ok := s.peerCallback(node, utils.ConvertH256ToHash(h.GenesisHash), utils.ConvertH256ToUint256Int(h.CurrentHeight)); ok {
+								node.Start()
+								s.addNode(cPeer)
+								log.Info("connected peer", "peerInfo", p.String(), "blockNumber", utils.ConvertH256ToUint256Int(h.CurrentHeight).Uint64())
+								event.GlobalEvent.Send(&common.PeerJoinEvent{Peer: cPeer.ID()})
 							} else {
-								if cPeer, ok := s.peerCallback(node, gHash, h.CurrentHeight); ok {
-									node.Start()
-									s.addNode(p.ID.String(), cPeer)
-									log.Infof("add peer peer id:%v", p.ID)
-									event.GlobalEvent.Send(&common.PeerJoinEvent{Peer: cPeer.ID()})
-								} else {
-									_ = node.Close()
-								}
+								log.Error("Peer Handshake failed", "PeerID", p.ID, "PeerAddress", p.Addrs)
+								_ = node.Close()
 							}
 						}
 					}
@@ -210,6 +236,8 @@ func (s *Service) nodeManager(peerCh chan peer.AddrInfo) {
 					s.host.Peerstore().RemovePeer(id)
 				}
 			}
+		case <-stateTimer.C:
+			s.state()
 		}
 	}
 }
@@ -224,31 +252,18 @@ func (s *Service) checkBootsStrap(id string) bool {
 	return false
 }
 
-func (s *Service) setupBootsStrap() {
+// todo
+func (s *Service) connectBootsStraps(bootsStraps []peer.AddrInfo) {
 
 	var wg sync.WaitGroup
-	for _, sAddr := range s.BootstrapPeers {
-		peerAddr, err := multiaddr.NewMultiaddr(sAddr)
-		if err != nil {
-			log.Warnf("failed parse string to muaddr %v, err %v", sAddr, err)
-			continue
-		}
-		peerInfo, err := peer.AddrInfoFromP2pAddr(peerAddr)
-		if err != nil {
-			log.Warnf("failed get peer info from muaddr %v, err  %v", peerAddr.String(), err)
-			continue
-		}
-		if peerInfo.ID == s.host.ID() {
-			continue
-		}
-		s.boots = append(s.boots, peerAddr)
+	for _, peerInfo := range bootsStraps {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := s.host.Connect(s.ctx, *peerInfo); err != nil {
+			if err := s.host.Connect(s.ctx, peerInfo); err != nil {
 				log.Warn("Connection bootnode failed", "err", err)
 			} else {
-				log.Infof("Connection established with bootnode ", "ID", peerInfo.ID, "address", peerInfo.Addrs)
+				log.Info("Connection established with bootnode ", "PeerID", peerInfo.ID, "PeerAddress", peerInfo.Addrs)
 			}
 		}()
 	}
@@ -266,7 +281,19 @@ func (s *Service) Wait() {
 	}
 }
 
-func (s *Service) addNode(id string, node common.Peer) {
+func (s *Service) state() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	for ID, p := range s.nodes {
+		log.Debug("Peer state:", "PeerID", ID, "PeerAddress", "peerCurrentNumber", p.CurrentHeight.Uint64(), p.IPeer.(*Node).Addrs(), "connectTime", common.PrettyDuration(time.Since(p.AddTimer)))
+		for protocolID, stream := range p.IPeer.(*Node).streams {
+			log.Debug("	stream state:", "protocolID", protocolID, "StreamID", stream.ID(), "connectTime", common.PrettyDuration(time.Since(stream.Stat().Opened)), "connectDirection", stream.Stat().Direction)
+		}
+	}
+}
+
+func (s *Service) addNode(node common.Peer) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if _, ok := s.nodes[node.ID()]; !ok {
@@ -295,10 +322,9 @@ func (s *Service) checkNode(id peer.ID) bool {
 func (s *Service) handleStream(stream network.Stream) {
 
 	if !s.checkNode(stream.Conn().RemotePeer()) {
-		log.Infof("receive [%s] stream, protocol = %s", stream.ID(), stream.Protocol())
+		log.Info("receive peer stream connect", "streamID", stream.ID(), "protocolID", stream.Protocol(), "PeerID", stream.Conn().RemotePeer())
 		p := s.host.Peerstore().PeerInfo(stream.Conn().RemotePeer())
 
-		log.Debugf("handler count is :%v", len(s.handlers))
 		if node, err := NewNode(s.ctx, s.host, s, p, s.handlers, WithStream(stream)); err != nil {
 			stream.Close()
 			log.Errorf("failed to new node %v, err %v", p.String(), err)
@@ -313,7 +339,7 @@ func (s *Service) handleStream(stream network.Stream) {
 			if err := node.AcceptHandshake(&h, AppProtocol, hash, number); err == nil {
 				if cp, ok := s.peerCallback(node, hash, number); ok {
 					node.Start()
-					s.addNode(stream.Conn().RemotePeer().String(), cp)
+					s.addNode(cp)
 				} else {
 					log.Debugf("AcceptHandshake")
 				}
@@ -335,7 +361,6 @@ func (s *Service) HandlePeerFound(p peer.AddrInfo) {
 		if p.ID == s.host.ID() {
 			log.Warnf("is self peer remote=%s == self=%s", p.ID.ShortString(), s.host.ID().ShortString())
 			return
-		} else {
 		}
 		s.addCh <- p
 	}

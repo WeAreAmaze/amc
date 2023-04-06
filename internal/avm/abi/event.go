@@ -18,10 +18,10 @@ package abi
 
 import (
 	"fmt"
+	types2 "github.com/amazechain/amc/common/types"
 	"strings"
 
-	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/crypto"
+	"github.com/amazechain/amc/common/crypto"
 )
 
 // Event is an event potentially triggered by the EVM's LOG mechanism. The Event
@@ -49,7 +49,7 @@ type Event struct {
 	Sig string
 	// ID returns the canonical representation of the event's signature used by the
 	// abi definition to identify event names and types.
-	ID common.Hash
+	ID types2.Hash
 }
 
 // NewEvent creates a new Event.
@@ -82,7 +82,7 @@ func NewEvent(name, rawName string, anonymous bool, inputs Arguments) Event {
 
 	str := fmt.Sprintf("event %v(%v)", rawName, strings.Join(names, ", "))
 	sig := fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
-	id := common.BytesToHash(crypto.Keccak256([]byte(sig)))
+	id := types2.BytesToHash(crypto.Keccak256([]byte(sig)))
 
 	return Event{
 		Name:      name,

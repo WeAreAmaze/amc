@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/crypto"
+	"github.com/amazechain/amc/common/crypto"
+	types2 "github.com/amazechain/amc/common/types"
 )
 
 type Error struct {
@@ -36,7 +36,7 @@ type Error struct {
 	Sig string
 	// ID returns the canonical representation of the event's signature used by the
 	// abi definition to identify event names and types.
-	ID common.Hash
+	ID types2.Hash
 }
 
 func NewError(name string, inputs Arguments) Error {
@@ -65,7 +65,7 @@ func NewError(name string, inputs Arguments) Error {
 
 	str := fmt.Sprintf("error %v(%v)", name, strings.Join(names, ", "))
 	sig := fmt.Sprintf("%v(%v)", name, strings.Join(types, ","))
-	id := common.BytesToHash(crypto.Keccak256([]byte(sig)))
+	id := types2.BytesToHash(crypto.Keccak256([]byte(sig)))
 
 	return Error{
 		Name:   name,

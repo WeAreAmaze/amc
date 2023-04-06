@@ -17,9 +17,8 @@
 package rlp
 
 import (
+	"github.com/amazechain/amc/common/hexutil"
 	"testing"
-
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
 )
 
 // TestIterator tests some basic things about the ListIterator. A more

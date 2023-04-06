@@ -27,7 +27,7 @@ package _interface
 //	Unmarshal(data []byte) error
 //	Marshal() ([]byte, error)
 //	Type() uint8
-//	ChainId() types.Int256
+//	ChainId() uint256.Int
 //	Data() []byte
 //}
 //

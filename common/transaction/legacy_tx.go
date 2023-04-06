@@ -18,25 +18,26 @@ package transaction
 
 import (
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/common"
+	"github.com/amazechain/amc/utils"
+	"github.com/holiman/uint256"
 )
 
 // LegacyTx is the transaction data of regular Ethereum transactions.
 type LegacyTx struct {
 	Nonce    uint64         // nonce of sender account
-	GasPrice types.Int256   // wei per gas
+	GasPrice *uint256.Int   // wei per gas
 	Gas      uint64         // gas limit
 	To       *types.Address `rlp:"nil"` // nil means contract creation
 	From     *types.Address `rlp:"nil"` // nil means contract creation
-	Value    types.Int256   // wei amount
+	Value    *uint256.Int   // wei amount
 	Data     []byte         // contract invocation input data
-	V, R, S  types.Int256   // signature values
+	V, R, S  *uint256.Int   // signature values
 	Sign     []byte
 }
 
 // NewTransaction creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
-func NewTransaction(nonce uint64, from types.Address, to *types.Address, amount types.Int256, gasLimit uint64, gasPrice types.Int256, data []byte) *Transaction {
+func NewTransaction(nonce uint64, from types.Address, to *types.Address, amount *uint256.Int, gasLimit uint64, gasPrice *uint256.Int, data []byte) *Transaction {
 	return NewTx(&LegacyTx{
 		Nonce:    nonce,
 		To:       to,
@@ -50,7 +51,7 @@ func NewTransaction(nonce uint64, from types.Address, to *types.Address, amount 
 
 // NewContractCreation creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
-func NewContractCreation(nonce uint64, amount types.Int256, gasLimit uint64, gasPrice types.Int256, data []byte) *Transaction {
+func NewContractCreation(nonce uint64, amount *uint256.Int, gasLimit uint64, gasPrice *uint256.Int, data []byte) *Transaction {
 	return NewTx(&LegacyTx{
 		Nonce:    nonce,
 		Value:    amount,
@@ -66,25 +67,28 @@ func (tx *LegacyTx) copy() TxData {
 		Nonce: tx.Nonce,
 		To:    copyAddressPtr(tx.To),
 		From:  copyAddressPtr(tx.From),
-		Data:  common.CopyBytes(tx.Data),
+		Data:  types.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are initialized below.
-		Value:    types.NewInt64(0),
-		GasPrice: types.NewInt64(0),
+		Value:    new(uint256.Int),
+		GasPrice: new(uint256.Int),
+		V:        new(uint256.Int),
+		R:        new(uint256.Int),
+		S:        new(uint256.Int),
 	}
-	if !tx.Value.IsEmpty() {
+	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
-	if !tx.GasPrice.IsEmpty() {
+	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
 	}
-	if !tx.V.IsEmpty() {
+	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
-	if !tx.R.IsEmpty() {
+	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
-	if !tx.S.IsEmpty() {
+	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
 	if tx.sign() != nil {
@@ -96,40 +100,38 @@ func (tx *LegacyTx) copy() TxData {
 
 // accessors for innerTx.
 func (tx *LegacyTx) txType() byte { return LegacyTxType }
-func (tx *LegacyTx) chainID() types.Int256 {
-	//bInt := deriveChainId(tx.V.ToBig())
-	//id, _ := types.FromBig(bInt)
-	//return id
-	return types.NewInt64(0)
+func (tx *LegacyTx) chainID() *uint256.Int {
+	return DeriveChainId(tx.V)
 }
 func (tx *LegacyTx) accessList() AccessList  { return nil }
 func (tx *LegacyTx) data() []byte            { return tx.Data }
 func (tx *LegacyTx) gas() uint64             { return tx.Gas }
-func (tx *LegacyTx) gasPrice() types.Int256  { return tx.GasPrice }
-func (tx *LegacyTx) gasTipCap() types.Int256 { return tx.GasPrice }
-func (tx *LegacyTx) gasFeeCap() types.Int256 { return tx.GasPrice }
-func (tx *LegacyTx) value() types.Int256     { return tx.Value }
+func (tx *LegacyTx) gasPrice() *uint256.Int  { return tx.GasPrice }
+func (tx *LegacyTx) gasTipCap() *uint256.Int { return tx.GasPrice }
+func (tx *LegacyTx) gasFeeCap() *uint256.Int { return tx.GasPrice }
+func (tx *LegacyTx) value() *uint256.Int     { return tx.Value }
 func (tx *LegacyTx) nonce() uint64           { return tx.Nonce }
 func (tx *LegacyTx) to() *types.Address      { return tx.To }
 func (tx *LegacyTx) from() *types.Address    { return tx.From }
 func (tx *LegacyTx) sign() []byte            { return tx.Sign }
 
-func (tx *LegacyTx) rawSignatureValues() (v, r, s types.Int256) {
+func (tx *LegacyTx) rawSignatureValues() (v, r, s *uint256.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *LegacyTx) setSignatureValues(chainID, v, r, s types.Int256) {
+func (tx *LegacyTx) setSignatureValues(chainID, v, r, s *uint256.Int) {
 	tx.V, tx.R, tx.S = v, r, s
 }
 
-//func deriveChainId(v *big.Int) *big.Int {
-//	if v.BitLen() <= 64 {
-//		v := v.Uint64()
-//		if v == 27 || v == 28 {
-//			return new(big.Int)
-//		}
-//		return new(big.Int).SetUint64((v - 35) / 2)
-//	}
-//	v = new(big.Int).Sub(v, big.NewInt(35))
-//	return v.Div(v, big.NewInt(2))
-//}
+func (tx *LegacyTx) hash() types.Hash {
+	hash := utils.RlpHash([]interface{}{
+		tx.Nonce,
+		tx.GasPrice,
+		tx.Gas,
+		tx.To,
+		tx.Value,
+		tx.Data,
+		tx.V, tx.R, tx.S,
+	})
+	return hash
+}

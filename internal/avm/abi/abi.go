@@ -21,10 +21,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/utils"
 	"io"
-
-	"github.com/amazechain/amc/internal/avm/common"
 )
 
 // The ABI holds information about a contract's context and available
@@ -211,7 +210,7 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 
 // EventByID looks an event up by its topic hash in the
 // ABI and returns nil if none found.
-func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
+func (abi *ABI) EventByID(topic types.Hash) (*Event, error) {
 	for _, event := range abi.Events {
 		if bytes.Equal(event.ID.Bytes(), topic.Bytes()) {
 			return &event, nil

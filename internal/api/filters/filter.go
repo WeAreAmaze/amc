@@ -5,13 +5,15 @@ import (
 	"errors"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/db"
 	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
-	mvm_types "github.com/amazechain/amc/internal/avm/types"
-	"github.com/amazechain/amc/internal/avm/vm"
+	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/consensus"
+	vm2 "github.com/amazechain/amc/internal/vm"
+	"github.com/amazechain/amc/internal/vm/evmtypes"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
+	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"math/big"
 )
@@ -21,17 +23,17 @@ type Api interface {
 	Downloader() common.IDownloader
 	P2pServer() common.INetwork
 	Peers() map[peer.ID]common.Peer
-	Database() db.IDatabase
+	Database() kv.RwDB
 	Engine() consensus.Engine
 	BlockChain() common.IBlockChain
-	GetEvm(ctx context.Context, msg mvm_types.Message, state common.IStateDB, header block.IHeader, vmConfig *vm.Config) (*vm.EVM, func() error, error)
+	GetEvm(ctx context.Context, msg internal.Message, ibs evmtypes.IntraBlockState, header block.IHeader, vmConfig *vm2.Config) (*vm2.EVM, func() error, error)
 }
 
 // Filter can be used to retrieve and filter logs.
 type Filter struct {
 	api Api
 
-	db        db.IDatabase
+	db        kv.RwDB
 	addresses []types.Address
 	topics    [][]types.Hash
 
@@ -191,9 +193,9 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*block.Log, err
 			f.begin = int64(number) + 1
 
 			// Retrieve the suggested block and pull any truly matching logs
-			header, err := f.api.BlockChain().GetHeaderByNumber(types.NewInt64(number))
-			if header == nil || err != nil {
-				return logs, err
+			header := f.api.BlockChain().GetHeaderByNumber(uint256.NewInt(number))
+			if header == nil {
+				return logs, nil
 			}
 			found, err := f.checkMatches(ctx, header)
 			if err != nil {
@@ -213,9 +215,9 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*block.Log, e
 	var logs []*block.Log
 
 	for ; f.begin <= int64(end); f.begin++ {
-		header, err := f.api.BlockChain().GetHeaderByNumber(types.NewInt64(uint64(f.begin)))
-		if header == nil || err != nil {
-			return logs, err
+		header := f.api.BlockChain().GetHeaderByNumber(uint256.NewInt(uint64(f.begin)))
+		if header == nil {
+			return logs, nil
 		}
 		found, err := f.blockLogs(ctx, header)
 		if err != nil {

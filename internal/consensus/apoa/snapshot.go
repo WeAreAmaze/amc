@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/db"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/rawdb"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"sort"
 	"time"
 
@@ -88,8 +88,8 @@ func newSnapshot(config *conf.APoaConfig, sigcache *lru.ARCCache, number uint64,
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *conf.APoaConfig, sigcache *lru.ARCCache, db db.IDatabase, hash types.Hash) (*Snapshot, error) {
-	blob, err := rawdb.GetPoaSnapshot(db, hash)
+func loadSnapshot(config *conf.APoaConfig, sigcache *lru.ARCCache, tx kv.Getter, hash types.Hash) (*Snapshot, error) {
+	blob, err := rawdb.GetPoaSnapshot(tx, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -104,12 +104,12 @@ func loadSnapshot(config *conf.APoaConfig, sigcache *lru.ARCCache, db db.IDataba
 }
 
 // store inserts the snapshot into the database.
-func (s *Snapshot) store(db db.IDatabase) error {
+func (s *Snapshot) store(tx kv.Putter) error {
 	blob, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
-	return rawdb.StorePoaSnapshot(db, s.Hash, blob)
+	return rawdb.StorePoaSnapshot(tx, s.Hash, blob)
 }
 
 // copy creates a deep copy of the snapshot, though not the individual votes.

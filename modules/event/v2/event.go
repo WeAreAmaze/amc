@@ -26,6 +26,7 @@ var errBadChannel = errors.New("event: Subscribe argument does not have sendable
 
 var (
 	GlobalEvent Event
+	GlobalFeed  Feed
 )
 
 type Subscription interface {

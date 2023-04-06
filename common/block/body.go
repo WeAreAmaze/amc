@@ -20,15 +20,22 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common/transaction"
-	"github.com/gogo/protobuf/proto"
+	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
 )
 
 type Body struct {
-	Txs []*transaction.Transaction
+	Txs       []*transaction.Transaction
+	Verifiers []*Verify
+	Rewards   []*Reward
 }
 
 func (b *Body) ToProtoMessage() proto.Message {
 	var pbTxs []*types_pb.Transaction
+	var pbVerifiers []*types_pb.Verifier
+	var pbRewards []*types_pb.Reward
+
 	for _, v := range b.Txs {
 		pbTx := v.ToProtoMessage()
 		if pbTx != nil {
@@ -36,8 +43,24 @@ func (b *Body) ToProtoMessage() proto.Message {
 		}
 	}
 
-	pBody := types_pb.PBody{
-		Txs: pbTxs,
+	for _, reward := range b.Rewards {
+		pbReward := reward.ToProtoMessage()
+		if pbReward != nil {
+			pbRewards = append(pbRewards, pbReward.(*types_pb.Reward))
+		}
+	}
+
+	for _, verifier := range b.Verifiers {
+		pbVerifier := verifier.ToProtoMessage()
+		if pbVerifier != nil {
+			pbVerifiers = append(pbVerifiers, pbVerifier.(*types_pb.Verifier))
+		}
+	}
+
+	pBody := types_pb.Body{
+		Txs:       pbTxs,
+		Verifiers: pbVerifiers,
+		Rewards:   pbRewards,
 	}
 
 	return &pBody
@@ -45,28 +68,103 @@ func (b *Body) ToProtoMessage() proto.Message {
 
 func (b *Body) FromProtoMessage(message proto.Message) error {
 	var (
-		pBody *types_pb.PBody
+		pBody *types_pb.Body
 		ok    bool
 	)
 
-	if pBody, ok = message.(*types_pb.PBody); !ok {
+	if pBody, ok = message.(*types_pb.Body); !ok {
 		return fmt.Errorf("type conversion failure")
 	}
 
 	var txs []*transaction.Transaction
-
+	//
 	for _, v := range pBody.Txs {
 		tx, err := transaction.FromProtoMessage(v)
 		if err == nil {
 			txs = append(txs, tx)
 		}
 	}
-
+	//
 	b.Txs = txs
+
+	//verifiers
+	var verifiers []*Verify
+	for _, v := range pBody.Verifiers {
+		verify := new(Verify).FromProtoMessage(v)
+		verifiers = append(verifiers, verify)
+	}
+	b.Verifiers = verifiers
+
+	//Reward
+	var rewards []*Reward
+	for _, v := range pBody.Rewards {
+		reward := new(Reward).FromProtoMessage(v)
+		rewards = append(rewards, reward)
+	}
+	b.Rewards = rewards
 
 	return nil
 }
 
 func (b *Body) Transactions() []*transaction.Transaction {
 	return b.Txs
+}
+func (b *Body) Verifier() []*Verify {
+	return b.Verifiers
+}
+
+func (b *Body) Reward() []*Reward {
+	return b.Rewards
+}
+
+func (b *Body) reward() []*types_pb.H256 {
+	var rewardAmount []*types_pb.H256
+	if len(b.Rewards) > 0 {
+		for _, reward := range b.Rewards {
+			rewardAmount = append(rewardAmount, utils.ConvertUint256IntToH256(reward.Amount))
+		}
+	}
+	return rewardAmount
+}
+
+func (b *Body) rewardAddress() []types.Address {
+	var rewardAddress []types.Address
+	for _, reward := range b.Rewards {
+		rewardAddress = append(rewardAddress, reward.Address)
+	}
+	return rewardAddress
+}
+
+func (b *Body) SendersFromTxs() []types.Address {
+	senders := make([]types.Address, len(b.Transactions()))
+	for i, tx := range b.Transactions() {
+		senders[i] = *tx.From()
+	}
+	return senders
+}
+
+func (b *Body) SendersToTxs(senders []types.Address) {
+	if senders == nil {
+		return
+	}
+
+	//todo
+	//for i, tx := range b.Txs {
+	//	//tx.SetFrom(senders[i])
+	//}
+}
+
+type BodyForStorage struct {
+	BaseTxId uint64
+	TxAmount uint32
+}
+
+func NewBlockFromStorage(hash types.Hash, header *Header, body *Body) *Block {
+	b := &Block{header: header, body: body}
+	b.hash.Store(hash)
+	return b
+}
+
+type RawBody struct {
+	Transactions [][]byte
 }

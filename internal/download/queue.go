@@ -43,10 +43,10 @@ type queue struct {
 	mode SyncMode
 
 	headerHead     hash.Hash                      // Hash of the last queued header to verify order
-	headerTaskPool map[uint64]*types_pb.PBHeader  // Pending header retrieval tasks, mapping starting indexes to skeleton headers
+	headerTaskPool map[uint64]*types_pb.Header    // Pending header retrieval tasks, mapping starting indexes to skeleton headers
 	headerPeerMiss map[string]map[uint64]struct{} // Set of per-peer header batches known to be unavailable
 	headerPendPool map[string]*fetchRequest       // Currently pending header retrieval operations
-	headerResults  []*types_pb.PBHeader           // Result cache accumulating the completed headers
+	headerResults  []*types_pb.Header             // Result cache accumulating the completed headers
 	headerHashes   []hash.Hash                    // Result cache accumulating the completed header hashes
 	headerProced   int                            // Number of headers already processed from the results
 	headerOffset   uint64                         // Number of the first header in the result cache

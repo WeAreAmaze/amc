@@ -40,6 +40,28 @@ func (mt MessageType) IsValid() bool {
 	return mt >= MsgConnect && mt < MsgTypeFirstInvalid
 }
 
+// String implements the stringer interface.
+func (mt MessageType) String() string {
+	switch mt {
+	case MsgConnect:
+		return "Connect"
+	case MsgPingReq:
+		return "PingRequest"
+	case MsgPingResp:
+		return "PingResponse"
+	case MsgAppHandshake:
+		return "AppHandshake"
+	case MsgApplication:
+		return "MsgApplication"
+	case MsgDownloader:
+		return "MsgDownloader"
+	case MsgTransaction:
+		return "MsgTransaction"
+	default:
+		return "unknown"
+	}
+}
+
 type IMessage interface {
 	Type() MessageType
 	Peer() peer.ID

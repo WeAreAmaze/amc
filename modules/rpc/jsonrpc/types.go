@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/amazechain/amc/internal/avm/common"
+	"github.com/amazechain/amc/common/hexutil"
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/amazechain/amc/common/types"
 )
 
 type API struct {
@@ -47,9 +49,11 @@ type jsonWriter interface {
 type BlockNumber int64
 
 const (
-	PendingBlockNumber  = BlockNumber(-2)
-	LatestBlockNumber   = BlockNumber(-1)
-	EarliestBlockNumber = BlockNumber(0)
+	SafeBlockNumber      = BlockNumber(-4)
+	FinalizedBlockNumber = BlockNumber(-3)
+	PendingBlockNumber   = BlockNumber(-2)
+	LatestBlockNumber    = BlockNumber(-1)
+	EarliestBlockNumber  = BlockNumber(0)
 )
 
 func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
@@ -67,6 +71,12 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 		return nil
 	case "pending":
 		*bn = PendingBlockNumber
+		return nil
+	case "finalized":
+		*bn = FinalizedBlockNumber
+		return nil
+	case "safe":
+		*bn = SafeBlockNumber
 		return nil
 	}
 
@@ -87,7 +97,7 @@ func (bn BlockNumber) Int64() int64 {
 
 type BlockNumberOrHash struct {
 	BlockNumber      *BlockNumber `json:"blockNumber,omitempty"`
-	BlockHash        *common.Hash `json:"blockHash,omitempty"`
+	BlockHash        *types.Hash  `json:"blockHash,omitempty"`
 	RequireCanonical bool         `json:"requireCanonical,omitempty"`
 }
 
@@ -124,7 +134,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 		return nil
 	default:
 		if len(input) == 66 {
-			hash := common.Hash{}
+			hash := types.Hash{}
 			err := UnmarshalText(hash, []byte(input))
 			if err != nil {
 				return err
@@ -153,11 +163,11 @@ func (bnh *BlockNumberOrHash) Number() (BlockNumber, bool) {
 	return BlockNumber(0), false
 }
 
-func (bnh *BlockNumberOrHash) Hash() (common.Hash, bool) {
+func (bnh *BlockNumberOrHash) Hash() (types.Hash, bool) {
 	if bnh.BlockHash != nil {
 		return *bnh.BlockHash, true
 	}
-	return common.Hash{}, false
+	return types.Hash{}, false
 }
 
 func BlockNumberOrHashWithNumber(blockNr BlockNumber) BlockNumberOrHash {
@@ -168,7 +178,7 @@ func BlockNumberOrHashWithNumber(blockNr BlockNumber) BlockNumberOrHash {
 	}
 }
 
-func BlockNumberOrHashWithHash(hash common.Hash, canonical bool) BlockNumberOrHash {
+func BlockNumberOrHashWithHash(hash types.Hash, canonical bool) BlockNumberOrHash {
 	return BlockNumberOrHash{
 		BlockNumber:      nil,
 		BlockHash:        &hash,
@@ -184,4 +194,25 @@ func (bnh *BlockNumberOrHash) String() string {
 		return bnh.BlockHash.String()
 	}
 	return "nil"
+}
+
+// DecimalOrHex unmarshals a non-negative decimal or hex parameter into a uint64.
+type DecimalOrHex uint64
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (dh *DecimalOrHex) UnmarshalJSON(data []byte) error {
+	input := strings.TrimSpace(string(data))
+	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
+		input = input[1 : len(input)-1]
+	}
+
+	value, err := strconv.ParseUint(input, 10, 64)
+	if err != nil {
+		value, err = hexutil.DecodeUint64(input)
+	}
+	if err != nil {
+		return err
+	}
+	*dh = DecimalOrHex(value)
+	return nil
 }

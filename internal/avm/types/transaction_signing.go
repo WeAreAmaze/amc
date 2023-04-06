@@ -20,9 +20,10 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/crypto"
-	"github.com/amazechain/amc/internal/avm/params"
+	"github.com/amazechain/amc/params"
+	"github.com/holiman/uint256"
 	"math/big"
 )
 
@@ -47,13 +48,13 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
-	case config.IsLondon(blockNumber):
+	case config.IsLondon(blockNumber.Uint64()):
 		signer = NewLondonSigner(config.ChainID)
-	case config.IsBerlin(blockNumber):
+	case config.IsBerlin(blockNumber.Uint64()):
 		signer = NewEIP2930Signer(config.ChainID)
-	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
-	case config.IsHomestead(blockNumber):
+	//case config.IsEIP155(blockNumber):
+	//	signer = NewEIP155Signer(config.ChainID)
+	case config.IsHomestead(blockNumber.Uint64()):
 		signer = HomesteadSigner{}
 	default:
 		signer = FrontierSigner{}
@@ -76,9 +77,9 @@ func LatestSigner(config *params.ChainConfig) Signer {
 		if config.BerlinBlock != nil {
 			return NewEIP2930Signer(config.ChainID)
 		}
-		if config.EIP155Block != nil {
-			return NewEIP155Signer(config.ChainID)
-		}
+		//if config.EIP155Block != nil {
+		//	return NewEIP155Signer(config.ChainID)
+		//}
 	}
 	return HomesteadSigner{}
 }
@@ -491,7 +492,9 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 		return common.Address{}, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
-	if !crypto.ValidateSignatureValues(V, R, S, homestead) {
+	ir, _ := uint256.FromBig(R)
+	is, _ := uint256.FromBig(S)
+	if !crypto.ValidateSignatureValues(V, ir, is, homestead) {
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format

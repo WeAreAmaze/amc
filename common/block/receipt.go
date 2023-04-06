@@ -18,11 +18,13 @@ package block
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common/types"
-	"github.com/gogo/protobuf/proto"
+	"github.com/amazechain/amc/internal/avm/rlp"
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -34,6 +36,20 @@ const (
 )
 
 type Receipts []*Receipt
+
+func (rs *Receipts) Marshal() ([]byte, error) {
+	pb := rs.ToProtoMessage()
+	return proto.Marshal(pb)
+}
+
+func (rs *Receipts) Unmarshal(data []byte) error {
+	pb := new(types_pb.Receipts)
+	if err := proto.Unmarshal(data, pb); nil != err {
+		return err
+	}
+
+	return rs.FromProtoMessage(pb)
+}
 
 // Len returns the number of receipts in this list.
 func (rs Receipts) Len() int { return len(rs) }
@@ -52,8 +68,10 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 		}
 	}
 	data := &storedReceipt{r.Status, r.CumulativeGasUsed, logs}
-	byte, _ := json.Marshal(data)
-	w.Write(byte)
+
+	rlp.Encode(w, data)
+	//byte, _ := json.Marshal(data)
+	//w.Write(byte)
 }
 
 func (rs *Receipts) FromProtoMessage(receipts *types_pb.Receipts) error {
@@ -80,12 +98,12 @@ func (rs *Receipts) ToProtoMessage() proto.Message {
 
 type Receipt struct {
 	// Consensus fields: These fields are defined by the Yellow Paper
-	Type              uint8       `json:"type,omitempty"`
-	PostState         []byte      `json:"root"`
-	Status            uint64      `json:"status"`
-	CumulativeGasUsed uint64      `json:"cumulativeGasUsed" gencodec:"required"`
-	Bloom             types.Bloom `json:"logsBloom"         gencodec:"required"`
-	Logs              []*Log      `json:"logs"              gencodec:"required"`
+	Type              uint8  `json:"type,omitempty"`
+	PostState         []byte `json:"root"`
+	Status            uint64 `json:"status"`
+	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
+	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
+	Logs              []*Log `json:"logs"              gencodec:"required"`
 
 	// Implementation fields: These fields are added by geth when processing a transaction.
 	// They are stored in the chain database.
@@ -96,7 +114,7 @@ type Receipt struct {
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
 	BlockHash        types.Hash   `json:"blockHash,omitempty"`
-	BlockNumber      types.Int256 `json:"blockNumber,omitempty"`
+	BlockNumber      *uint256.Int `json:"blockNumber,omitempty"`
 	TransactionIndex uint         `json:"transactionIndex"`
 }
 
@@ -121,22 +139,23 @@ func (r *Receipt) toProtoMessage() proto.Message {
 
 	var logs []*types_pb.Log
 	for _, log := range r.Logs {
-		logs = append(logs, log.toProtoMessage().(*types_pb.Log))
+		logs = append(logs, log.ToProtoMessage().(*types_pb.Log))
 	}
-	return &types_pb.Receipt{
-		Type:              uint64(r.Type),
+	pb := &types_pb.Receipt{
+		Type:              uint32(r.Type),
 		PostState:         r.PostState,
 		Status:            r.Status,
 		CumulativeGasUsed: r.CumulativeGasUsed,
-		//Bloom:             bloom,
-		Logs:             logs,
-		TxHash:           r.TxHash,
-		ContractAddress:  r.ContractAddress,
-		GasUsed:          r.GasUsed,
-		BlockHash:        r.BlockHash,
-		BlockNumber:      r.BlockNumber,
-		TransactionIndex: uint64(r.TransactionIndex),
+		Logs:              logs,
+		TxHash:            utils.ConvertHashToH256(r.TxHash),
+		ContractAddress:   utils.ConvertAddressToH160(r.ContractAddress),
+		GasUsed:           r.GasUsed,
+		BlockHash:         utils.ConvertHashToH256(r.BlockHash),
+		BlockNumber:       utils.ConvertUint256IntToH256(r.BlockNumber),
+		TransactionIndex:  uint64(r.TransactionIndex),
+		Bloom:             utils.ConvertBytesToH2048(r.Bloom[:]),
 	}
+	return pb
 }
 
 func (r *Receipt) fromProtoMessage(message proto.Message) error {
@@ -159,7 +178,7 @@ func (r *Receipt) fromProtoMessage(message proto.Message) error {
 	for _, logMessage := range pReceipt.Logs {
 		log := new(Log)
 
-		if err := log.fromProtoMessage(logMessage); err != nil {
+		if err := log.FromProtoMessage(logMessage); err != nil {
 			return fmt.Errorf("type conversion failure log %s", err)
 		}
 		logs = append(logs, log)
@@ -169,13 +188,13 @@ func (r *Receipt) fromProtoMessage(message proto.Message) error {
 	r.PostState = pReceipt.PostState
 	r.Status = pReceipt.Status
 	r.CumulativeGasUsed = pReceipt.CumulativeGasUsed
-	//r.Bloom = *bloom
+	r.Bloom = utils.ConvertH2048ToBloom(pReceipt.Bloom)
 	r.Logs = logs
-	r.TxHash = pReceipt.TxHash
-	r.ContractAddress = pReceipt.ContractAddress
+	r.TxHash = utils.ConvertH256ToHash(pReceipt.TxHash)
+	r.ContractAddress = utils.ConvertH160toAddress(pReceipt.ContractAddress)
 	r.GasUsed = pReceipt.GasUsed
-	r.BlockHash = pReceipt.BlockHash
-	r.BlockNumber = pReceipt.BlockNumber
+	r.BlockHash = utils.ConvertH256ToHash(pReceipt.BlockHash)
+	r.BlockNumber = utils.ConvertH256ToUint256Int(pReceipt.BlockNumber)
 	r.TransactionIndex = uint(pReceipt.TransactionIndex)
 
 	return nil

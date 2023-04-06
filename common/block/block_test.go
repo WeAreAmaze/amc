@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/internal/avm/rlp"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"testing"
 )
 

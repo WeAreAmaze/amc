@@ -22,6 +22,10 @@ import (
 
 	"github.com/amazechain/amc/params"
 	"github.com/urfave/cli/v2"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/amazechain/amc/internal/tracers/js"
+	_ "github.com/amazechain/amc/internal/tracers/native"
 )
 
 func main() {
@@ -35,7 +39,7 @@ func main() {
 	flags = append(flags, accountFlag...)
 	flags = append(flags, metricsFlags...)
 
-	rootCmd = append(rootCmd, walletCommand, accountCommand)
+	rootCmd = append(rootCmd, walletCommand, accountCommand, exportCommand)
 	commands := rootCmd
 
 	app := &cli.App{

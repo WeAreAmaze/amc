@@ -17,28 +17,28 @@
 package api
 
 import (
+	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	mvm_common "github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
-	"github.com/amazechain/amc/internal/consensus"
+	"github.com/amazechain/amc/utils"
+	"github.com/holiman/uint256"
 	"math/big"
 )
 
-func RPCMarshalBlock(block block.IBlock, inclTx bool, fullTx bool, engine consensus.Engine) (map[string]interface{}, error) {
-	fields := RPCMarshalHeader(block.Header(), engine)
-	fields["size"] = hexutil.Uint64(block.Size())
+func RPCMarshalBlock(block block.IBlock, chain common.IBlockChain, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(block.Header())
 
 	if inclTx {
 		formatTx := func(tx *transaction.Transaction) (interface{}, error) {
-			hash, err := tx.Hash()
-			return mvm_types.FromAmcHash(hash), err
+			hash := tx.Hash()
+			return mvm_types.FromAmcHash(hash), nil
 		}
 		if fullTx {
 			formatTx = func(tx *transaction.Transaction) (interface{}, error) {
-				hash, _ := tx.Hash()
+				hash := tx.Hash()
 				return newRPCTransactionFromBlockHash(block, hash), nil
 			}
 		}
@@ -51,6 +51,34 @@ func RPCMarshalBlock(block block.IBlock, inclTx bool, fullTx bool, engine consen
 			}
 		}
 		fields["transactions"] = transactions
+
+		// verifiers
+		verifiers := make([]interface{}, len(block.Body().Verifier()))
+		for i, verifier := range block.Body().Verifier() {
+			verifiers[i] = verifier
+		}
+		fields["verifier"] = verifiers
+
+		// reward todo
+		type RPCReward struct {
+			Address types.Address
+			Amount  *uint256.Int
+		}
+		rewards := make([]*RPCReward, len(block.Body().Reward()))
+		for i, reward := range block.Body().Reward() {
+			rewards[i] = &RPCReward{
+				reward.Address,
+				reward.Amount,
+			}
+		}
+		fields["rewards"] = rewards
+
+		td := chain.GetTd(block.Hash(), block.Number64())
+		if td == nil {
+			td = new(uint256.Int)
+		}
+		fields["totalDifficulty"] = (*hexutil.Big)(td.ToBig())
+
 	}
 	// POA
 	uncleHashes := make([]types.Hash, 0)
@@ -62,7 +90,7 @@ func RPCMarshalBlock(block block.IBlock, inclTx bool, fullTx bool, engine consen
 // newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
 func newRPCTransactionFromBlockHash(b block.IBlock, findHash types.Hash) *RPCTransaction {
 	for idx, tx := range b.Transactions() {
-		hash, _ := tx.Hash()
+		hash := tx.Hash()
 		if hash == findHash {
 			return newRPCTransactionFromBlockIndex(b, uint64(idx))
 		}
@@ -80,35 +108,32 @@ func newRPCTransactionFromBlockIndex(b block.IBlock, index uint64) *RPCTransacti
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
-func RPCMarshalHeader(head block.IHeader, engine consensus.Engine) map[string]interface{} {
-	//todo
+func RPCMarshalHeader(head block.IHeader) map[string]interface{} {
 	header := head.(*block.Header)
-	b := [256]byte{}
+	ethHeader := mvm_types.FromAmcHeader(head)
 
-	author, _ := engine.Author(header)
 	result := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number64().ToBig()),
 		"hash":             mvm_types.FromAmcHash(header.Hash()),
 		"parentHash":       mvm_types.FromAmcHash(header.ParentHash),
 		"nonce":            header.Nonce,
 		"mixHash":          mvm_types.FromAmcHash(header.MixDigest),
-		"sha3Uncles":       mvm_common.Hash{},
-		"miner":            mvm_types.FromAmcAddress(&author),
+		"sha3Uncles":       mvm_types.FromAmcHash(utils.EmptyUncleHash),
+		"miner":            mvm_types.FromAmcAddress(&header.Coinbase),
 		"difficulty":       (*hexutil.Big)(header.Difficulty.ToBig()),
-		"totalDifficulty":  (*hexutil.Big)(big.NewInt(100)),
 		"extraData":        hexutil.Bytes(header.Extra),
-		"size":             hexutil.Uint64(header.Size()),
+		"size":             hexutil.Uint64(ethHeader.Size()),
 		"gasLimit":         hexutil.Uint64(header.GasLimit),
 		"gasUsed":          hexutil.Uint64(header.GasUsed),
 		"timestamp":        hexutil.Uint64(header.Time),
-		"transactionsRoot": mvm_types.FromAmcHash(header.ParentHash),
-		"receiptsRoot":     mvm_types.FromAmcHash(header.ParentHash),
-		"logsBloom":        hexutil.Bytes(b[:]),
-		//todo
-		"stateRoot": mvm_types.FromAmcHash(header.ParentHash),
+		"transactionsRoot": mvm_types.FromAmcHash(header.TxHash),
+		"receiptsRoot":     mvm_types.FromAmcHash(header.ReceiptHash),
+		"logsBloom":        ethHeader.Bloom,
+		"stateRoot":        mvm_types.FromAmcHash(header.Root),
+		"signature":        header.Signature,
 	}
 
-	if !header.BaseFee.IsEmpty() {
+	if header.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(header.BaseFee.ToBig())
 	}
 

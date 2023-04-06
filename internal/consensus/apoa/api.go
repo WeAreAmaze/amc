@@ -20,12 +20,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
+	"github.com/holiman/uint256"
 )
 
 // API is a user facing jsonrpc API to allow controlling the signer and voting
@@ -42,7 +43,7 @@ func (api *API) GetSnapshot(number *jsonrpc.BlockNumber) (*Snapshot, error) {
 	if number == nil || *number == jsonrpc.LatestBlockNumber {
 		header = api.chain.CurrentBlock().Header()
 	} else {
-		header, _ = api.chain.GetHeaderByNumber(types.NewInt64(uint64(number.Int64())))
+		header = api.chain.GetHeaderByNumber(uint256.NewInt(uint64(number.Int64())))
 	}
 	// Ensure we have an actually valid block and return its snapshot
 	if header == nil {
@@ -52,8 +53,8 @@ func (api *API) GetSnapshot(number *jsonrpc.BlockNumber) (*Snapshot, error) {
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
-func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
-	header, _ := api.chain.GetHeaderByHash(mvm_types.ToAmcHash(hash))
+func (api *API) GetSnapshotAtHash(hash types.Hash) (*Snapshot, error) {
+	header, _ := api.chain.GetHeaderByHash(hash)
 	if header == nil {
 		return nil, errUnknownBlock
 	}
@@ -67,7 +68,7 @@ func (api *API) GetSigners(number *jsonrpc.BlockNumber) ([]common.Address, error
 	if number == nil || *number == jsonrpc.LatestBlockNumber {
 		header = api.chain.CurrentBlock().Header()
 	} else {
-		header, _ = api.chain.GetHeaderByNumber(types.NewInt64(uint64(number.Int64())))
+		header = api.chain.GetHeaderByNumber(uint256.NewInt(uint64(number.Int64())))
 	}
 	// Ensure we have an actually valid block and return the signers from its snapshot
 	if header == nil {
@@ -87,8 +88,8 @@ func (api *API) GetSigners(number *jsonrpc.BlockNumber) ([]common.Address, error
 }
 
 // GetSignersAtHash retrieves the list of authorized signers at the specified block.
-func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
-	header, _ := api.chain.GetHeaderByHash(mvm_types.ToAmcHash(hash))
+func (api *API) GetSignersAtHash(hash types.Hash) ([]common.Address, error) {
+	header, _ := api.chain.GetHeaderByHash(hash)
 	if header == nil {
 		return nil, errUnknownBlock
 	}
@@ -169,12 +170,12 @@ func (api *API) Status() (*status, error) {
 		signStatus[s] = 0
 	}
 	for n := start; n < end; n++ {
-		h, _ := api.chain.GetHeaderByNumber(types.NewInt64(n))
-		block := api.chain.GetBlock(h.Hash())
+		h := api.chain.GetHeaderByNumber(uint256.NewInt(n))
+		block := api.chain.GetBlock(h.Hash(), n)
 		if h == nil {
 			return nil, fmt.Errorf("missing block %d", n)
 		}
-		if block.Difficulty().Compare(diffInTurn) == 0 {
+		if block.Difficulty().Cmp(diffInTurn) == 0 {
 			optimals++
 		}
 		diff += block.Difficulty().Uint64()
@@ -226,9 +227,9 @@ func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (types.Address, 
 		if blockNrOrHash == nil {
 			header = api.chain.CurrentBlock().Header()
 		} else if hash, ok := blockNrOrHash.Hash(); ok {
-			header, _ = api.chain.GetHeaderByHash(mvm_types.ToAmcHash(hash))
+			header, _ = api.chain.GetHeaderByHash(hash)
 		} else if number, ok := blockNrOrHash.Number(); ok {
-			header, _ = api.chain.GetHeaderByNumber(types.NewInt64(uint64(number.Int64())))
+			header = api.chain.GetHeaderByNumber(uint256.NewInt(uint64(number.Int64())))
 		}
 		if header == nil {
 			return types.Address{}, fmt.Errorf("missing block %v", blockNrOrHash.String())

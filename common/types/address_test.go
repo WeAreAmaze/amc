@@ -18,10 +18,15 @@ package types
 
 import (
 	"crypto/rand"
-	"github.com/amazechain/amc/utils"
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"encoding/json"
+	"github.com/holiman/uint256"
+	"reflect"
+
+	// "github.com/amazechain/amc/utils" cycle import
 	"strings"
 	"testing"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
 )
 
 func TestAddress_ed25519(t *testing.T) {
@@ -44,33 +49,33 @@ func TestFromECDSAPub(t *testing.T) {
 	t.Log(addr.String())
 }
 
-func TestAddress_DecodeString(t *testing.T) {
-	_, pub, err := crypto.GenerateEd25519Key(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+// func TestAddress_DecodeString(t *testing.T) {
+// 	_, pub, err := crypto.GenerateEd25519Key(rand.Reader)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	addr := PublicToAddress(pub)
-	t.Log(addr.String())
-	t.Log(addr.Bytes())
+// 	addr := PublicToAddress(pub)
+// 	t.Log(addr.String())
+// 	t.Log(addr.Bytes())
 
-	h := addr.HexBytes()
-	var c Address
-	if c.DecodeHexBytes(h) {
-		t.Log(h)
-		t.Logf("c: %s", c.String())
-	}
+// 	h := addr.HexBytes()
+// 	var c Address
+// 	if c.DecodeHexBytes(h) {
+// 		t.Log(h)
+// 		t.Logf("c: %s", c.String())
+// 	}
 
-	var a, b Address
-	if a.DecodeString(addr.String()) {
-		t.Logf("a: %s", a.String())
-	}
-	if b.DecodeBytes(addr.Bytes()) {
-		t.Logf("b: %s", b.String())
-	}
+// 	var a, b Address
+// 	if a.DecodeString(addr.String()) {
+// 		t.Logf("a: %s", a.String())
+// 	}
+// 	if b.DecodeBytes(addr.Bytes()) {
+// 		t.Logf("b: %s", b.String())
+// 	}
 
-	t.Log("done!")
-}
+// 	t.Log("done!")
+// }
 
 func TestPrivateToAddress(t *testing.T) {
 	priv, pub, err := crypto.GenerateEd25519Key(rand.Reader)
@@ -151,15 +156,39 @@ func TestSign(t *testing.T) {
 	}
 }
 
-func TestAddressToInt(t *testing.T) {
-	priv, _, err := crypto.GenerateECDSAKeyPair(rand.Reader)
-	if err != nil {
+// func TestAddressToInt(t *testing.T) {
+// 	priv, _, err := crypto.GenerateECDSAKeyPair(rand.Reader)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	sp, err := utils.PrivateToString(priv)
+
+// 	addr := PrivateToAddress(priv)
+// 	t.Logf("address: %s", addr)
+// 	t.Logf("private: %s", sp)
+// }
+
+func TestAddressMarshal(t *testing.T) {
+	aa := make(map[Address]*uint256.Int)
+	var a1, a2 Address
+	a1.DecodeString("AMC4541Fc1CCB4e042a3BaDFE46904F9D22d127B682")
+	a2.DecodeString("AMC9BA336835422BAeFc537d75642959d2a866500a3")
+	aa[a1] = uint256.NewInt(1)
+	aa[a2] = uint256.NewInt(2)
+
+	b, err := json.Marshal(aa)
+	if nil != err {
 		t.Fatal(err)
 	}
 
-	sp, err := utils.PrivateToString(priv)
+	bb := make(map[Address]*uint256.Int)
 
-	addr := PrivateToAddress(priv)
-	t.Logf("address: %s", addr)
-	t.Logf("private: %s", sp)
+	if err := json.Unmarshal(b, &bb); nil != err {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(aa, bb) {
+		t.Error("failed")
+	}
 }

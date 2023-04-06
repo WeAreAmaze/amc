@@ -3,8 +3,8 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
 )
 
 type Log struct {

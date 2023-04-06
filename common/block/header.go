@@ -20,12 +20,15 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/amazechain/amc/api/protocol/types_pb"
-	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
-	"github.com/gogo/protobuf/proto"
-	"reflect"
+	"github.com/amazechain/amc/log"
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 	"sync/atomic"
+
+	"github.com/amazechain/amc/api/protocol/types_pb"
+	"github.com/amazechain/amc/common/hexutil"
+	"github.com/amazechain/amc/common/types"
 )
 
 type BlockNonce [8]byte
@@ -52,36 +55,31 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
 }
 
-var headerSize = types.StorageSize(reflect.TypeOf(Header{}).Size())
-
 type Header struct {
 	ParentHash  types.Hash    `json:"parentHash"       gencodec:"required"`
 	Coinbase    types.Address `json:"miner"`
 	Root        types.Hash    `json:"stateRoot"        gencodec:"required"`
 	TxHash      types.Hash    `json:"transactionsRoot" gencodec:"required"`
 	ReceiptHash types.Hash    `json:"receiptsRoot"     gencodec:"required"`
-	Difficulty  types.Int256  `json:"difficulty"       gencodec:"required"`
-	Number      types.Int256  `json:"number"           gencodec:"required"`
+	Bloom       Bloom         `json:"logsBloom"        gencodec:"required"`
+	Difficulty  *uint256.Int  `json:"difficulty"       gencodec:"required"`
+	Number      *uint256.Int  `json:"number"           gencodec:"required"`
 	GasLimit    uint64        `json:"gasLimit"         gencodec:"required"`
 	GasUsed     uint64        `json:"gasUsed"          gencodec:"required"`
 	Time        uint64        `json:"timestamp"        gencodec:"required"`
 	MixDigest   types.Hash    `json:"mixHash"`
 	Nonce       BlockNonce    `json:"nonce"`
-	Extra       []byte        `json:"-"        gencodec:"required"`
+	Extra       []byte        `json:"extraData"        gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
-	BaseFee types.Int256 `json:"baseFeePerGas" rlp:"optional"`
+	BaseFee *uint256.Int `json:"baseFeePerGas" rlp:"optional"`
 
 	hash atomic.Value
+
+	Signature types.Signature `json:"signature"`
 }
 
-// Size returns the approximate memory used by all internal contents. It is used
-// to approximate and limit the memory consumption of various caches.
-func (h *Header) Size() types.StorageSize {
-	return headerSize + types.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen())/8)
-}
-
-func (h *Header) Number64() types.Int256 {
+func (h *Header) Number64() *uint256.Int {
 	return h.Number
 }
 
@@ -89,68 +87,82 @@ func (h *Header) StateRoot() types.Hash {
 	return h.Root
 }
 
-func (h *Header) BaseFee64() types.Int256 {
+func (h *Header) BaseFee64() *uint256.Int {
 	return h.BaseFee
 }
 
-func (h *Header) Hash() types.Hash {
-	//todo
-	//if hash := h.hash.Load(); hash != nil {
-	//	return hash.(types.Hash)
-	//}
+func (h Header) Hash() types.Hash {
+	if hash := h.hash.Load(); hash != nil {
+		return hash.(types.Hash)
+	}
+
+	if h.BaseFee == nil {
+		h.BaseFee = uint256.NewInt(0)
+	}
+
+	if h.Difficulty == nil {
+		h.Difficulty = uint256.NewInt(0)
+	}
 
 	buf, err := json.Marshal(h)
 	if err != nil {
 		return types.Hash{}
 	}
 
-	hash := types.BytesToHash(buf)
+	if h.Number.Uint64() == 0 {
+		log.Tracef("genesis header json Marshal: %s", string(buf))
+	}
+
+	hash := types.BytesHash(buf)
 	h.hash.Store(hash)
 	return hash
 }
 
 func (h *Header) ToProtoMessage() proto.Message {
-	return &types_pb.PBHeader{
-		ParentHash:  h.ParentHash,
-		Coinbase:    h.Coinbase,
-		Root:        h.Root,
-		TxHash:      h.TxHash,
-		ReceiptHash: h.ReceiptHash,
-		Difficulty:  h.Difficulty,
-		Number:      h.Number,
+	return &types_pb.Header{
+		ParentHash:  utils.ConvertHashToH256(h.ParentHash),
+		Coinbase:    utils.ConvertAddressToH160(h.Coinbase),
+		Root:        utils.ConvertHashToH256(h.Root),
+		TxHash:      utils.ConvertHashToH256(h.TxHash),
+		ReceiptHash: utils.ConvertHashToH256(h.ReceiptHash),
+		Difficulty:  utils.ConvertUint256IntToH256(h.Difficulty),
+		Number:      utils.ConvertUint256IntToH256(h.Number),
 		GasLimit:    h.GasLimit,
 		GasUsed:     h.GasUsed,
 		Time:        h.Time,
 		Nonce:       h.Nonce.Uint64(),
-		BaseFee:     h.BaseFee,
+		BaseFee:     utils.ConvertUint256IntToH256(h.BaseFee),
 		Extra:       h.Extra,
+		Signature:   utils.ConvertSignatureToH768(h.Signature),
+		Bloom:       utils.ConvertBytesToH2048(h.Bloom.Bytes()),
 	}
 }
 
 func (h *Header) FromProtoMessage(message proto.Message) error {
 	var (
-		pbHeader *types_pb.PBHeader
+		pbHeader *types_pb.Header
 		ok       bool
 	)
 
-	if pbHeader, ok = message.(*types_pb.PBHeader); !ok {
+	if pbHeader, ok = message.(*types_pb.Header); !ok {
 		return fmt.Errorf("type conversion failure")
 	}
 
-	h.ParentHash = pbHeader.ParentHash
-	h.Coinbase = pbHeader.Coinbase
-	h.Root = pbHeader.Root
-	h.TxHash = pbHeader.TxHash
-	h.ReceiptHash = pbHeader.ReceiptHash
-	h.Difficulty = pbHeader.Difficulty
-	h.Number = pbHeader.Number
+	h.ParentHash = utils.ConvertH256ToHash(pbHeader.ParentHash)
+	h.Coinbase = utils.ConvertH160toAddress(pbHeader.Coinbase)
+	h.Root = utils.ConvertH256ToHash(pbHeader.Root)
+	h.TxHash = utils.ConvertH256ToHash(pbHeader.TxHash)
+	h.ReceiptHash = utils.ConvertH256ToHash(pbHeader.ReceiptHash)
+	h.Difficulty = utils.ConvertH256ToUint256Int(pbHeader.Difficulty)
+	h.Number = utils.ConvertH256ToUint256Int(pbHeader.Number)
 	h.GasLimit = pbHeader.GasLimit
 	h.GasUsed = pbHeader.GasUsed
 	h.Time = pbHeader.Time
 	h.Nonce = EncodeNonce(pbHeader.Nonce)
-	h.BaseFee = pbHeader.BaseFee
+	h.BaseFee = utils.ConvertH256ToUint256Int(pbHeader.BaseFee)
 	h.Extra = pbHeader.Extra
-
+	h.Signature = utils.ConvertH768ToSignature(pbHeader.Signature)
+	h.Bloom = utils.ConvertH2048ToBloom(pbHeader.Bloom)
 	return nil
 }
 
@@ -160,7 +172,7 @@ func (h *Header) Marshal() ([]byte, error) {
 }
 
 func (h *Header) Unmarshal(data []byte) error {
-	var pbHeader types_pb.PBHeader
+	var pbHeader types_pb.Header
 	if err := proto.Unmarshal(data, &pbHeader); err != nil {
 		return err
 	}
@@ -172,5 +184,37 @@ func (h *Header) Unmarshal(data []byte) error {
 
 func CopyHeader(h *Header) *Header {
 	cpy := *h
+
+	if cpy.Difficulty = uint256.NewInt(0); h.Difficulty != nil {
+		cpy.Difficulty.SetBytes(h.Difficulty.Bytes())
+	}
+	if cpy.Number = uint256.NewInt(0); h.Number != nil {
+		cpy.Number.SetBytes(h.Number.Bytes())
+	}
+
+	if h.BaseFee != nil {
+		cpy.BaseFee = uint256.NewInt(0).SetBytes(h.BaseFee.Bytes())
+	}
+
+	if len(h.Extra) > 0 {
+		cpy.Extra = make([]byte, len(h.Extra))
+		copy(cpy.Extra, h.Extra)
+	}
 	return &cpy
+}
+
+func CopyReward(rewards []*Reward) []*Reward {
+	var cpyReward []*Reward
+
+	for _, reward := range rewards {
+		addr, amount := types.Address{}, uint256.Int{}
+
+		addr.SetBytes(reward.Address[:])
+		cpyReward = append(cpyReward, &Reward{
+			Address: addr,
+			Amount:  amount.SetBytes(reward.Amount.Bytes()),
+		})
+	}
+
+	return cpyReward
 }

@@ -1,17 +1,32 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rlp
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/math"
 	"io"
-	"io/ioutil"
 	"math/big"
-	"runtime"
 	"sync"
 	"testing"
 
-	"github.com/amazechain/amc/internal/avm/common/math"
+	"github.com/holiman/uint256"
 )
 
 type testEncoder struct {
@@ -25,29 +40,31 @@ func (e *testEncoder) EncodeRLP(w io.Writer) error {
 	if e.err != nil {
 		return e.err
 	}
-	w.Write([]byte{0, 1, 0, 1, 0, 1, 0, 1, 0, 1})
+	if _, err := w.Write([]byte{0, 1, 0, 1, 0, 1, 0, 1, 0, 1}); err != nil {
+		return err
+	}
 	return nil
 }
 
 type testEncoderValueMethod struct{}
 
 func (e testEncoderValueMethod) EncodeRLP(w io.Writer) error {
-	w.Write([]byte{0xFA, 0xFE, 0xF0})
-	return nil
+	_, err := w.Write([]byte{0xFA, 0xFE, 0xF0})
+	return err
 }
 
 type byteEncoder byte
 
 func (e byteEncoder) EncodeRLP(w io.Writer) error {
-	w.Write(EmptyList)
-	return nil
+	_, err := w.Write(EmptyList)
+	return err
 }
 
 type undecodableEncoder func()
 
 func (f undecodableEncoder) EncodeRLP(w io.Writer) error {
-	w.Write([]byte{0xF5, 0xF5, 0xF5})
-	return nil
+	_, err := w.Write([]byte{0xF5, 0xF5, 0xF5})
+	return err
 }
 
 type encodableReader struct {
@@ -129,18 +146,28 @@ var encTests = []encTest{
 	{val: *big.NewInt(0xFFFFFF), output: "83FFFFFF"},
 
 	// negative ints are not supported
-	{val: big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
-	{val: *big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
+	{val: big.NewInt(-1), error: "rlp: cannot encode negative *big.Int"},
 
-	// byte arrays
-	{val: [0]byte{}, output: "80"},
-	{val: [1]byte{0}, output: "00"},
-	{val: [1]byte{1}, output: "01"},
-	{val: [1]byte{0x7F}, output: "7F"},
-	{val: [1]byte{0x80}, output: "8180"},
-	{val: [1]byte{0xFF}, output: "81FF"},
-	{val: [3]byte{1, 2, 3}, output: "83010203"},
-	{val: [57]byte{1, 2, 3}, output: "B839010203000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+	// uint256 integers (should match uint for small values)
+	{val: uint256.NewInt(0), output: "80"},
+	{val: uint256.NewInt(1), output: "01"},
+	{val: uint256.NewInt(127), output: "7F"},
+	{val: uint256.NewInt(128), output: "8180"},
+	{val: uint256.NewInt(256), output: "820100"},
+	{val: uint256.NewInt(1024), output: "820400"},
+	{val: uint256.NewInt(0xFFFFFF), output: "83FFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFF), output: "84FFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFF), output: "85FFFFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFFFF), output: "86FFFFFFFFFFFF"},
+	{val: uint256.NewInt(0xFFFFFFFFFFFFFF), output: "87FFFFFFFFFFFFFF"},
+	{
+		val:    uint256.NewInt(0).SetBytes(unhex("102030405060708090A0B0C0D0E0F2")),
+		output: "8F102030405060708090A0B0C0D0E0F2",
+	},
+	{
+		val:    uint256.NewInt(0).SetBytes(unhex("0100020003000400050006000700080009000A000B000C000D000E01")),
+		output: "9C0100020003000400050006000700080009000A000B000C000D000E01",
+	},
 
 	// named byte type arrays
 	{val: [0]namedByteType{}, output: "80"},
@@ -282,6 +309,7 @@ var encTests = []encTest{
 	{val: (*[]byte)(nil), output: "80"},
 	{val: (*[10]byte)(nil), output: "80"},
 	{val: (*big.Int)(nil), output: "80"},
+	{val: (*uint256.Int)(nil), output: "80"},
 	{val: (*[]string)(nil), output: "C0"},
 	{val: (*[10]string)(nil), output: "C0"},
 	{val: (*[]interface{})(nil), output: "C0"},
@@ -383,28 +411,13 @@ func TestEncodeToBytes(t *testing.T) {
 	runEncTests(t, EncodeToBytes)
 }
 
-func TestEncodeAppendToBytes(t *testing.T) {
-	buffer := make([]byte, 20)
-	runEncTests(t, func(val interface{}) ([]byte, error) {
-		w := NewEncoderBuffer(nil)
-		defer w.Flush()
-
-		err := Encode(w, val)
-		if err != nil {
-			return nil, err
-		}
-		output := w.AppendToBytes(buffer[:0])
-		return output, nil
-	})
-}
-
 func TestEncodeToReader(t *testing.T) {
 	runEncTests(t, func(val interface{}) ([]byte, error) {
 		_, r, err := EncodeToReader(val)
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.ReadAll(r)
+		return io.ReadAll(r)
 	})
 }
 
@@ -425,7 +438,7 @@ func TestEncodeToReaderPiecewise(t *testing.T) {
 			}
 			n, err := r.Read(output[start:end])
 			end = start + n
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
 				return nil, err
@@ -445,7 +458,7 @@ func TestEncodeToReaderReturnToPool(t *testing.T) {
 		go func() {
 			for i := 0; i < 1000; i++ {
 				_, r, _ := EncodeToReader("foo")
-				ioutil.ReadAll(r)
+				io.ReadAll(r)
 				r.Read(buf)
 				r.Read(buf)
 				r.Read(buf)
@@ -485,85 +498,6 @@ func BenchmarkEncodeBigInts(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		out.Reset()
 		if err := Encode(out, ints); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkEncodeConcurrentInterface(b *testing.B) {
-	type struct1 struct {
-		A string
-		B *big.Int
-		C [20]byte
-	}
-	value := []interface{}{
-		uint(999),
-		&struct1{A: "hello", B: big.NewInt(0xFFFFFFFF)},
-		[10]byte{1, 2, 3, 4, 5, 6},
-		[]string{"yeah", "yeah", "yeah"},
-	}
-
-	var wg sync.WaitGroup
-	for cpu := 0; cpu < runtime.NumCPU(); cpu++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			var buffer bytes.Buffer
-			for i := 0; i < b.N; i++ {
-				buffer.Reset()
-				err := Encode(&buffer, value)
-				if err != nil {
-					panic(err)
-				}
-			}
-		}()
-	}
-	wg.Wait()
-}
-
-type byteArrayStruct struct {
-	A [20]byte
-	B [32]byte
-	C [32]byte
-}
-
-func BenchmarkEncodeByteArrayStruct(b *testing.B) {
-	var out bytes.Buffer
-	var value byteArrayStruct
-
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		out.Reset()
-		if err := Encode(&out, &value); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-type structSliceElem struct {
-	X uint64
-	Y uint64
-	Z uint64
-}
-
-type structPtrSlice []*structSliceElem
-
-func BenchmarkEncodeStructPtrSlice(b *testing.B) {
-	var out bytes.Buffer
-	var value = structPtrSlice{
-		&structSliceElem{1, 1, 1},
-		&structSliceElem{2, 2, 2},
-		&structSliceElem{3, 3, 3},
-		&structSliceElem{5, 5, 5},
-		&structSliceElem{6, 6, 6},
-		&structSliceElem{7, 7, 7},
-	}
-
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		out.Reset()
-		if err := Encode(&out, &value); err != nil {
 			b.Fatal(err)
 		}
 	}

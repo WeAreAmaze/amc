@@ -19,6 +19,7 @@ package common
 import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/transaction"
+	"github.com/amazechain/amc/modules/state"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -52,4 +53,7 @@ type DownloaderFinishEvent struct{}
 type ChainHighestBlock struct {
 	Block    block.Block
 	Inserted bool
+}
+type MinedEntireEvent struct {
+	Entire state.EntireCode
 }

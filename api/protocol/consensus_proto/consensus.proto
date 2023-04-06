@@ -15,9 +15,10 @@
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 syntax = "proto3";
-package consensus.pb;
+package consensus_pb;
 
-import "gogoproto/gogo.proto";
+import "types_pb/types.proto";
+option go_package = "github.com/amazechain/amc/api/protocol/consensus_proto";
 
 message PBSigners {
   repeated PBSigner signer = 1;
@@ -25,7 +26,7 @@ message PBSigners {
 
 message PBSigner {
   string public = 1;
-  bytes address = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  types_pb.H160 address = 2;
   string version = 3;
 }
 

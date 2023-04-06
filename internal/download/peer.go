@@ -18,36 +18,38 @@ package download
 
 import (
 	"context"
-	"math/rand"
-	"sync"
-
 	"github.com/amazechain/amc/api/protocol/sync_proto"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
-	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
-	"github.com/gogo/protobuf/proto"
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"go.uber.org/zap"
+	"math/rand"
+	"sync"
 )
 
 // peerInfo
 type peerInfo struct {
 	ID         peer.ID
-	Number     types.Int256
-	Difficulty types.Int256
+	Number     *uint256.Int
+	Difficulty *uint256.Int
 }
 
 type peersInfo struct {
 	ctx    context.Context
 	cancel context.CancelFunc
-	lock   sync.Mutex
+	lock   sync.RWMutex
 
 	peers common.PeerMap
 	info  map[peer.ID]peerInfo
 }
 
-func (p *peersInfo) findPeers(number types.Int256, count int) common.PeerSet {
+func (p *peersInfo) findPeers(number *uint256.Int, count int) common.PeerSet {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 	set := common.PeerSet{}
 	ids := make(map[peer.ID]struct{}, count)
 	for i := 0; i < len(p.peers) && i < count; i++ {
@@ -57,13 +59,13 @@ func (p *peersInfo) findPeers(number types.Int256, count int) common.PeerSet {
 			}
 			//p.log.Infof("Compare downloader number : %v, peer id : %v, remote peer number: %v", number.Uint64(), id.String(), p.info[id].Number.Uint64())
 			//  Add 2 number as network delay
-			if p.info[id].Number.Add(types.NewInt64(2)).Compare(number) >= 0 {
+			if peerInfo, ok := p.info[id]; ok && new(uint256.Int).AddUint64(peerInfo.Number, 2).Cmp(number) >= 0 {
 				ids[id] = struct{}{}
 				set = append(set, p.peers[id])
 			}
 		}
 	}
-	log.Infof("finded great than number %v peers count: %v, limit: %v", number.Uint64(), len(set), count)
+	log.Tracef("finded great than number %v peers count: %v, limit: %v", number.Uint64(), len(set), count)
 	return set
 }
 
@@ -72,7 +74,7 @@ func (p peersInfo) get(id peer.ID) (common.Peer, bool) {
 	return peer, ok
 }
 
-func (p *peersInfo) update(id peer.ID, Number types.Int256, Difficulty types.Int256) {
+func (p *peersInfo) update(id peer.ID, Number *uint256.Int, Difficulty *uint256.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -95,7 +97,7 @@ func (p *peersInfo) drop(id peer.ID) {
 }
 
 // peerInfoBroadcastLoop
-func (p *peersInfo) peerInfoBroadcast(Number types.Int256) {
+func (p *peersInfo) peerInfoBroadcast(Number *uint256.Int) {
 	log.Debugf("start to broadcast peer info , number is :%v , peer count is %v", Number.Uint64(), len(p.peers))
 	for _, peer := range p.peers {
 		msg := &sync_proto.SyncTask{
@@ -103,8 +105,8 @@ func (p *peersInfo) peerInfoBroadcast(Number types.Int256) {
 			SyncType: sync_proto.SyncType_PeerInfoBroadcast,
 			Payload: &sync_proto.SyncTask_SyncPeerInfoBroadcast{
 				SyncPeerInfoBroadcast: &sync_proto.SyncPeerInfoBroadcast{
-					Number:     Number,
-					Difficulty: types.NewInt64(0),
+					Number:     utils.ConvertUint256IntToH256(Number),
+					Difficulty: utils.ConvertUint256IntToH256(uint256.NewInt(0)),
 					//todo
 				},
 			},
@@ -116,12 +118,6 @@ func (p *peersInfo) peerInfoBroadcast(Number types.Int256) {
 		if err != nil {
 			log.Error("failed to sync peer info", zap.String("peer id", peer.ID().String()), zap.Error(err))
 		}
-	}
-}
-
-func (p *peersInfo) state() {
-	for _, peer := range p.peers {
-		log.Debugf("peer id %s: number %d", peer.ID().String(), peer.CurrentHeight.Uint64())
 	}
 }
 

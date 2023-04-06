@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/amazechain/amc/accounts"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/crypto"
 	"github.com/google/uuid"
 )
 
@@ -136,7 +136,7 @@ func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	}
 	key := &Key{
 		Id:         id,
-		Address:    types.Address(crypto.PubkeyToAddress(privateKeyECDSA.PublicKey)),
+		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
 	}
 	return key

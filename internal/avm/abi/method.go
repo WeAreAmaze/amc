@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/amazechain/amc/internal/avm/crypto"
+	"github.com/amazechain/amc/common/crypto"
 )
 
 // FunctionType represents different types of functions a contract might have.

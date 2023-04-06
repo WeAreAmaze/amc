@@ -10,6 +10,7 @@ import (
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"sync"
 	"time"
 )
@@ -325,7 +326,7 @@ func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev common.RemovedL
 func (es *EventSystem) handleTxsEvent(filters filterIndex, ev common.NewTxsEvent) {
 	hashes := make([]types.Hash, 0, len(ev.Txs))
 	for _, tx := range ev.Txs {
-		hash, _ := tx.Hash()
+		hash := tx.Hash()
 		hashes = append(hashes, hash)
 	}
 	for _, f := range filters[PendingTransactionsSubscription] {
@@ -361,16 +362,24 @@ func (es *EventSystem) lightFilterNewHead(newHeader block.IHeader, callBack func
 		if oldh.Number64().Uint64() >= newh.Number64().Uint64() {
 			oldHeaders = append(oldHeaders, oldh)
 			pHash := oldh.(*block.Header).ParentHash
-			oldh, _, _ = rawdb.GetHeader(es.api.Database(), pHash)
+			es.api.Database().View(context.Background(), func(tx kv.Tx) error {
+				var err error
+				oldh, err = rawdb.ReadHeaderByHash(tx, pHash)
+				return err
+			})
 		}
 		if oldh.Number64().Uint64() < newh.Number64().Uint64() {
 			newHeaders = append(newHeaders, newh)
 			pHash := newh.(*block.Header).ParentHash
-			newh, _, _ = rawdb.GetHeader(es.api.Database(), pHash)
-			if newh == nil {
-				// happens when CHT syncing, nothing to do
-				newh = oldh
-			}
+			es.api.Database().View(context.Background(), func(tx kv.Tx) error {
+				newh, _ = rawdb.ReadHeaderByHash(tx, pHash)
+				if newh == nil {
+					// happens when CHT syncing, nothing to do
+					newh = oldh
+				}
+				return nil
+			})
+
 		}
 	}
 	// roll back old blocks

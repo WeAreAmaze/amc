@@ -20,17 +20,13 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
-	"sync"
-
-	"golang.org/x/crypto/sha3"
-
-	"github.com/amazechain/amc/internal/avm/rlp"
-
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/crypto"
+	"github.com/amazechain/amc/common/u256"
+	"github.com/amazechain/amc/params"
+	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
+	"math/big"
 )
 
 var (
@@ -44,6 +40,24 @@ var (
 type sigCache struct {
 	signer Signer
 	from   types.Address
+}
+
+// MakeSigner returns a Signer based on the given chain config and block number.
+func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
+	var signer Signer
+	switch {
+	case config.IsLondon(blockNumber.Uint64()):
+		signer = NewLondonSigner(config.ChainID)
+	case config.IsBerlin(blockNumber.Uint64()):
+		signer = NewEIP2930Signer(config.ChainID)
+	case config.IsEip1559FeeCollector(blockNumber.Uint64()):
+		signer = NewEIP155Signer(config.ChainID)
+	case config.IsHomestead(blockNumber.Uint64()):
+		signer = HomesteadSigner{}
+	default:
+		signer = FrontierSigner{}
+	}
+	return signer
 }
 
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
@@ -60,6 +74,17 @@ func LatestSignerForChainID(chainID *big.Int) Signer {
 	return NewLondonSigner(chainID)
 }
 
+// SignNewTx creates a transaction and signs it.
+func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) (*Transaction, error) {
+	tx := NewTx(txdata)
+	h := s.Hash(tx)
+	sig, err := crypto.Sign(h[:], prv)
+	if err != nil {
+		return nil, err
+	}
+	return tx.WithSignature(s, sig)
+}
+
 // SignTx signs the transaction using the given signer and private key.
 func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
 	h := s.Hash(tx)
@@ -68,6 +93,32 @@ func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, err
 		return nil, err
 	}
 	return tx.WithSignature(s, sig)
+}
+
+// Sender returns the address derived from the signature (V, R, S) using secp256k1
+// elliptic curve and an error if it failed deriving or upon an incorrect
+// signature.
+//
+// Sender may cache the address, allowing it to be used regardless of
+// signing method. The cache is invalidated if the cached signer does
+// not match the signer used in the current call.
+func Sender(signer Signer, tx *Transaction) (types.Address, error) {
+	if sc := tx.from.Load(); sc != nil {
+		sigCache := sc.(sigCache)
+		// If the signer used to derive from in a previous
+		// call is not the same as used current, invalidate
+		// the cache.
+		if sigCache.signer.Equal(signer) {
+			return sigCache.from, nil
+		}
+	}
+
+	addr, err := signer.Sender(tx)
+	if err != nil {
+		return types.Address{}, err
+	}
+	tx.from.Store(sigCache{signer: signer, from: addr})
+	return addr, nil
 }
 
 // Signer encapsulates transaction signature handling. The name of this type is slightly
@@ -87,7 +138,7 @@ type Signer interface {
 
 	// Hash returns 'signature hash', i.e. the transaction hash that is signed by the
 	// private key. This hash does not uniquely identify the transaction.
-	Hash(tx *Transaction) common.Hash
+	Hash(tx *Transaction) types.Hash
 
 	// Equal returns true if the given signer is the same as the receiver.
 	Equal(Signer) bool
@@ -143,11 +194,11 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s londonSigner) Hash(tx *Transaction) common.Hash {
+func (s londonSigner) Hash(tx *Transaction) types.Hash {
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Hash(tx)
 	}
-	return prefixedRlpHash(
+	return utils.PrefixedRlpHash(
 		tx.Type(),
 		[]interface{}{
 			s.chainId,
@@ -225,10 +276,10 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
+func (s eip2930Signer) Hash(tx *Transaction) types.Hash {
 	switch tx.Type() {
 	case LegacyTxType:
-		return rlpHash([]interface{}{
+		return utils.RlpHash([]interface{}{
 			tx.Nonce(),
 			tx.GasPrice(),
 			tx.Gas(),
@@ -238,7 +289,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 			s.chainId, uint(0), uint(0),
 		})
 	case AccessListTxType:
-		return prefixedRlpHash(
+		return utils.PrefixedRlpHash(
 			tx.Type(),
 			[]interface{}{
 				s.chainId,
@@ -255,7 +306,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 		// json struct via RPC, it's probably more prudent to return an
 		// empty hash instead of killing the node with a panic
 		//panic("Unsupported transaction type: %d", tx.typ)
-		return common.Hash{}
+		return types.Hash{}
 	}
 }
 
@@ -321,8 +372,8 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
-	return rlpHash([]interface{}{
+func (s EIP155Signer) Hash(tx *Transaction) types.Hash {
+	return utils.RlpHash([]interface{}{
 		tx.Nonce(),
 		tx.GasPrice(),
 		tx.Gas(),
@@ -391,8 +442,8 @@ func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
-	return rlpHash([]interface{}{
+func (fs FrontierSigner) Hash(tx *Transaction) types.Hash {
+	return utils.RlpHash([]interface{}{
 		tx.Nonce(),
 		tx.GasPrice(),
 		tx.Gas(),
@@ -412,12 +463,14 @@ func decodeSignature(sig []byte) (r, s, v *big.Int) {
 	return r, s, v
 }
 
-func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (types.Address, error) {
+func recoverPlain(sighash types.Hash, R, S, Vb *big.Int, homestead bool) (types.Address, error) {
 	if Vb.BitLen() > 8 {
 		return types.Address{}, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
-	if !crypto.ValidateSignatureValues(V, R, S, homestead) {
+	lr, _ := uint256.FromBig(R)
+	ls, _ := uint256.FromBig(S)
+	if !crypto.ValidateSignatureValues(V, lr, ls, homestead) {
 		return types.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format
@@ -439,28 +492,15 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (types
 	return addr, nil
 }
 
-// hasherPool holds LegacyKeccak256 hashers for rlpHash.
-var hasherPool = sync.Pool{
-	New: func() interface{} { return sha3.NewLegacyKeccak256() },
-}
-
-func rlpHash(x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
-	defer hasherPool.Put(sha)
-	sha.Reset()
-	rlp.Encode(sha, x)
-	sha.Read(h[:])
-	return h
-}
-
-// prefixedRlpHash writes the prefix into the hasher before rlp-encoding x.
-// It's used for typed transactions.
-func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
-	defer hasherPool.Put(sha)
-	sha.Reset()
-	sha.Write([]byte{prefix})
-	rlp.Encode(sha, x)
-	sha.Read(h[:])
-	return h
+// deriveChainID derives the chain id from the given v parameter
+func DeriveChainId(v *uint256.Int) *uint256.Int {
+	if v.IsUint64() {
+		v := v.Uint64()
+		if v == 27 || v == 28 {
+			return new(uint256.Int)
+		}
+		return new(uint256.Int).SetUint64((v - 35) / 2)
+	}
+	r := new(uint256.Int).Sub(v, u256.Num35)
+	return r.Div(r, u256.Num2)
 }

@@ -19,13 +19,15 @@ package transaction
 import (
 	"bytes"
 	"fmt"
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common/types"
-	"github.com/gogo/protobuf/proto"
 )
 
 var (
@@ -43,21 +45,22 @@ type TxData interface {
 	txType() byte // returns the type ID
 	copy() TxData // creates a deep copy and initializes all fields
 
-	chainID() types.Int256
+	chainID() *uint256.Int
 	accessList() AccessList
 	data() []byte
 	gas() uint64
-	gasPrice() types.Int256
-	gasTipCap() types.Int256
-	gasFeeCap() types.Int256
-	value() types.Int256
+	gasPrice() *uint256.Int
+	gasTipCap() *uint256.Int
+	gasFeeCap() *uint256.Int
+	value() *uint256.Int
 	nonce() uint64
 	to() *types.Address
 	from() *types.Address
 	sign() []byte
+	hash() types.Hash
 
-	rawSignatureValues() (v, r, s types.Int256)
-	setSignatureValues(chainID, v, r, s types.Int256)
+	rawSignatureValues() (v, r, s *uint256.Int)
+	setSignatureValues(chainID, v, r, s *uint256.Int)
 
 	//Marshal() ([]byte, error)
 	//MarshalTo(data []byte) (n int, err error)
@@ -97,7 +100,7 @@ func NewTx(inner TxData) *Transaction {
 	return tx
 }
 
-func FromProtoMessage(message proto.Message) (*Transaction, error) {
+func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 	var (
 		pbTx  *types_pb.Transaction
 		ok    bool
@@ -111,51 +114,85 @@ func FromProtoMessage(message proto.Message) (*Transaction, error) {
 	switch pbTx.Type {
 	case LegacyTxType:
 		var itx LegacyTx
-		itx.To = pbTx.To
-		itx.From = &pbTx.From
-		itx.Sign = pbTx.Sing
+		if nil != pbTx.To {
+			itx.To = utils.ConvertH160ToPAddress(pbTx.To)
+		}
+		itx.From = utils.ConvertH160ToPAddress(pbTx.From)
+		itx.Sign = pbTx.Sign
 		itx.Nonce = pbTx.Nonce
 		itx.Gas = pbTx.Gas
-		itx.GasPrice = pbTx.GasPrice
-		itx.Value = pbTx.Value
-		itx.V = pbTx.V
-		itx.R = pbTx.R
-		itx.S = pbTx.S
+		itx.GasPrice = utils.ConvertH256ToUint256Int(pbTx.GasPrice)
+		itx.Value = utils.ConvertH256ToUint256Int(pbTx.Value)
+		if nil != pbTx.V {
+			itx.V = utils.ConvertH256ToUint256Int(pbTx.V)
+		}
+		if nil != pbTx.R {
+			itx.R = utils.ConvertH256ToUint256Int(pbTx.R)
+		}
+		if nil != pbTx.S {
+			itx.S = utils.ConvertH256ToUint256Int(pbTx.S)
+		}
 		itx.Data = pbTx.Data
 		inner = &itx
 	case AccessListTxType:
 		var altt AccessListTx
-		altt.ChainID = types.NewInt64(pbTx.ChainID)
+		altt.ChainID = uint256.NewInt(pbTx.ChainID)
 		altt.Nonce = pbTx.Nonce
 		altt.Gas = pbTx.Gas
-		altt.GasPrice = pbTx.GasPrice
-		altt.Value = pbTx.Value
-		altt.V = pbTx.V
-		altt.R = pbTx.R
-		altt.S = pbTx.S
+		altt.GasPrice = utils.ConvertH256ToUint256Int(pbTx.GasPrice)
+		altt.Value = utils.ConvertH256ToUint256Int(pbTx.Value)
+		if nil != pbTx.V {
+			altt.V = utils.ConvertH256ToUint256Int(pbTx.V)
+		}
+		if nil != pbTx.R {
+			altt.R = utils.ConvertH256ToUint256Int(pbTx.R)
+		}
+		if nil != pbTx.S {
+			altt.S = utils.ConvertH256ToUint256Int(pbTx.S)
+		}
 		altt.Data = pbTx.Data
-		altt.To = pbTx.To
-		altt.From = &pbTx.From
-		altt.Sign = pbTx.Sing
+		if nil != pbTx.To {
+			altt.To = utils.ConvertH160ToPAddress(pbTx.To)
+		}
+		//altt.To = utils.ConvertH160ToPAddress(pbTx.To)
+		altt.From = utils.ConvertH160ToPAddress(pbTx.From)
+		altt.Sign = pbTx.Sign
 		inner = &altt
 	case DynamicFeeTxType:
 		var dftt DynamicFeeTx
-		dftt.ChainID = types.NewInt64(pbTx.ChainID)
+		dftt.ChainID = uint256.NewInt(pbTx.ChainID)
 		dftt.Nonce = pbTx.Nonce
 		dftt.Gas = pbTx.Gas
-		dftt.GasFeeCap = pbTx.FeePerGas
-		dftt.GasTipCap = pbTx.PriorityFeePerGas
-		dftt.Value = pbTx.Value
-		dftt.V = pbTx.V
-		dftt.R = pbTx.R
-		dftt.S = pbTx.S
+		dftt.GasFeeCap = utils.ConvertH256ToUint256Int(pbTx.FeePerGas)
+		dftt.GasTipCap = utils.ConvertH256ToUint256Int(pbTx.PriorityFeePerGas)
+		dftt.Value = utils.ConvertH256ToUint256Int(pbTx.Value)
+		if nil != pbTx.V {
+			dftt.V = utils.ConvertH256ToUint256Int(pbTx.V)
+		}
+		if nil != pbTx.R {
+			dftt.R = utils.ConvertH256ToUint256Int(pbTx.R)
+		}
+		if nil != pbTx.S {
+			dftt.S = utils.ConvertH256ToUint256Int(pbTx.S)
+		}
 		dftt.Data = pbTx.Data
-		dftt.To = pbTx.To
-		dftt.From = &pbTx.From
-		dftt.Sign = pbTx.Sing
+		if nil != pbTx.To {
+			dftt.To = utils.ConvertH160ToPAddress(pbTx.To)
+		}
+		//dftt.To = utils.ConvertH160ToPAddress(pbTx.To)
+		dftt.From = utils.ConvertH160ToPAddress(pbTx.From)
+		dftt.Sign = pbTx.Sign
 		inner = &dftt
 	}
 
+	return inner, nil
+}
+
+func FromProtoMessage(message proto.Message) (*Transaction, error) {
+	inner, err := txDataFromProtoMessage(message)
+	if err != nil {
+		return nil, err
+	}
 	return NewTx(inner), nil
 }
 
@@ -168,36 +205,46 @@ func (tx *Transaction) ToProtoMessage() proto.Message {
 		pbTx.ChainID = t.ChainID.Uint64()
 		pbTx.Nonce = tx.Nonce()
 		pbTx.Gas = tx.Gas()
-		pbTx.GasPrice = tx.GasPrice()
-		pbTx.Value = tx.Value()
+		pbTx.GasPrice = utils.ConvertUint256IntToH256(tx.GasPrice())
+		pbTx.Value = utils.ConvertUint256IntToH256(tx.Value())
 		pbTx.Data = tx.Data()
-		pbTx.To = tx.To()
-		pbTx.From, _ = tx.From()
-		pbTx.Sing = t.Sign
+		pbTx.From = utils.ConvertAddressToH160(*tx.From())
+		pbTx.Sign = t.Sign
 	case *LegacyTx:
 		pbTx.Nonce = tx.Nonce()
 		pbTx.Gas = tx.Gas()
-		pbTx.GasPrice = tx.GasPrice()
-		pbTx.Value = tx.Value()
+		pbTx.GasPrice = utils.ConvertUint256IntToH256(tx.GasPrice())
+		pbTx.Value = utils.ConvertUint256IntToH256(tx.Value())
 		pbTx.Data = tx.Data()
-		pbTx.To = tx.To()
-		pbTx.From, _ = tx.From()
-		pbTx.Sing = t.Sign
+		//pbTx.To = utils.ConvertAddressToH160(*tx.To())
+		pbTx.From = utils.ConvertAddressToH160(*tx.From())
+		pbTx.Sign = t.Sign
 	case *DynamicFeeTx:
 		pbTx.ChainID = t.ChainID.Uint64()
 		pbTx.Nonce = tx.Nonce()
 		pbTx.Gas = tx.Gas()
-		pbTx.GasPrice = tx.GasPrice()
-		pbTx.Value = tx.Value()
+		pbTx.GasPrice = utils.ConvertUint256IntToH256(tx.GasPrice())
+		pbTx.Value = utils.ConvertUint256IntToH256(tx.Value())
 		pbTx.Data = tx.Data()
-		pbTx.To = tx.To()
-		pbTx.From, _ = tx.From()
-		pbTx.Sing = t.Sign
-		pbTx.FeePerGas = t.GasFeeCap
-		pbTx.PriorityFeePerGas = t.GasTipCap
+		//pbTx.To = utils.ConvertAddressToH160(*tx.To())
+		pbTx.From = utils.ConvertAddressToH160(*tx.From())
+		pbTx.Sign = t.Sign
+		pbTx.FeePerGas = utils.ConvertUint256IntToH256(t.GasFeeCap)
+		pbTx.PriorityFeePerGas = utils.ConvertUint256IntToH256(t.GasTipCap)
 	}
-
-	pbTx.V, pbTx.R, pbTx.S = tx.RawSignatureValues()
+	if tx.To() != nil {
+		pbTx.To = utils.ConvertAddressToH160(*tx.To())
+	}
+	v, r, s := tx.RawSignatureValues()
+	if nil != v {
+		pbTx.V = utils.ConvertUint256IntToH256(v)
+	}
+	if nil != r {
+		pbTx.R = utils.ConvertUint256IntToH256(r)
+	}
+	if nil != s {
+		pbTx.S = utils.ConvertUint256IntToH256(s)
+	}
 
 	return &pbTx
 }
@@ -210,13 +257,14 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 	//}
 }
 
-func (tx *Transaction) RawSignatureValues() (v, r, s types.Int256) {
+func (tx *Transaction) RawSignatureValues() (v, r, s *uint256.Int) {
 	return tx.inner.rawSignatureValues()
 }
 
 // WithSignature todo
-func (tx *Transaction) WithSignatureValues(v, r, s types.Int256) (*Transaction, error) {
-	tx.inner.setSignatureValues(types.NewInt64(100100100), v, r, s)
+func (tx *Transaction) WithSignatureValues(v, r, s *uint256.Int) (*Transaction, error) {
+	//todo
+	tx.inner.setSignatureValues(uint256.NewInt(100100100), v, r, s)
 	return tx, nil
 }
 
@@ -229,37 +277,46 @@ func (tx Transaction) Marshal() ([]byte, error) {
 		pbTx.ChainID = t.ChainID.Uint64()
 		pbTx.Nonce = tx.Nonce()
 		pbTx.Gas = tx.Gas()
-		pbTx.GasPrice = tx.GasPrice()
-		pbTx.Value = tx.Value()
+		pbTx.GasPrice = utils.ConvertUint256IntToH256(tx.GasPrice())
+		pbTx.Value = utils.ConvertUint256IntToH256(tx.Value())
 		pbTx.Data = tx.Data()
-		pbTx.To = tx.To()
-		pbTx.From, _ = tx.From()
-		pbTx.Sing = t.Sign
+		pbTx.From = utils.ConvertAddressToH160(*tx.From())
+		pbTx.Sign = t.Sign
 	case *LegacyTx:
 		pbTx.Nonce = tx.Nonce()
 		pbTx.Gas = tx.Gas()
-		pbTx.GasPrice = tx.GasPrice()
-		pbTx.Value = tx.Value()
+		pbTx.GasPrice = utils.ConvertUint256IntToH256(tx.GasPrice())
+		pbTx.Value = utils.ConvertUint256IntToH256(tx.Value())
 		pbTx.Data = tx.Data()
-		pbTx.To = tx.To()
-		pbTx.From, _ = tx.From()
-		pbTx.Sing = t.Sign
+		//pbTx.To = utils.ConvertAddressToH160(*tx.To())
+		pbTx.From = utils.ConvertAddressToH160(*tx.From())
+		pbTx.Sign = t.Sign
 	case *DynamicFeeTx:
 		pbTx.ChainID = t.ChainID.Uint64()
 		pbTx.Nonce = tx.Nonce()
 		pbTx.Gas = tx.Gas()
-		pbTx.GasPrice = tx.GasPrice()
-		pbTx.Value = tx.Value()
+		pbTx.GasPrice = utils.ConvertUint256IntToH256(tx.GasPrice())
+		pbTx.Value = utils.ConvertUint256IntToH256(tx.Value())
 		pbTx.Data = tx.Data()
-		pbTx.To = tx.To()
-		pbTx.From, _ = tx.From()
-		pbTx.Sing = t.Sign
-		pbTx.FeePerGas = t.GasFeeCap
-		pbTx.PriorityFeePerGas = t.GasTipCap
+		//pbTx.To = utils.ConvertAddressToH160(*tx.To())
+		pbTx.From = utils.ConvertAddressToH160(*tx.From())
+		pbTx.Sign = t.Sign
+		pbTx.FeePerGas = utils.ConvertUint256IntToH256(t.GasFeeCap)
+		pbTx.PriorityFeePerGas = utils.ConvertUint256IntToH256(t.GasTipCap)
 	}
-
-	pbTx.R, pbTx.S, pbTx.V = tx.RawSignatureValues()
-
+	if tx.To() != nil {
+		pbTx.To = utils.ConvertAddressToH160(*tx.To())
+	}
+	v, r, s := tx.RawSignatureValues()
+	if nil != v {
+		pbTx.V = utils.ConvertUint256IntToH256(v)
+	}
+	if nil != r {
+		pbTx.R = utils.ConvertUint256IntToH256(r)
+	}
+	if nil != s {
+		pbTx.S = utils.ConvertUint256IntToH256(s)
+	}
 	return proto.Marshal(&pbTx)
 }
 
@@ -275,28 +332,27 @@ func (tx *Transaction) MarshalTo(data []byte) (n int, err error) {
 
 func (tx *Transaction) Unmarshal(data []byte) error {
 	var pbTx types_pb.Transaction
-	err := proto.Unmarshal(data, &pbTx)
+	var err error
+	var inner TxData
+	err = proto.Unmarshal(data, &pbTx)
 	if err != nil {
 		return err
 	}
 
-	switch pbTx.Type {
-	case LegacyTxType:
-		//var itx LegacyTx
-		//if pbTx.To
-	case AccessListTxType:
-	case DynamicFeeTxType:
-
+	inner, err = txDataFromProtoMessage(&pbTx)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	tx.setDecoded(inner, 0)
+	return err
 }
 
 func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
 }
 
-func (tx *Transaction) ChainId() types.Int256 {
+func (tx *Transaction) ChainId() *uint256.Int {
 	return tx.inner.chainID()
 }
 
@@ -312,19 +368,19 @@ func (tx *Transaction) Gas() uint64 {
 	return tx.inner.gas()
 }
 
-func (tx *Transaction) GasPrice() types.Int256 {
+func (tx *Transaction) GasPrice() *uint256.Int {
 	return tx.inner.gasPrice()
 }
 
-func (tx *Transaction) GasTipCap() types.Int256 {
+func (tx *Transaction) GasTipCap() *uint256.Int {
 	return tx.inner.gasTipCap()
 }
 
-func (tx *Transaction) GasFeeCap() types.Int256 {
+func (tx *Transaction) GasFeeCap() *uint256.Int {
 	return tx.inner.gasFeeCap()
 }
 
-func (tx *Transaction) Value() types.Int256 {
+func (tx *Transaction) Value() *uint256.Int {
 	return tx.inner.value()
 }
 
@@ -333,11 +389,11 @@ func (tx *Transaction) Nonce() uint64 {
 }
 
 func (tx *Transaction) To() *types.Address {
-	return tx.inner.to()
+	return copyAddressPtr(tx.inner.to())
 }
 
-func (tx *Transaction) From() (types.Address, error) {
-	return *tx.inner.from(), nil
+func (tx *Transaction) From() *types.Address {
+	return tx.inner.from()
 }
 
 func (tx *Transaction) SetFrom(addr types.Address) {
@@ -366,77 +422,81 @@ func (tx *Transaction) Sign() []byte {
 	return tx.inner.sign()
 }
 
-func (tx *Transaction) Cost() types.Int256 {
+func (tx *Transaction) Cost() *uint256.Int {
 	price := tx.inner.gasPrice()
-	gas := types.NewInt64(tx.inner.gas())
-	total := new(types.Int256).Mul(price, gas)
-	total = total.Add(tx.Value())
+	gas := uint256.NewInt(tx.inner.gas())
+	total := new(uint256.Int).Mul(price, gas)
+	total = total.Add(total, tx.Value())
 	return total
 }
 
-func (tx *Transaction) Hash() (types.Hash, error) {
+func (tx *Transaction) Hash() types.Hash {
 	if hash := tx.hash.Load(); hash != nil {
-		return hash.(types.Hash), nil
+		return hash.(types.Hash)
 	}
-
-	v, r, s := tx.RawSignatureValues()
-	var inner = &rlpTx{
-		Nonce:    tx.Nonce(),
-		GasPrice: tx.GasPrice().ToBig(),
-		Gas:      tx.Gas(),
-		To:       tx.To(),
-		Value:    tx.Value().ToBig(),
-		Data:     tx.Data(),
-		V:        v.ToBig(),
-		R:        r.ToBig(),
-		S:        s.ToBig(),
-	}
-
-	var h types.Hash
-	if tx.Type() == LegacyTxType {
-
-		h = types.Hash(rlpHash(inner))
-	} else {
-		h = types.Hash(prefixedRlpHash(tx.Type(), inner))
-	}
-
+	h := tx.inner.hash()
 	tx.hash.Store(h)
-	return h, nil
+	return h
 }
 
 // EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
-func (tx *Transaction) EffectiveGasTipIntCmp(other types.Int256, baseFee types.Int256) int {
-	if baseFee.IsEmpty() {
+func (tx *Transaction) EffectiveGasTipIntCmp(other *uint256.Int, baseFee *uint256.Int) int {
+	if baseFee == nil {
 		return tx.GasTipCapIntCmp(other)
 	}
-	return tx.EffectiveGasTipValue(baseFee).Compare(other)
+	return tx.EffectiveGasTipValue(baseFee).Cmp(other)
+}
+
+// GasTipCapCmp compares the gasTipCap of two transactions.
+func (tx *Transaction) GasTipCapCmp(other *Transaction) int {
+	return tx.inner.gasTipCap().Cmp(other.inner.gasTipCap())
+}
+
+// GasFeeCapIntCmp compares the fee cap of the transaction against the given fee cap.
+func (tx *Transaction) GasFeeCapIntCmp(other *uint256.Int) int {
+	return tx.inner.gasFeeCap().Cmp(other)
 }
 
 // GasTipCapIntCmp compares the gasTipCap of the transaction against the given gasTipCap.
-func (tx *Transaction) GasTipCapIntCmp(other types.Int256) int {
-	return tx.inner.gasTipCap().Compare(other)
+func (tx *Transaction) GasTipCapIntCmp(other *uint256.Int) int {
+	return tx.inner.gasTipCap().Cmp(other)
 }
 
 // EffectiveGasTipValue is identical to EffectiveGasTip, but does not return an
 // error in case the effective gasTipCap is negative
-func (tx *Transaction) EffectiveGasTipValue(baseFee types.Int256) types.Int256 {
+func (tx *Transaction) EffectiveGasTipValue(baseFee *uint256.Int) *uint256.Int {
 	effectiveTip, _ := tx.EffectiveGasTip(baseFee)
 	return effectiveTip
+}
+
+// EffectiveGasTipCmp compares the effective gasTipCap of two transactions assuming the given base fee.
+func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *uint256.Int) int {
+	if baseFee == nil {
+		return tx.GasTipCapCmp(other)
+	}
+	return tx.EffectiveGasTipValue(baseFee).Cmp(other.EffectiveGasTipValue(baseFee))
 }
 
 // EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
-func (tx *Transaction) EffectiveGasTip(baseFee types.Int256) (types.Int256, error) {
-	if baseFee.IsEmpty() {
+func (tx *Transaction) EffectiveGasTip(baseFee *uint256.Int) (*uint256.Int, error) {
+	if baseFee == nil {
 		return tx.GasTipCap(), nil
 	}
 	var err error
 	gasFeeCap := tx.GasFeeCap()
-	if gasFeeCap.Compare(baseFee) == -1 {
+	if gasFeeCap.Cmp(baseFee) == -1 {
 		err = ErrGasFeeCapTooLow
 	}
-	return types.Int256Min(tx.GasTipCap(), gasFeeCap.Sub(baseFee)), err
+	return uint256Min(tx.GasTipCap(), gasFeeCap.Sub(gasFeeCap, baseFee)), err
+}
+
+func uint256Min(x, y *uint256.Int) *uint256.Int {
+	if x.Cmp(y) == 1 {
+		return x
+	}
+	return y
 }
 
 func isProtectedV(V *big.Int) bool {
@@ -466,10 +526,10 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		return nil, err
 	}
 	cpy := tx.inner.copy()
-	chainID, _ := types.FromBig(signer.ChainID())
-	v1, _ := types.FromBig(v)
-	r1, _ := types.FromBig(r)
-	s1, _ := types.FromBig(s)
+	chainID, _ := uint256.FromBig(signer.ChainID())
+	v1, _ := uint256.FromBig(v)
+	r1, _ := uint256.FromBig(r)
+	s1, _ := uint256.FromBig(s)
 	cpy.setSignatureValues(chainID, v1, r1, s1)
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
@@ -478,10 +538,10 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 //	to        types.Address
 //	from      types.Address
 //	nonce     uint64
-//	amount    types.Int256
+//	amount    uint256.Int
 //	gasLimit  uint64
-//	gasPrice  types.Int256
-//	gasFeeCap types.Int256
+//	gasPrice  uint256.Int
+//	gasFeeCap uint256.Int
 //	payload   []byte
 //}
 
@@ -508,13 +568,96 @@ func copyAddressPtr(a *types.Address) *types.Address {
 	return &cpy
 }
 
-// for hash
-type rlpTx struct {
-	Nonce    uint64         // nonce of sender account
-	GasPrice *big.Int       // wei per gas
-	Gas      uint64         // gas limit
-	To       *types.Address `rlp:"nil"` // nil means contract creation
-	Value    *big.Int       // wei amount
-	Data     []byte         // contract invocation input data
-	V, R, S  *big.Int       // signature values
+// Message is a fully derived transaction and implements core.Message
+type Message struct {
+	to         *types.Address
+	from       types.Address
+	nonce      uint64
+	amount     uint256.Int
+	gasLimit   uint64
+	gasPrice   uint256.Int
+	feeCap     uint256.Int
+	tip        uint256.Int
+	data       []byte
+	accessList AccessList
+	checkNonce bool
+	isFree     bool
+}
+
+func NewMessage(from types.Address, to *types.Address, nonce uint64, amount *uint256.Int, gasLimit uint64, gasPrice *uint256.Int, feeCap, tip *uint256.Int, data []byte, accessList AccessList, checkNonce bool, isFree bool) Message {
+	m := Message{
+		from:       from,
+		to:         to,
+		nonce:      nonce,
+		amount:     *amount,
+		gasLimit:   gasLimit,
+		data:       data,
+		accessList: accessList,
+		checkNonce: checkNonce,
+		isFree:     isFree,
+	}
+	if gasPrice != nil {
+		m.gasPrice.Set(gasPrice)
+	}
+	if tip != nil {
+		m.tip.Set(tip)
+	}
+	if feeCap != nil {
+		m.feeCap.Set(feeCap)
+	}
+	return m
+}
+
+// AsMessage returns the transaction as a core.Message.
+func (tx *Transaction) AsMessage(s Signer, baseFee *uint256.Int) (Message, error) {
+	msg := Message{
+		nonce:    tx.Nonce(),
+		gasLimit: tx.Gas(),
+		gasPrice: *new(uint256.Int).Set(tx.GasPrice()),
+		feeCap:   *new(uint256.Int).Set(tx.GasFeeCap()),
+		tip:      *new(uint256.Int).Set(tx.GasTipCap()),
+		//gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
+		//gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
+		to:         tx.To(),
+		amount:     *tx.Value(),
+		data:       tx.Data(),
+		accessList: tx.AccessList(),
+		checkNonce: false,
+		//isFake:     false,
+	}
+
+	// If baseFee provided, set gasPrice to effectiveGasPrice.
+	if baseFee != nil {
+		msg.gasPrice.Add(&msg.tip, baseFee)
+
+		if msg.gasPrice.Gt(&msg.feeCap) {
+			msg.gasPrice = msg.feeCap
+		}
+	}
+	//var err error
+	//msg.from, err = Sender(s, tx)
+	//if nil != err {
+	//	return msg, err
+	//}
+	msg.from = *tx.From()
+
+	return msg, nil
+}
+func (m Message) From() types.Address    { return m.from }
+func (m Message) To() *types.Address     { return m.to }
+func (m Message) GasPrice() *uint256.Int { return &m.gasPrice }
+func (m Message) FeeCap() *uint256.Int   { return &m.feeCap }
+func (m Message) Tip() *uint256.Int      { return &m.tip }
+func (m Message) Value() *uint256.Int    { return &m.amount }
+func (m Message) Gas() uint64            { return m.gasLimit }
+func (m Message) Nonce() uint64          { return m.nonce }
+func (m Message) Data() []byte           { return m.data }
+func (m Message) AccessList() AccessList { return m.accessList }
+func (m Message) CheckNonce() bool       { return m.checkNonce }
+func (m *Message) SetCheckNonce(checkNonce bool) {
+	m.checkNonce = checkNonce
+}
+func (m Message) IsFree() bool { return m.isFree }
+func (m *Message) SetIsFree(isFree bool) {
+	m.isFree = isFree
 }

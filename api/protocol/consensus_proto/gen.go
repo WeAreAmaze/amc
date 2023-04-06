@@ -14,6 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
-package consensus_pb
+package consensus_proto
 
-//go:generate protoc -I=../ -I=. -I=../include --gogo_out=paths=source_relative:. consensus.proto
+//go:generate protoc -I=../ -I=. -I=../include --go_out=paths=source_relative:. consensus.proto

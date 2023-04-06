@@ -1,13 +1,18 @@
 # Build
 FROM docker.io/library/golang:1.19-alpine3.15 AS builder
 
+# Add aliyun repos
+RUN echo http://mirrors.aliyun.com/alpine/v3.13/main/ > /etc/apk/repositories && echo http://mirrors.aliyun.com/alpine/v3.13/community/ >> /etc/apk/repositories
+# GO PROXY
+RUN go env -w GOPROXY=https://goproxy.cn,direct
 
 # RUN apk add --no-cache gcc musl-dev linux-headers git make
 RUN apk add --no-cache build-base  linux-headers git bash ca-certificates  libstdc++
 
 WORKDIR /amc
 ADD . .
-
+ENV GO111MODULE="on"
+ENV GOPROXY="https://goproxy.cn,direct"
 RUN go mod tidy && go build  -o ./build/bin/AmazeChain-linux-amd64 ./cmd/amc
 
 

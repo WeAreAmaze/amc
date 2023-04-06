@@ -20,19 +20,25 @@ import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/consensus"
+	"github.com/amazechain/amc/modules/state"
+	"github.com/amazechain/amc/params"
+	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 type IHeaderChain interface {
-	GetHeaderByNumber(number types.Int256) (block.IHeader, error)
+	GetHeaderByNumber(number *uint256.Int) block.IHeader
+	GetHeaderByNumberTxn(tx kv.Tx, number *uint256.Int) block.IHeader
 	GetHeaderByHash(h types.Hash) (block.IHeader, error)
 	InsertHeader(headers []block.IHeader) (int, error)
 	GetBlockByHash(h types.Hash) (block.IBlock, error)
-	GetBlockByNumber(number types.Int256) (block.IBlock, error)
+	GetBlockByNumber(number *uint256.Int) (block.IBlock, error)
 }
 
 type IBlockChain interface {
 	IHeaderChain
+	Config() *params.ChainConfig
 	CurrentBlock() block.IBlock
 	Blocks() []block.IBlock
 	Start() error
@@ -48,11 +54,18 @@ type IBlockChain interface {
 	GetLogs(blockHash types.Hash) ([][]*block.Log, error)
 	SetHead(head uint64) error
 
-	//
-	GetHeader(types.Hash, types.Int256) block.IHeader
+	GetHeader(types.Hash, *uint256.Int) block.IHeader
 	// alias for GetBlocksFromHash?
-	GetBlock(hash types.Hash) block.IBlock
-	StateAt(root types.Hash) IStateDB
+	GetBlock(hash types.Hash, number uint64) block.IBlock
+	StateAt(tx kv.Tx, blockNr uint64) *state.IntraBlockState
 
-	GetTd(hash types.Hash) types.Int256
+	GetTd(hash types.Hash, number *uint256.Int) *uint256.Int
+
+	DB() kv.RwDB
+	Quit() <-chan struct{}
+}
+
+type IMiner interface {
+	Start()
+	PendingBlockAndReceipts() (block.IBlock, block.Receipts)
 }

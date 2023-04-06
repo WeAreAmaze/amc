@@ -17,18 +17,19 @@
 package api
 
 import (
+	"github.com/amazechain/amc/common/hexutil"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
 )
 
 type DumpAccount struct {
-	Balance   string                 `json:"balance"`
-	Nonce     uint64                 `json:"nonce"`
-	Root      hexutil.Bytes          `json:"root"`
-	CodeHash  hexutil.Bytes          `json:"codeHash"`
-	Code      hexutil.Bytes          `json:"code,omitempty"`
-	Storage   map[common.Hash]string `json:"storage,omitempty"`
-	Address   *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
-	SecureKey hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
+	Balance   string                `json:"balance"`
+	Nonce     uint64                `json:"nonce"`
+	Root      hexutil.Bytes         `json:"root"`
+	CodeHash  hexutil.Bytes         `json:"codeHash"`
+	Code      hexutil.Bytes         `json:"code,omitempty"`
+	Storage   map[types.Hash]string `json:"storage,omitempty"`
+	Address   *common.Address       `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
+	SecureKey hexutil.Bytes         `json:"key,omitempty"`     // If we don't have address, we can output the key
 
 }

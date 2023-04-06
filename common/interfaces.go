@@ -22,7 +22,8 @@ import (
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -40,8 +41,8 @@ type IDownloader interface {
 
 type ConnHandler func([]byte, peer.ID) error
 
-type ProtocolHandshakeFn func(peer IPeer, genesisHash types.Hash, currentHeight types.Int256) (Peer, bool)
-type ProtocolHandshakeInfo func() (types.Hash, types.Int256, error)
+type ProtocolHandshakeFn func(peer IPeer, genesisHash types.Hash, currentHeight *uint256.Int) (Peer, bool)
+type ProtocolHandshakeInfo func() (types.Hash, *uint256.Int, error)
 
 type INetwork interface {
 	WriterMessage(messageType message.MessageType, payload []byte, peer peer.ID) error
@@ -51,6 +52,7 @@ type INetwork interface {
 	Start() error
 	Host() host.Host
 	PeerCount() int
+	Bootstrapped() bool
 }
 
 type IPeer interface {
@@ -72,9 +74,9 @@ type IPubSub interface {
 type IStateDB interface {
 	CreateAccount(types.Address)
 
-	SubBalance(addr types.Address, amount types.Int256)
-	AddBalance(addr types.Address, amount types.Int256)
-	GetBalance(addr types.Address) types.Int256
+	SubBalance(addr types.Address, amount uint256.Int)
+	AddBalance(addr types.Address, amount uint256.Int)
+	GetBalance(addr types.Address) uint256.Int
 
 	GetNonce(addr types.Address) uint64
 	SetNonce(addr types.Address, nonce uint64)
@@ -116,8 +118,8 @@ type IStateDB interface {
 	Error() error
 }
 type ChainStateReader interface {
-	BalanceAt(ctx context.Context, account types.Address, blockNumber types.Int256) (types.Int256, error)
-	StorageAt(ctx context.Context, account types.Address, key types.Hash, blockNumber types.Int256) ([]byte, error)
-	CodeAt(ctx context.Context, account types.Address, blockNumber types.Int256) ([]byte, error)
-	NonceAt(ctx context.Context, account types.Address, blockNumber types.Int256) (uint64, error)
+	BalanceAt(ctx context.Context, account types.Address, blockNumber uint256.Int) (uint256.Int, error)
+	StorageAt(ctx context.Context, account types.Address, key types.Hash, blockNumber uint256.Int) ([]byte, error)
+	CodeAt(ctx context.Context, account types.Address, blockNumber uint256.Int) ([]byte, error)
+	NonceAt(ctx context.Context, account types.Address, blockNumber uint256.Int) (uint64, error)
 }

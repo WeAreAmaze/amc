@@ -16,14 +16,16 @@
 
 package conf
 
+import "math/big"
+
 type ConsensusConfig struct {
-	EngineName string     `json:"name" yaml:"name"`
-	BlsKey     string     `json:"bls" yaml:"bls"`
-	Etherbase  string     `json:"etherbase" yaml:"etherbase"`
-	Period     uint64     `json:"period" yaml:"period"`
-	APoa       APoaConfig `json:"poa" yaml:"poa"`
-	GasFloor   uint64     `json:"gasFloor" yaml:"gasFloor"` // Target gas floor for mined blocks.
-	GasCeil    uint64     `json:"gasCeil" yaml:"gasCeil"`   // Target gas ceiling for mined blocks.
+	EngineName string      `json:"name" yaml:"name"`
+	Etherbase  string      `json:"etherbase" yaml:"etherbase"`
+	Period     uint64      `json:"period" yaml:"period"`
+	APoa       *APoaConfig `json:"apoa" yaml:"poa"`
+	GasFloor   uint64      `json:"gasFloor" yaml:"gasFloor"` // Target gas floor for mined blocks.
+	GasCeil    uint64      `json:"gasCeil" yaml:"gasCeil"`   // Target gas ceiling for mined blocks.
+	APos       *APosConfig `json:"apos" yaml:"pos"`
 }
 
 type APoaConfig struct {
@@ -32,4 +34,16 @@ type APoaConfig struct {
 	InmemorySnapshots  int    `json:"inmemorySnapshots" yaml:"inmemorySnapshots"`
 	InmemorySignatures int    `json:"inmemorySignatures" yaml:"inmemorySignatures"`
 	InMemory           bool   `json:"inMemory" yaml:"inMemory"`
+}
+
+type APosConfig struct {
+	Epoch              uint64   `json:"epoch" yaml:"epoch"`
+	CheckpointInterval uint64   `json:"checkpointInterval" yaml:"checkpointInterval"`
+	InmemorySnapshots  int      `json:"inmemorySnapshots" yaml:"inmemorySnapshots"`
+	InmemorySignatures int      `json:"inmemorySignatures" yaml:"inmemorySignatures"`
+	InMemory           bool     `json:"inMemory" yaml:"inMemory"`
+	RewardEpoch        uint64   `json:"rewardEpoch" yaml:"rewardEpoch"`
+	RewardLimit        *big.Int `json:"rewardLimit" yaml:"rewardLimit"`
+
+	DepositContract string `json:"depositContract" yaml:"depositContract"` // Deposit contract
 }

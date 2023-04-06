@@ -28,9 +28,9 @@ import (
 	"time"
 
 	"github.com/amazechain/amc/accounts"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/crypto"
 	event "github.com/amazechain/amc/modules/event/v2"
 )
 

@@ -19,20 +19,22 @@ package block
 import (
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
+	"github.com/amazechain/amc/common/hashing"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/rlp"
-	"github.com/gogo/protobuf/proto"
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 	"sync/atomic"
 	"time"
 )
 
-type writeCounter types.StorageSize
-
-func (c *writeCounter) Write(b []byte) (int, error) {
-	*c += writeCounter(len(b))
-	return len(b), nil
-}
+//type writeCounter types.StorageSize
+//
+//func (c *writeCounter) Write(b []byte) (int, error) {
+//	*c += writeCounter(len(b))
+//	return len(b), nil
+//}
 
 type Block struct {
 	header *Header
@@ -43,6 +45,42 @@ type Block struct {
 
 	ReceiveAt    time.Time
 	ReceivedFrom interface{}
+}
+
+type Verify struct {
+	Address   types.Address
+	PublicKey types.PublicKey
+}
+
+func (v *Verify) ToProtoMessage() proto.Message {
+	var pbVerifier types_pb.Verifier
+	pbVerifier.Address = utils.ConvertAddressToH160(v.Address)
+	pbVerifier.PublicKey = utils.ConvertPublicKeyToH384(v.PublicKey)
+	return &pbVerifier
+}
+
+func (v *Verify) FromProtoMessage(pbVerifier *types_pb.Verifier) *Verify {
+	v.Address = utils.ConvertH160toAddress(pbVerifier.Address)
+	v.PublicKey = utils.ConvertH384ToPublicKey(pbVerifier.PublicKey)
+	return v
+}
+
+type Reward struct {
+	Address types.Address
+	Amount  *uint256.Int
+}
+
+func (r *Reward) ToProtoMessage() proto.Message {
+	var pbReward types_pb.Reward
+	pbReward.Address = utils.ConvertAddressToH160(r.Address)
+	pbReward.Amount = utils.ConvertUint256IntToH256(r.Amount)
+	return &pbReward
+}
+
+func (r *Reward) FromProtoMessage(pbReward *types_pb.Reward) *Reward {
+	r.Address = utils.ConvertH160toAddress(pbReward.Address)
+	r.Amount = utils.ConvertH256ToUint256Int(pbReward.Amount)
+	return r
 }
 
 func (b *Block) Transactions() []*transaction.Transaction {
@@ -67,7 +105,7 @@ func (b *Block) Marshal() ([]byte, error) {
 }
 
 func (b *Block) Unmarshal(data []byte) error {
-	var pBlock types_pb.PBlock
+	var pBlock types_pb.Block
 	if err := proto.Unmarshal(data, &pBlock); err != nil {
 		return err
 	}
@@ -75,17 +113,6 @@ func (b *Block) Unmarshal(data []byte) error {
 		return err
 	}
 	return nil
-}
-
-func (b *Block) Size() types.StorageSize {
-	if size := b.size.Load(); size != nil {
-		return size.(types.StorageSize)
-	}
-	c := writeCounter(0)
-	//todo use protobuf instead
-	rlp.Encode(&c, b)
-	b.size.Store(types.StorageSize(c))
-	return types.StorageSize(c)
 }
 
 // NewBlock creates a new block. The input data is copied,
@@ -98,47 +125,50 @@ func (b *Block) Size() types.StorageSize {
 func NewBlock(h IHeader, txs []*transaction.Transaction) IBlock {
 
 	block := &Block{
-		header:       h.(*Header),
-		body:         &Body{Txs: txs},
-		ReceiveAt:    time.Now(),
-		ReceivedFrom: nil,
-	}
-	return block
-}
-
-func NewBlockFromReceipt(h IHeader, txs []*transaction.Transaction, uncles []IHeader, receipts []*Receipt) IBlock {
-
-	block := &Block{
 		header:       CopyHeader(h.(*Header)),
 		body:         &Body{Txs: txs},
 		ReceiveAt:    time.Now(),
 		ReceivedFrom: nil,
 	}
+	return block
+}
 
-	block.header.TxHash = types.DeriveSha(transaction.Transactions(txs))
+func NewBlockFromReceipt(h IHeader, txs []*transaction.Transaction, uncles []IHeader, receipts []*Receipt, reward []*Reward) IBlock {
 
-	block.header.ReceiptHash = types.DeriveSha(Receipts(receipts))
+	block := &Block{
+		header:       CopyHeader(h.(*Header)),
+		body:         &Body{Txs: txs, Rewards: CopyReward(reward)},
+		ReceiveAt:    time.Now(),
+		ReceivedFrom: nil,
+	}
+	if len(receipts) > 0 {
+		print(receipts)
+	}
+
+	block.header.Bloom = CreateBloom(receipts)
+	block.header.TxHash = hashing.DeriveSha(transaction.Transactions(txs))
+	block.header.ReceiptHash = hashing.DeriveSha(Receipts(receipts))
 
 	return block
 }
 
 func (b *Block) Header() IHeader {
-	return b.header
+	return CopyHeader(b.header)
 }
 
 func (b *Block) Body() IBody {
 	return b.body
 }
 
-func (b *Block) Number64() types.Int256 {
+func (b *Block) Number64() *uint256.Int {
 	return b.header.Number
 }
 
-func (b *Block) BaseFee64() types.Int256 {
+func (b *Block) BaseFee64() *uint256.Int {
 	return b.header.BaseFee
 }
 
-func (b *Block) Difficulty() types.Int256 {
+func (b *Block) Difficulty() *uint256.Int {
 	return b.header.Difficulty
 }
 
@@ -170,6 +200,11 @@ func (b *Block) TxHash() types.Hash {
 	return b.header.TxHash
 }
 
+func (b *Block) WithSeal(header IHeader) *Block {
+	b.header = CopyHeader(header.(*Header))
+	return b
+}
+
 func (b *Block) Transaction(hash types.Hash) *transaction.Transaction {
 	return nil
 }
@@ -177,9 +212,9 @@ func (b *Block) Transaction(hash types.Hash) *transaction.Transaction {
 func (b *Block) ToProtoMessage() proto.Message {
 	pbHeader := b.header.ToProtoMessage()
 	pbBody := b.body.ToProtoMessage()
-	pBlock := types_pb.PBlock{
-		Header: pbHeader.(*types_pb.PBHeader),
-		Txs:    pbBody.(*types_pb.PBody),
+	pBlock := types_pb.Block{
+		Header: pbHeader.(*types_pb.Header),
+		Body:   pbBody.(*types_pb.Body),
 	}
 
 	return &pBlock
@@ -187,13 +222,13 @@ func (b *Block) ToProtoMessage() proto.Message {
 
 func (b *Block) FromProtoMessage(message proto.Message) error {
 	var (
-		pBlock *types_pb.PBlock
+		pBlock *types_pb.Block
 		header Header
 		body   Body
 		ok     bool
 	)
 
-	if pBlock, ok = message.(*types_pb.PBlock); !ok {
+	if pBlock, ok = message.(*types_pb.Block); !ok {
 		return fmt.Errorf("type conversion failure")
 	}
 
@@ -201,12 +236,20 @@ func (b *Block) FromProtoMessage(message proto.Message) error {
 		return err
 	}
 
-	if err := body.FromProtoMessage(pBlock.Txs); err != nil {
+	if err := body.FromProtoMessage(pBlock.Body); err != nil {
 		return err
 	}
 
 	b.header = &header
 	b.body = &body
 	b.ReceiveAt = time.Now()
+	return nil
+}
+
+func (b *Block) SendersToTxs(senders []types.Address) {
+	//todo
+}
+
+func (b *Block) Uncles() []*Header {
 	return nil
 }

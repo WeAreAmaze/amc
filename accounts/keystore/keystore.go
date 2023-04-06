@@ -33,9 +33,9 @@ import (
 	"time"
 
 	"github.com/amazechain/amc/accounts"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/crypto"
 	event "github.com/amazechain/amc/modules/event/v2"
 )
 
@@ -66,7 +66,7 @@ type KeyStore struct {
 	unlocked map[types.Address]*unlocked // Currently unlocked account (decrypted private keys)
 
 	wallets     []accounts.Wallet       // Wallet wrappers around the individual key files
-	updateFeed  event.Event             // Event feed to notify wallet additions/removals
+	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
 
@@ -496,6 +496,14 @@ func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (account
 	ks.cache.add(a)
 	ks.refreshWallets()
 	return a, nil
+}
+
+// isUpdating returns whether the event notification loop is running.
+// This method is mainly meant for tests.
+func (ks *KeyStore) isUpdating() bool {
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+	return ks.updating
 }
 
 // zeroKey zeroes a private key in memory.

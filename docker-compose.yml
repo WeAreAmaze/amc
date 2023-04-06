@@ -168,7 +168,7 @@ services:
         ipv4_address: 172.18.0.6
   explorer_migrate:
     container_name: explorer_migrate
-    image: amazechain/amc-explorer:v3
+    image: amazechain/amc-explorer:latest
     depends_on:
       - postgres
     env_file:
@@ -180,7 +180,7 @@ services:
       network1:
         ipv4_address: 172.18.0.7
   explorer:
-    image: amazechain/amc-explorer:v3
+    image: amazechain/amc-explorer:latest
     container_name: explorer
     restart: always
     depends_on:

@@ -3,6 +3,7 @@ package avm
 import (
 	amc_common "github.com/amazechain/amc/common"
 	amc_types "github.com/amazechain/amc/common/types"
+	types2 "github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/internal/avm/types"
 	"math/big"
@@ -12,8 +13,8 @@ type DBStates struct {
 	db amc_common.IStateDB
 }
 
-func (D *DBStates) Prepare(thash common.Hash, ti int) {
-	D.db.Prepare(types.ToAmcHash(thash), ti)
+func (D *DBStates) Prepare(thash types2.Hash, ti int) {
+	D.db.Prepare(thash, ti)
 }
 
 func (D *DBStates) TxIndex() int {
@@ -53,10 +54,10 @@ func (D *DBStates) SetNonce(address common.Address, u uint64) {
 	D.db.SetNonce(addr, u)
 }
 
-func (D *DBStates) GetCodeHash(address common.Address) common.Hash {
+func (D *DBStates) GetCodeHash(address common.Address) types2.Hash {
 	addr := *types.ToAmcAddress(&address)
 	hash := D.db.GetCodeHash(addr)
-	return types.FromAmcHash(hash)
+	return hash
 }
 
 func (D *DBStates) GetCode(address common.Address) []byte {
@@ -86,24 +87,24 @@ func (D *DBStates) GetRefund() uint64 {
 	return D.db.GetRefund()
 }
 
-func (D *DBStates) GetCommittedState(address common.Address, hash common.Hash) common.Hash {
+func (D *DBStates) GetCommittedState(address common.Address, hash types2.Hash) types2.Hash {
 	addr := *types.ToAmcAddress(&address)
-	h := types.ToAmcHash(hash)
+	h := hash
 	newHash := D.db.GetCommittedState(addr, h)
-	return types.FromAmcHash(newHash)
+	return newHash
 }
 
-func (D *DBStates) GetState(address common.Address, hash common.Hash) common.Hash {
+func (D *DBStates) GetState(address common.Address, hash types2.Hash) types2.Hash {
 	addr := *types.ToAmcAddress(&address)
-	h := types.ToAmcHash(hash)
+	h := hash
 	newHash := D.db.GetState(addr, h)
-	return types.FromAmcHash(newHash)
+	return newHash
 }
 
-func (D *DBStates) SetState(address common.Address, hash common.Hash, hash2 common.Hash) {
+func (D *DBStates) SetState(address common.Address, hash types2.Hash, hash2 types2.Hash) {
 	addr := *types.ToAmcAddress(&address)
-	h1 := types.ToAmcHash(hash)
-	h2 := types.ToAmcHash(hash2)
+	h1 := hash
+	h2 := hash2
 	D.db.SetState(addr, h1, h2)
 
 }
@@ -146,16 +147,16 @@ func (D *DBStates) AddressInAccessList(addr common.Address) bool {
 	return D.db.AddressInAccessList(*types.ToAmcAddress(&addr))
 }
 
-func (D *DBStates) SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool) {
-	return D.db.SlotInAccessList(*types.ToAmcAddress(&addr), types.ToAmcHash(slot))
+func (D *DBStates) SlotInAccessList(addr common.Address, slot types2.Hash) (addressOk bool, slotOk bool) {
+	return D.db.SlotInAccessList(*types.ToAmcAddress(&addr), slot)
 }
 
 func (D *DBStates) AddAddressToAccessList(addr common.Address) {
 	D.db.AddAddressToAccessList(*types.ToAmcAddress(&addr))
 }
 
-func (D *DBStates) AddSlotToAccessList(addr common.Address, slot common.Hash) {
-	D.db.AddSlotToAccessList(*types.ToAmcAddress(&addr), types.ToAmcHash(slot))
+func (D *DBStates) AddSlotToAccessList(addr common.Address, slot types2.Hash) {
+	D.db.AddSlotToAccessList(*types.ToAmcAddress(&addr), slot)
 }
 
 func (D *DBStates) RevertToSnapshot(i int) {
@@ -170,15 +171,15 @@ func (D *DBStates) AddLog(log *types.Log) {
 	D.db.AddLog(types.ToAmcLog(log))
 }
 
-func (D *DBStates) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log {
-	return types.FromAmcLogs(D.db.GetLogs(types.ToAmcHash(hash), types.ToAmcHash(blockHash)))
+func (D *DBStates) GetLogs(hash types2.Hash, blockHash types2.Hash) []*types.Log {
+	return types.FromAmcLogs(D.db.GetLogs(hash, blockHash))
 }
 
-func (D *DBStates) AddPreimage(hash common.Hash, bytes []byte) {
+func (D *DBStates) AddPreimage(hash types2.Hash, bytes []byte) {
 	//panic("implement me")
 }
 
-func (D *DBStates) ForEachStorage(address common.Address, f func(common.Hash, common.Hash) bool) error {
+func (D *DBStates) ForEachStorage(address common.Address, f func(types2.Hash, types2.Hash) bool) error {
 	//panic("implement me")
 	return nil
 }

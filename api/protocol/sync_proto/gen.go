@@ -16,4 +16,4 @@
 
 package sync_proto
 
-//go:generate protoc -I=../ -I=. -I=../include --gogo_out=paths=source_relative:. sync.proto
+//go:generate protoc -I=../ -I=. -I=../include --go_out=paths=source_relative:. sync.proto

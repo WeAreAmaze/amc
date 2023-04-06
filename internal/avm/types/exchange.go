@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/crypto"
-	"github.com/amazechain/amc/internal/avm/params"
 	"github.com/amazechain/amc/internal/avm/rlp"
 	"github.com/amazechain/amc/log"
+	"github.com/amazechain/amc/params"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 	"math/big"
 	"sync"
@@ -56,6 +57,19 @@ func ToAmcAccessList(accessList AccessList) transaction.AccessList {
 	return txAccessList
 }
 
+func FromAmcAccessList(accessList transaction.AccessList) AccessList {
+	var txAccessList AccessList
+	for _, accessTuple := range accessList {
+		txAccessTuple := new(AccessTuple)
+		txAccessTuple.Address = *FromAmcAddress(&accessTuple.Address)
+		for _, hash := range accessTuple.StorageKeys {
+			txAccessTuple.StorageKeys = append(txAccessTuple.StorageKeys, FromAmcHash(hash))
+		}
+		txAccessList = append(txAccessList, *txAccessTuple)
+	}
+	return txAccessList
+}
+
 func FromAmcAddress(address *types.Address) *common.Address {
 	if address == nil {
 		return nil
@@ -91,7 +105,7 @@ func ToAmcLog(log *Log) *block.Log {
 		Address:     *ToAmcAddress(&log.Address),
 		Topics:      topics,
 		Data:        log.Data,
-		BlockNumber: types.NewInt64(log.BlockNumber),
+		BlockNumber: uint256.NewInt(log.BlockNumber),
 		TxHash:      ToAmcHash(log.TxHash),
 		TxIndex:     log.TxIndex,
 		BlockHash:   ToAmcHash(log.BlockHash),
@@ -140,14 +154,6 @@ func FromAmcLogs(amcLogs []*block.Log) []*Log {
 }
 
 type Transaction struct {
-	//Nonce    uint64          // nonce of sender account
-	//GasPrice *big.Int        // wei per gas
-	//Gas      uint64          // gas limit
-	//To       *common.Address `rlp:"nil"` // nil means contract creation
-	//Value    *big.Int        // wei amount
-	//Data     []byte          // contract invocation input data
-	//V, R, S  *big.Int        // signature values
-
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
@@ -162,6 +168,22 @@ func NewTx(inner TxData) *Transaction {
 	tx := new(Transaction)
 	tx.setDecoded(inner.copy(), 0)
 	return tx
+}
+
+// Hash returns the transaction hash.
+func (tx *Transaction) Hash() common.Hash {
+	if hash := tx.hash.Load(); hash != nil {
+		return hash.(common.Hash)
+	}
+
+	var h common.Hash
+	if tx.Type() == LegacyTxType {
+		h = rlpHash(tx.inner)
+	} else {
+		h = prefixedRlpHash(tx.Type(), tx.inner)
+	}
+	tx.hash.Store(h)
+	return h
 }
 
 func isProtectedV(V *big.Int) bool {
@@ -253,7 +275,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
-// UnmarshalBinary todo compatible with other txs
+// UnmarshalBinary
 func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
 		// It's a legacy transaction.
@@ -304,27 +326,14 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 
 func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNumber *big.Int) (*transaction.Transaction, error) {
 
-	switch tx.Type() {
-	case LegacyTxType:
-		log.Debug("tx type is LegacyTxType")
-	case AccessListTxType:
-		log.Debug("tx type is AccessListTxType")
-	case DynamicFeeTxType:
-		log.Debug("tx type is DynamicFeeTxType")
-	}
-
-	gasPrice, ok := types.FromBig(tx.GasPrice())
-	if !ok {
+	var inner transaction.TxData
+	gasPrice, overflow := uint256.FromBig(tx.GasPrice())
+	if overflow {
 		return nil, fmt.Errorf("cannot convert big int to int256")
 	}
 
-	var to *types.Address
-	if tx.To() != nil {
-		to = ToAmcAddress(tx.To())
-	}
-
-	value, ok := types.FromBig(tx.Value())
-	if !ok {
+	vl, overflow := uint256.FromBig(tx.Value())
+	if overflow {
 		return nil, fmt.Errorf("cannot convert big int to int256")
 	}
 
@@ -334,13 +343,120 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 		return nil, err
 	}
 
-	amcTx := transaction.NewTransaction(tx.Nonce(), *ToAmcAddress(&from), to, value, tx.Gas(), gasPrice, tx.Data())
 	v, r, s := tx.RawSignatureValues()
-	v256, _ := types.FromBig(v)
-	r256, _ := types.FromBig(r)
-	s256, _ := types.FromBig(s)
-	amcTx.WithSignatureValues(v256, r256, s256)
+	V, is1 := uint256.FromBig(v)
+	R, is2 := uint256.FromBig(r)
+	S, is3 := uint256.FromBig(s)
+	if is1 || is2 || is3 {
+		return nil, fmt.Errorf("r,s,v overflow")
+	}
+	switch tx.Type() {
+	case LegacyTxType:
+		inner = &transaction.LegacyTx{
+			Nonce:    tx.Nonce(),
+			Gas:      tx.Gas(),
+			Data:     common.CopyBytes(tx.Data()),
+			GasPrice: gasPrice,
+			Value:    vl,
+			To:       ToAmcAddress(tx.To()),
+			From:     ToAmcAddress(&from),
+			V:        V,
+			R:        R,
+			S:        S,
+		}
+
+		log.Debug("tx type is LegacyTxType")
+	case AccessListTxType:
+		at := &transaction.AccessListTx{
+			Nonce:      tx.Nonce(),
+			Gas:        tx.Gas(),
+			Data:       common.CopyBytes(tx.Data()),
+			To:         ToAmcAddress(tx.To()),
+			GasPrice:   gasPrice,
+			Value:      vl,
+			From:       ToAmcAddress(&from),
+			AccessList: ToAmcAccessList(tx.AccessList()),
+			V:          V,
+			R:          R,
+			S:          S,
+		}
+		at.ChainID, _ = uint256.FromBig(tx.ChainId())
+		inner = at
+		log.Debug("tx type is AccessListTxType")
+	case DynamicFeeTxType:
+		dft := &transaction.DynamicFeeTx{
+			Nonce:      tx.Nonce(),
+			Gas:        tx.Gas(),
+			To:         ToAmcAddress(tx.To()),
+			Data:       common.CopyBytes(tx.Data()),
+			AccessList: ToAmcAccessList(tx.AccessList()),
+			Value:      vl,
+			From:       ToAmcAddress(&from),
+			V:          V,
+			R:          R,
+			S:          S,
+		}
+		dft.ChainID, _ = uint256.FromBig(tx.ChainId())
+		dft.GasTipCap, _ = uint256.FromBig(tx.GasTipCap())
+		dft.GasFeeCap, _ = uint256.FromBig(tx.GasFeeCap())
+		inner = dft
+		log.Debug("tx type is DynamicFeeTxType")
+	}
+
+	amcTx := transaction.NewTx(inner)
 	return amcTx, nil
+}
+
+func (tx *Transaction) FromAmcTransaction(amcTx *transaction.Transaction) {
+
+	var inner TxData
+
+	gasPrice := amcTx.GasPrice().ToBig()
+	vl := amcTx.Value().ToBig()
+
+	switch amcTx.Type() {
+	case transaction.LegacyTxType:
+		inner = &LegacyTx{
+			Nonce:    amcTx.Nonce(),
+			Gas:      amcTx.Gas(),
+			Data:     common.CopyBytes(amcTx.Data()),
+			GasPrice: gasPrice,
+			Value:    vl,
+			To:       FromAmcAddress(amcTx.To()),
+		}
+
+	case transaction.AccessListTxType:
+		at := &AccessListTx{
+			Nonce:      amcTx.Nonce(),
+			Gas:        amcTx.Gas(),
+			Data:       common.CopyBytes(amcTx.Data()),
+			To:         FromAmcAddress(amcTx.To()),
+			GasPrice:   gasPrice,
+			Value:      vl,
+			AccessList: FromAmcAccessList(amcTx.AccessList()),
+		}
+		at.ChainID = amcTx.ChainId().ToBig()
+		inner = at
+
+	case transaction.DynamicFeeTxType:
+		dft := &DynamicFeeTx{
+			Nonce:      amcTx.Nonce(),
+			Gas:        amcTx.Gas(),
+			To:         FromAmcAddress(amcTx.To()),
+			Data:       common.CopyBytes(amcTx.Data()),
+			AccessList: FromAmcAccessList(amcTx.AccessList()),
+			Value:      vl,
+		}
+		dft.ChainID = amcTx.ChainId().ToBig()
+		dft.GasTipCap = amcTx.GasTipCap().ToBig()
+		dft.GasFeeCap = amcTx.GasFeeCap().ToBig()
+		inner = dft
+	}
+
+	v, r, s := amcTx.RawSignatureValues()
+	inner.setSignatureValues(amcTx.ChainId().ToBig(), v.ToBig(), r.ToBig(), s.ToBig())
+
+	tx.setDecoded(inner.copy(), 0)
 }
 
 func FromAmcHeader(iHeader block.IHeader) *Header {
@@ -348,12 +464,16 @@ func FromAmcHeader(iHeader block.IHeader) *Header {
 	//author, _ := engine.Author(iHeader)
 
 	var baseFee *big.Int
-	if !header.BaseFee.IsZero() {
+	if header.BaseFee != nil {
 		baseFee = header.BaseFee.ToBig()
 	}
+
+	bloom := new(Bloom)
+	bloom.SetBytes(header.Bloom.Bytes())
+
 	return &Header{
 		ParentHash:  FromAmcHash(header.ParentHash),
-		UncleHash:   common.Hash{},
+		UncleHash:   FromAmcHash(EmptyUncleHash),
 		Coinbase:    *FromAmcAddress(&header.Coinbase),
 		Root:        FromAmcHash(header.Root),
 		TxHash:      FromAmcHash(header.TxHash),
@@ -367,6 +487,7 @@ func FromAmcHeader(iHeader block.IHeader) *Header {
 		MixDigest:   FromAmcHash(header.MixDigest),
 		Nonce:       EncodeNonce(header.Nonce.Uint64()),
 		BaseFee:     baseFee,
+		Bloom:       *bloom,
 	}
 }
 

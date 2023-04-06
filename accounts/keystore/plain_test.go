@@ -25,9 +25,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/crypto"
 )
 
 func tmpKeyStoreIface(t *testing.T, encrypted bool) (dir string, ks keyStore) {

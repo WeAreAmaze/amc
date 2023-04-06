@@ -17,37 +17,38 @@
 package download
 
 import (
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 	"math/rand"
 	"time"
 
 	"github.com/amazechain/amc/api/protocol/sync_proto"
 	"github.com/amazechain/amc/common/message"
-	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
-	"github.com/gogo/protobuf/proto"
 )
 
 // fetchHeaders
-func (d *Downloader) fetchHeaders(from types.Int256, latest types.Int256) error {
+func (d *Downloader) fetchHeaders(from uint256.Int, latest uint256.Int) error {
 
 	// 1. create task
-	difference := latest.Sub(from)
-	tasks := difference.Div(difference, types.NewInt64(maxHeaderFetch))
-	tasks = tasks.Add(types.NewInt64(1))
+	begin := new(uint256.Int).AddUint64(&from, 1)
+	difference := new(uint256.Int).Sub(&latest, begin)
+	tasks := new(uint256.Int).Add(new(uint256.Int).Div(difference, uint256.NewInt(maxHeaderFetch)), uint256.NewInt(1))
 	//
-	log.Infof("Starting header downloads from: %v latest: %v difference: %v task: %v", from.Uint64(), latest.Uint64(), difference.Uint64(), tasks.Uint64())
-	defer log.Infof("Header download terminated")
+	log.Infof("Starting header downloads from: %v latest: %v difference: %v task: %v", begin.Uint64(), latest.Uint64(), difference.Uint64(), tasks.Uint64())
+	defer log.Infof("Header download Finished")
 
 	d.headerTaskLock.Lock()
 	for i := 1; i <= int(tasks.Uint64()); i++ {
 		taskID := rand.Uint64()
 		d.headerTasks = append(d.headerTasks, Task{
 			taskID:     taskID,
-			IndexBegin: from,
-			IndexEnd:   types.Int256Min(from.Add(types.NewInt64(maxHeaderFetch)).Sub(types.NewInt64(1)), latest),
-			IsSync:     false,
+			IndexBegin: *begin,
+			//IndexEnd:   *types.Int256Min(uint256.NewInt(0).Sub(uint256.NewInt(0).Add(&from, uint256.NewInt(maxHeaderFetch)), uint256.NewInt(1)), &latest),
+			IsSync: false,
 		})
-		from = from.Add(types.NewInt64(maxHeaderFetch)).Add(types.NewInt64(1))
+		begin = begin.Add(begin, uint256.NewInt(maxHeaderFetch))
 	}
 	d.headerTaskLock.Unlock()
 
@@ -55,26 +56,34 @@ func (d *Downloader) fetchHeaders(from types.Int256, latest types.Int256) error 
 	defer tick.Stop()
 
 	for {
-		log.Infof("header tasks count is %v, header processing tasks count is: %v", len(d.headerTasks), len(d.headerProcessingTasks))
+		log.Tracef("header tasks count is %v, header processing tasks count is: %v", len(d.headerTasks), len(d.headerProcessingTasks))
 
 		if len(d.headerTasks) == 0 && len(d.headerProcessingTasks) == 0 { // break if there are no tasks
 			break
 		}
 
-		peerSet := d.peersInfo.findPeers(latest, syncPeerCount)
+		peerSet := d.peersInfo.findPeers(&latest, syncPeerCount)
 		d.headerTaskLock.Lock()
 		if len(d.headerTasks) > 0 {
 			for _, p := range peerSet {
 				randIndex := 0
 				randTask := d.headerTasks[randIndex]
 
+				//
+				var fetchCount uint64
+				if latest.Uint64()-randTask.IndexBegin.Uint64() >= maxHeaderFetch-1 {
+					fetchCount = maxHeaderFetch
+				} else {
+					fetchCount = latest.Uint64() - randTask.IndexBegin.Uint64() + 1
+				}
+
 				msg := &sync_proto.SyncTask{
 					Id:       randTask.taskID,
 					SyncType: sync_proto.SyncType_HeaderReq,
 					Payload: &sync_proto.SyncTask_SyncHeaderRequest{
 						SyncHeaderRequest: &sync_proto.SyncHeaderRequest{
-							Number: randTask.IndexBegin,
-							Amount: randTask.IndexEnd.Sub(randTask.IndexBegin),
+							Number: utils.ConvertUint256IntToH256(&randTask.IndexBegin),
+							Amount: utils.ConvertUint256IntToH256(uint256.NewInt(fetchCount)),
 						},
 					},
 				}
@@ -119,28 +128,30 @@ func (d *Downloader) fetchHeaders(from types.Int256, latest types.Int256) error 
 }
 
 // fetchHeaders
-func (d *Downloader) fetchBodies(latest types.Int256) error {
+func (d *Downloader) fetchBodies(latest uint256.Int) error {
 
-	log.Debug("Starting body downloads")
-	defer log.Debug("Bodies download terminated")
+	defer log.Info("Bodies download Finished")
 
 	tick := time.NewTicker(syncPeerIntervalRequest)
 	defer tick.Stop()
-
 	startProcess := false
 
 	for {
 		// If there are unprocessed tasks
-		peerSet := d.peersInfo.findPeers(latest, syncPeerCount)
+		peerSet := d.peersInfo.findPeers(&latest, syncPeerCount)
 
-		log.Infof("downloader body task count is %d, processing task count is %d", len(d.bodyTaskPool), len(d.bodyProcessingTasks))
+		log.Tracef("downloader body task count is %d, processing task count is %d", len(d.bodyTaskPool), len(d.bodyProcessingTasks))
 		if startProcess && len(d.bodyTaskPool) == 0 && len(d.bodyProcessingTasks) == 0 {
-			break
+			return nil
 		}
+
+		d.once.Do(func() {
+			log.Info("Starting body downloads")
+			startProcess = true
+		})
 
 		d.bodyTaskPoolLock.Lock()
 		if len(d.bodyTaskPool) > 0 {
-			startProcess = true
 			for _, p := range peerSet {
 				// first task
 				randIndex := 0
@@ -151,7 +162,7 @@ func (d *Downloader) fetchBodies(latest types.Int256) error {
 					SyncType: sync_proto.SyncType_BodyReq,
 					Payload: &sync_proto.SyncTask_SyncBlockRequest{
 						SyncBlockRequest: &sync_proto.SyncBlockRequest{
-							Number: randTask.number, //todo task pool
+							Number: utils.Uint256sToH256(randTask.number), //todo task pool
 						},
 					},
 				}
@@ -181,5 +192,4 @@ func (d *Downloader) fetchBodies(latest types.Int256) error {
 			continue
 		}
 	}
-	return nil
 }

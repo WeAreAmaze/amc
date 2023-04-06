@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"github.com/amazechain/amc/common/types"
+	"github.com/holiman/uint256"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"testing"
 )
@@ -32,11 +33,11 @@ func TestNewLegacyTx(t *testing.T) {
 
 	addr := types.PublicToAddress(pub)
 
-	tx := NewTransaction(1, addr, addr, types.NewInt64(10000), 21000, types.NewInt64(10000000), []byte("hello"))
+	tx := NewTransaction(1, addr, &addr, uint256.NewInt(10000), 21000, uint256.NewInt(10000000), []byte("hello"))
 	t.Logf("tx: %v", tx)
 
 	buf1, err := json.Marshal(tx)
-	t.Log(types.BytesToHash(buf1).String())
+	t.Log(types.BytesHash(buf1).String())
 
 	switch txt := tx.inner.(type) {
 	case *LegacyTx:
@@ -45,14 +46,11 @@ func TestNewLegacyTx(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		txHash := types.BytesToHash(buf)
+		txHash := types.BytesHash(buf)
 		t.Log(txHash.String())
 	}
 
-	hash, err := tx.Hash()
-	if err != nil {
-		t.Fatal(err)
-	}
+	hash := tx.Hash()
 
 	t.Log(hash.String())
 
@@ -66,7 +64,7 @@ func TestTDin(t *testing.T) {
 
 	addr := types.PublicToAddress(pub)
 
-	tx := NewTransaction(1, addr, addr, types.NewInt64(10000), 21000, types.NewInt64(10000000), []byte("hello"))
+	tx := NewTransaction(1, addr, &addr, uint256.NewInt(10000), 21000, uint256.NewInt(10000000), []byte("hello"))
 	t.Logf("tx: %v", tx)
 
 	b, err := tx.Marshal()

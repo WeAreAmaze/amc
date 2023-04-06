@@ -16,15 +16,18 @@
 
 package transaction
 
-import "github.com/amazechain/amc/common/types"
+import (
+	"github.com/amazechain/amc/common/types"
+	"github.com/holiman/uint256"
+)
 
 type SakuragiTx struct {
-	Nonce    uint64       // nonce of sender account
-	GasPrice types.Int256 // wei per gas
-	Gas      uint64       // gas limit
+	Nonce    uint64      // nonce of sender account
+	GasPrice uint256.Int // wei per gas
+	Gas      uint64      // gas limit
 	To       *types.Address
 	From     *types.Address
-	Value    types.Int256 // wei amount
-	Data     []byte       // contract invocation input data
-	Sign     []byte       // signature values
+	Value    uint256.Int // wei amount
+	Data     []byte      // contract invocation input data
+	Sign     []byte      // signature values
 }

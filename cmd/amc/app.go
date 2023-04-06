@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -90,13 +91,13 @@ func appRun(ctx *cli.Context) error {
 		return err
 	}
 
+	// Unlock any account specifically requested
+	unlockAccounts(ctx, n, &DefaultConfig)
+
 	if err := n.Start(); err != nil {
 		cancel()
 		return err
 	}
-
-	// Unlock any account specifically requested
-	unlockAccounts(ctx, n, &DefaultConfig)
 
 	// Register wallet event handlers to open and auto-derive wallets
 	events := make(chan accounts.WalletEvent, 16)

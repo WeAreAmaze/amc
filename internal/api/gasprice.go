@@ -5,13 +5,14 @@ import (
 	common2 "github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/transaction"
 	types2 "github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/params"
+	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/types"
+	"github.com/amazechain/amc/log"
+	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
+	"github.com/amazechain/amc/params"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
-	"github.com/amazechain/amc/log"
 	"math/big"
 	"sort"
 	"sync"
@@ -19,26 +20,12 @@ import (
 
 const sampleNumber = 3 // Number of transactions sampled in a block
 
-var (
-	DefaultMaxPrice    = big.NewInt(500 * params.GWei)
-	DefaultIgnorePrice = big.NewInt(2 * params.Wei)
-)
-
-type Config struct {
-	Blocks           int
-	Percentile       int
-	MaxHeaderHistory int
-	MaxBlockHistory  int
-	Default          *big.Int `toml:",omitempty"`
-	MaxPrice         *big.Int `toml:",omitempty"`
-	IgnorePrice      *big.Int `toml:",omitempty"`
-}
-
 // Oracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
 type Oracle struct {
 	backend     common2.IBlockChain
-	lastHead    common.Hash
+	miner       common2.IMiner
+	lastHead    types2.Hash
 	lastPrice   *big.Int
 	maxPrice    *big.Int
 	ignorePrice *big.Int
@@ -48,11 +35,13 @@ type Oracle struct {
 	checkBlocks, percentile           int
 	maxHeaderHistory, maxBlockHistory int
 	historyCache                      *lru.Cache
+	//
+	chainConfig *params.ChainConfig
 }
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
 // gasprice for newly created transaction.
-func NewOracle(backend common2.IBlockChain, params Config) *Oracle {
+func NewOracle(backend common2.IBlockChain, miner common2.IMiner, chainConfig *params.ChainConfig, params conf.GpoConfig) *Oracle {
 	blocks := params.Blocks
 	if blocks < 1 {
 		blocks = 1
@@ -68,12 +57,12 @@ func NewOracle(backend common2.IBlockChain, params Config) *Oracle {
 	}
 	maxPrice := params.MaxPrice
 	if maxPrice == nil || maxPrice.Int64() <= 0 {
-		maxPrice = DefaultMaxPrice
+		maxPrice = conf.DefaultMaxPrice
 		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
 	}
 	ignorePrice := params.IgnorePrice
 	if ignorePrice == nil || ignorePrice.Int64() <= 0 {
-		ignorePrice = DefaultIgnorePrice
+		ignorePrice = conf.DefaultIgnorePrice
 		log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
 	} else if ignorePrice.Int64() > 0 {
 		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
@@ -90,20 +79,25 @@ func NewOracle(backend common2.IBlockChain, params Config) *Oracle {
 	}
 
 	cache, _ := lru.New(2048)
-	//headEvent := make(chan core.ChainHeadEvent, 1)
-	//backend.SubscribeChainHeadEvent(headEvent)
-	//go func() {
-	//	var lastHead common.Hash
-	//	for ev := range headEvent {
-	//		if ev.Block.ParentHash() != lastHead {
-	//			cache.Purge()
-	//		}
-	//		lastHead = ev.Block.Hash()
-	//	}
-	//}()
+
+	highestBlockCh := make(chan common2.ChainHighestBlock)
+	defer close(highestBlockCh)
+	highestSub := event.GlobalEvent.Subscribe(highestBlockCh)
+	defer highestSub.Unsubscribe()
+
+	go func() {
+		var lastHead types2.Hash
+		for ev := range highestBlockCh {
+			if ev.Block.ParentHash() != lastHead {
+				cache.Purge()
+			}
+			lastHead = ev.Block.Hash()
+		}
+	}()
 
 	return &Oracle{
 		backend:          backend,
+		miner:            miner,
 		lastPrice:        params.Default,
 		maxPrice:         maxPrice,
 		ignorePrice:      ignorePrice,
@@ -112,6 +106,7 @@ func NewOracle(backend common2.IBlockChain, params Config) *Oracle {
 		maxHeaderHistory: maxHeaderHistory,
 		maxBlockHistory:  maxBlockHistory,
 		historyCache:     cache,
+		chainConfig:      chainConfig,
 	}
 }
 
@@ -122,14 +117,15 @@ func NewOracle(backend common2.IBlockChain, params Config) *Oracle {
 // necessary to add the basefee to the returned number to fall back to the legacy
 // behavior.
 func (oracle *Oracle) SuggestTipCap(ctx context.Context, chainConfig *params.ChainConfig) (*big.Int, error) {
-	var latestNumber jsonrpc.BlockNumber
-	latestNumber = jsonrpc.LatestBlockNumber
-	head, _ := oracle.backend.GetHeaderByNumber(types2.NewInt64(uint64(latestNumber)))
-	var headHash common.Hash
+	//var latestNumber jsonrpc.BlockNumber
+	//latestNumber = jsonrpc.LatestBlockNumber
+
+	head := oracle.backend.CurrentBlock().Header()
+	var headHash types2.Hash
 	if head == nil {
-		headHash = common.Hash{}
+		headHash = types2.Hash{}
 	} else {
-		headHash = common.Hash(head.Hash())
+		headHash = types2.Hash(head.Hash())
 	}
 
 	// If the latest gasprice is still available, return it.
@@ -213,7 +209,7 @@ type results struct {
 // are sent by the miner itself(it doesn't make any sense to include this kind of
 // transaction prices for sampling), nil gasprice is returned.
 func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, blockNum uint64, limit int, ignoreUnder *big.Int, result chan results, quit chan struct{}) {
-	block, err := oracle.backend.GetBlockByNumber(types2.NewInt64(uint64(jsonrpc.BlockNumber(blockNum))))
+	block, err := oracle.backend.GetBlockByNumber(uint256.NewInt(uint64(jsonrpc.BlockNumber(blockNum))))
 	if block == nil {
 		select {
 		case result <- results{nil, err}:
@@ -234,8 +230,7 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 		if ignoreUnder != nil && tip.Cmp(ignoreUnderx) == -1 {
 			continue
 		}
-		sender, err := tx.From()
-		if err == nil && sender != block.Coinbase() {
+		if *tx.From() != block.Coinbase() {
 			prices = append(prices, tip.ToBig())
 			if len(prices) >= limit {
 				break
@@ -250,10 +245,10 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, signer types.Signer, b
 
 type txSorter struct {
 	txs     []*transaction.Transaction
-	baseFee types2.Int256
+	baseFee *uint256.Int
 }
 
-func newSorter(txs []*transaction.Transaction, baseFee types2.Int256) *txSorter {
+func newSorter(txs []*transaction.Transaction, baseFee *uint256.Int) *txSorter {
 	return &txSorter{
 		txs:     txs,
 		baseFee: baseFee,
@@ -278,23 +273,3 @@ type bigIntArray []*big.Int
 func (s bigIntArray) Len() int           { return len(s) }
 func (s bigIntArray) Less(i, j int) bool { return s[i].Cmp(s[j]) < 0 }
 func (s bigIntArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-// FullNodeGPO contains default gasprice oracle settings for full node.
-var FullNodeGPO = Config{
-	Blocks:           20,
-	Percentile:       60,
-	MaxHeaderHistory: 1024,
-	MaxBlockHistory:  1024,
-	MaxPrice:         DefaultMaxPrice,
-	IgnorePrice:      DefaultIgnorePrice,
-}
-
-// LightClientGPO contains default gasprice oracle settings for light client.
-var LightClientGPO = Config{
-	Blocks:           2,
-	Percentile:       60,
-	MaxHeaderHistory: 300,
-	MaxBlockHistory:  5,
-	MaxPrice:         DefaultMaxPrice,
-	IgnorePrice:      DefaultIgnorePrice,
-}

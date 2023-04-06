@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"reflect"
 	"testing"
 	"testing/quick"
 )
@@ -54,7 +55,7 @@ func TestCountValues(t *testing.T) {
 		if count != test.count {
 			t.Errorf("test %d: count mismatch, got %d want %d\ninput: %s", i, count, test.count, test.input)
 		}
-		if !errors.Is(err, test.err) {
+		if !reflect.DeepEqual(err, test.err) {
 			t.Errorf("test %d: err mismatch, got %q want %q\ninput: %s", i, err, test.err, test.input)
 		}
 	}
@@ -109,7 +110,7 @@ func TestSplitUint64(t *testing.T) {
 		if !bytes.Equal(rest, unhex(test.rest)) {
 			t.Errorf("test %d: rest mismatch: got %x, want %s (input %q)", i, rest, test.rest, test.input)
 		}
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}
 	}

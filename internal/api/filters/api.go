@@ -370,7 +370,7 @@ func (filterApi *FilterAPI) GetFilterLogs(ctx context.Context, id jsonrpc.ID) ([
 // GetFilterChanges returns the logs for the filter with the given id since
 // last time it was called. This can be used for polling.
 //
-// For pending transaction and block filters the result is []common.Hash.
+// For pending transaction and block filters the result is []types.Hash.
 // (pending)Log filters return []Log.
 func (filterApi *FilterAPI) GetFilterChanges(id jsonrpc.ID) (interface{}, error) {
 	filterApi.filtersMu.Lock()

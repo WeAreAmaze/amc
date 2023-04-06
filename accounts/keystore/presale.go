@@ -26,8 +26,7 @@ import (
 	"fmt"
 
 	"github.com/amazechain/amc/accounts"
-	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/crypto"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -91,7 +90,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 
 	key = &Key{
 		Id:         uuid.UUID{},
-		Address:    types.Address(crypto.PubkeyToAddress(ecKey.PublicKey)),
+		Address:    crypto.PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}
 	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"

@@ -21,8 +21,8 @@ import (
 
 	"github.com/amazechain/amc/accounts"
 	"github.com/amazechain/amc/common"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/transaction"
-	"github.com/amazechain/amc/internal/avm/crypto"
 )
 
 // keystoreWallet implements the accounts.Wallet interface for the original

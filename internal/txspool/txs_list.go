@@ -20,6 +20,7 @@ import (
 	"container/heap"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
+	"github.com/holiman/uint256"
 	"math"
 	"sort"
 	"sync"
@@ -72,12 +73,7 @@ func (as *accountSet) empty() bool {
 // containsTx checks if the sender of a given tx is within the set. If the sender
 // cannot be derived, this method returns false.
 func (as *accountSet) containsTx(tx *transaction.Transaction) bool {
-	//todo
-	addr, err := tx.From()
-	if err != nil {
-		return false
-	}
-	return as.contains(addr)
+	return as.contains(*tx.From())
 }
 
 // add inserts a new address into the set to track.
@@ -88,10 +84,7 @@ func (as *accountSet) add(addr types.Address) {
 
 // addTx adds the sender of tx into the set.
 func (as *accountSet) addTx(tx *transaction.Transaction) {
-	//todo
-	if addr, err := tx.From(); err == nil {
-		as.add(addr)
-	}
+	as.add(*tx.From())
 }
 
 // flatten returns the list of addresses within this set, also caching it for later
@@ -232,7 +225,7 @@ func (t *txLookup) Add(tx *transaction.Transaction, local bool) {
 	t.slots += numSlots(tx)
 	//todo slotsGauge.Update(int64(t.slots))
 
-	hash, _ := tx.Hash()
+	hash := tx.Hash()
 	if local {
 		t.locals[hash] = tx
 	} else {
@@ -279,10 +272,10 @@ func (t *txLookup) RemoteToLocals(locals *accountSet) int {
 }
 
 // RemotesBelowTip finds all remote transactions below the given tip threshold.
-func (t *txLookup) RemotesBelowTip(threshold types.Int256) []*transaction.Transaction {
+func (t *txLookup) RemotesBelowTip(threshold uint256.Int) []*transaction.Transaction {
 	found := make([]*transaction.Transaction, 0, 128)
 	t.Range(func(hash types.Hash, tx *transaction.Transaction, local bool) bool {
-		if tx.GasPrice().Compare(threshold) < 0 {
+		if tx.GasPrice().Cmp(&threshold) < 0 {
 			found = append(found, tx)
 		}
 		return true
@@ -516,7 +509,7 @@ func (m *txsSortedMap) LastElement() *transaction.Transaction {
 type txsList struct {
 	strict  bool
 	txs     *txsSortedMap
-	costcap types.Int256
+	costcap uint256.Int
 	gascap  uint64
 }
 
@@ -526,7 +519,7 @@ func newTxsList(strict bool) *txsList {
 	return &txsList{
 		strict:  strict,
 		txs:     newTxSortedMap(),
-		costcap: *new(types.Int256),
+		costcap: *uint256.NewInt(0),
 	}
 }
 
@@ -546,33 +539,33 @@ func (l *txsList) Add(tx *transaction.Transaction, priceBump uint64) (bool, *tra
 
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		if old.Gas() >= tx.Gas() || old.GasPrice().Compare(tx.GasPrice()) >= 0 {
+		if old.Gas() >= tx.Gas() || old.GasPrice().Cmp(tx.GasPrice()) >= 0 {
 			return false, nil
 		}
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
-		a := types.NewInt64(100 + priceBump)
-		aFeeCap := new(types.Int256).Mul(a, old.GasPrice())
+		a := uint256.NewInt(100 + priceBump)
+		aFeeCap := new(uint256.Int).Mul(a, old.GasPrice())
 		aTip := a.Mul(a, old.GasPrice())
 
 		// thresholdTip    = oldTip * (100 + priceBump) / 100
-		b := types.NewInt64(100)
+		b := uint256.NewInt(100)
 		thresholdFeeCap := aFeeCap.Div(aFeeCap, b)
 		thresholdTip := aTip.Div(aTip, b)
 
 		// We have to ensure that both the new fee cap and tip are higher than the
 		// old ones as well as checking the percentage threshold to ensure that
 		// this is accurate for low (Wei-level) gas price replacements.
-		if tx.GasPrice().Compare(thresholdFeeCap) < 0 || tx.GasPrice().Compare(thresholdTip) < 0 {
+		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
 	}
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
 
-	cost := new(types.Int256).Mul(tx.GasPrice(), types.NewInt64(tx.Gas())).Add(tx.Value())
+	cost := uint256.NewInt(0).Add(new(uint256.Int).Mul(tx.GasPrice(), uint256.NewInt(tx.Gas())), tx.Value())
 
-	if l.costcap.Compare(cost) < 0 {
-		l.costcap = cost
+	if l.costcap.Cmp(cost) < 0 {
+		l.costcap = *cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
 		l.gascap = gas
@@ -596,9 +589,9 @@ func (l *txsList) Forward(threshold uint64) []*transaction.Transaction {
 // a point in calculating all the costs or if the balance covers all. If the threshold
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
-func (l *txsList) Filter(costLimit types.Int256, gasLimit uint64) ([]*transaction.Transaction, []*transaction.Transaction) {
+func (l *txsList) Filter(costLimit uint256.Int, gasLimit uint64) ([]*transaction.Transaction, []*transaction.Transaction) {
 	// If all transactions are below the threshold, short circuit
-	if l.costcap.Compare(costLimit) <= 0 && l.gascap <= gasLimit {
+	if l.costcap.Cmp(&costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
 	}
 	l.costcap = costLimit // Lower the caps to the thresholds
@@ -606,8 +599,8 @@ func (l *txsList) Filter(costLimit types.Int256, gasLimit uint64) ([]*transactio
 
 	// Filter out all the transactions above the account's funds
 	removed := l.txs.Filter(func(tx *transaction.Transaction) bool {
-		cost := tx.Value().Add(new(types.Int256).Mul(tx.GasPrice(), types.NewInt64(tx.Gas())))
-		return tx.Gas() > gasLimit || cost.Compare(costLimit) > 0
+		cost := uint256.NewInt(0).Add(tx.Value(), uint256.NewInt(0).Mul(tx.GasPrice(), uint256.NewInt(tx.Gas())))
+		return tx.Gas() > gasLimit || cost.Cmp(&costLimit) > 0
 	})
 
 	if len(removed) == 0 {
@@ -689,7 +682,7 @@ func (l *txsList) LastElement() *transaction.Transaction {
 // then the heap is sorted based on the effective tip based on the given base fee.
 // If baseFee is nil then the sorting is based on gasFeeCap.
 type priceHeap struct {
-	baseFee types.Int256 // heap should always be re-sorted after baseFee is changed
+	baseFee *uint256.Int // heap should always be re-sorted after baseFee is changed
 	list    []*transaction.Transaction
 }
 
@@ -708,19 +701,18 @@ func (h *priceHeap) Less(i, j int) bool {
 }
 
 func (h *priceHeap) cmp(a, b *transaction.Transaction) int {
-	// todo
-	if !h.baseFee.IsEmpty() {
+	if h.baseFee != nil {
 		// Compare effective tips if baseFee is specified
-		if c := a.GasPrice().Compare(b.GasPrice()); c != 0 {
+		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
 			return c
 		}
 	}
 	// Compare fee caps if baseFee is not specified or effective tips are equal
-	if c := a.GasPrice().Compare(b.GasPrice()); c != 0 {
+	if c := a.GasPrice().Cmp(b.GasPrice()); c != 0 {
 		return c
 	}
 	// Compare tips if effective tips and fee caps are equal
-	return a.GasPrice().Compare(b.GasPrice())
+	return a.GasPrice().Cmp(b.GasPrice())
 }
 
 func (h *priceHeap) Push(x interface{}) {
@@ -810,7 +802,7 @@ func (l *txPricedList) Underpriced(tx *transaction.Transaction) bool {
 func (l *txPricedList) underpricedFor(h *priceHeap, tx *transaction.Transaction) bool {
 	// Discard stale price points if found at the heap start
 	for len(h.list) > 0 {
-		hash, _ := h.list[0].Hash()
+		hash := h.list[0].Hash()
 		if l.all.GetRemote(hash) == nil { // Removed or migrated
 			atomic.AddInt64(&l.stales, -1)
 			heap.Pop(h)
@@ -837,7 +829,7 @@ func (l *txPricedList) Discard(slots int, force bool) ([]*transaction.Transactio
 		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio || floatingRatio == 0 {
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.urgent).(*transaction.Transaction)
-			hash, _ := tx.Hash()
+			hash := tx.Hash()
 			if l.all.GetRemote(hash) == nil { // Removed or migrated
 				atomic.AddInt64(&l.stales, -1)
 				continue
@@ -851,7 +843,7 @@ func (l *txPricedList) Discard(slots int, force bool) ([]*transaction.Transactio
 			}
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.floating).(*transaction.Transaction)
-			hash, _ := tx.Hash()
+			hash := tx.Hash()
 			if l.all.GetRemote(hash) == nil { // Removed or migrated
 				atomic.AddInt64(&l.stales, -1)
 				continue
@@ -901,7 +893,7 @@ func (l *txPricedList) Reheap() {
 
 // SetBaseFee updates the base fee and triggers a re-heap. Note that Removed is not
 // necessary to call right before SetBaseFee when processing a new block.
-func (l *txPricedList) SetBaseFee(baseFee types.Int256) {
+func (l *txPricedList) SetBaseFee(baseFee *uint256.Int) {
 	l.urgent.baseFee = baseFee
 	l.Reheap()
 }

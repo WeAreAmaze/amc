@@ -38,7 +38,7 @@ type KadDHT struct {
 	cancel context.CancelFunc
 }
 
-func NewKadDht(ctx context.Context, s *Service, isServer bool) (*KadDHT, error) {
+func NewKadDht(ctx context.Context, s *Service, isServer bool, bootstrappers ...peer.AddrInfo) (*KadDHT, error) {
 
 	c, cancel := context.WithCancel(ctx)
 	var mode kademliaDHT.ModeOpt
@@ -48,7 +48,7 @@ func NewKadDht(ctx context.Context, s *Service, isServer bool) (*KadDHT, error) 
 		mode = kademliaDHT.ModeClient
 	}
 
-	dht, err := kademliaDHT.New(c, s.host, kademliaDHT.Mode(mode))
+	dht, err := kademliaDHT.New(c, s.host, kademliaDHT.Mode(mode), kademliaDHT.BootstrapPeers(bootstrappers...))
 
 	if err != nil {
 		log.Error("create dht failed", err)
@@ -101,7 +101,7 @@ func (k *KadDHT) loopDiscoverRemote() {
 			} else {
 				for p := range peerChan {
 					if p.ID != k.service.host.ID() {
-						log.Infof("find peer %s", fmt.Sprintf("info: %s", p.String()))
+						log.Tracef("find peer %s", fmt.Sprintf("info: %s", p.String()))
 						k.service.HandlePeerFound(p)
 					}
 				}

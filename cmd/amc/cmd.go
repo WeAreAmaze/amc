@@ -126,7 +126,7 @@ var consensusFlag = []cli.Flag{
 	&cli.StringFlag{
 		Name:        "engine.type",
 		Usage:       "consensus engine",
-		Value:       "APoaEngine",
+		Value:       "APosEngine", //APoaEngine,APosEngine
 		Destination: &DefaultConfig.GenesisBlockCfg.Engine.EngineName,
 	},
 	&cli.BoolFlag{

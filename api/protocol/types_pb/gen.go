@@ -16,4 +16,4 @@
 
 package types_pb
 
-//go:generate protoc -I=../ -I=. -I=../include --gogo_out=paths=source_relative:. types.proto
+//go:generate protoc -I=../ -I=. -I=../include --go_out=paths=source_relative:. types.proto

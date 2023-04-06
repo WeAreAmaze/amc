@@ -38,9 +38,9 @@ import (
 	"path/filepath"
 
 	"github.com/amazechain/amc/accounts"
+	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/math"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/common/math"
-	"github.com/amazechain/amc/internal/avm/crypto"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
@@ -232,7 +232,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	}
 	return &Key{
 		Id:         id,
-		Address:    types.Address(crypto.PubkeyToAddress(key.PublicKey)),
+		Address:    crypto.PubkeyToAddress(key.PublicKey),
 		PrivateKey: key,
 	}, nil
 }

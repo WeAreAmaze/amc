@@ -18,9 +18,14 @@ package network
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/log"
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 	"io"
 	"sync"
 	"time"
@@ -29,7 +34,6 @@ import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/types"
-	"github.com/gogo/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -38,8 +42,8 @@ import (
 )
 
 var (
-	pingPongTimeOut  = time.Duration(10) * time.Second
-	handshakeTimeOut = time.Duration(30) * time.Second
+	pingPongTimeOut  = time.Duration(1) * time.Second
+	handshakeTimeOut = time.Duration(2) * time.Second
 )
 
 type NodeConfig struct {
@@ -72,7 +76,7 @@ type Node struct {
 	host.Host
 
 	peer    *libpeer.AddrInfo
-	streams map[string]network.Stream
+	streams map[string]network.Stream // send and read msg stream protocolID -> stream
 
 	sync.RWMutex
 
@@ -121,7 +125,7 @@ func NewNode(ctx context.Context, h host.Host, s *Service, peer libpeer.AddrInfo
 	} else {
 		stream, err = node.NewStream(node.ctx, peer.ID, config.Protocol)
 		if err != nil {
-			log.Error("failed to created stream to peer", "peer ID", peer.String(), "peer addr", peer.Addrs, "err", err)
+			log.Error("failed to created stream to peer", "PeerID", peer.ID, "PeerAddress", peer.Addrs, "err", err)
 			return nil, err
 		}
 	}
@@ -142,20 +146,22 @@ func (n *Node) Start() {
 	}
 }
 
+// ProcessHandshake read peer's genesisHash and currentHeight
 func (n *Node) ProcessHandshake(h *msg_proto.ProtocolHandshakeMessage) error {
-	s, ok := n.streams[string(n.config.Protocol)]
+	stream, ok := n.streams[string(n.config.Protocol)]
 	if !ok {
-		return fmt.Errorf("invalid protocol %s", n.config.Protocol)
+		return fmt.Errorf("invalid protocol %stream", n.config.Protocol)
 	}
 
 	errCh := make(chan error)
-	//var h msg_proto.ProtocolHandshakeMessage
+	defer close(errCh)
 
 	go func() {
 		var header Header
-		msgType, payloadLen, err := header.Decode(s)
+		reader := bufio.NewReader(stream)
+		msgType, payloadLen, err := header.Decode(reader)
 		if err != nil {
-			log.Errorf("failed to decode protocol handshake msg")
+			log.Error("failed to decode protocol handshake msg", "ID", n.peer.ID, "data", stream, "err", err)
 			errCh <- err
 			return
 		}
@@ -167,7 +173,7 @@ func (n *Node) ProcessHandshake(h *msg_proto.ProtocolHandshakeMessage) error {
 		}
 
 		payload := make([]byte, payloadLen)
-		_, err = io.ReadFull(s, payload)
+		_, err = io.ReadFull(reader, payload)
 		if err != nil {
 			log.Error("failed read payload", fmt.Errorf("payload len %d", payloadLen), err)
 			errCh <- err
@@ -176,7 +182,7 @@ func (n *Node) ProcessHandshake(h *msg_proto.ProtocolHandshakeMessage) error {
 
 		var m msg_proto.MessageData
 		if err = proto.Unmarshal(payload, &m); err != nil {
-			log.Errorf("failed unmarshal to msg, from peer:%s", s.Conn().ID())
+			log.Errorf("failed unmarshal to msg, from peer:%s", stream.Conn().ID())
 			errCh <- err
 			return
 		}
@@ -192,13 +198,13 @@ func (n *Node) ProcessHandshake(h *msg_proto.ProtocolHandshakeMessage) error {
 	case <-n.ctx.Done():
 		return n.ctx.Err()
 	case <-time.After(handshakeTimeOut):
-		_ = s.Close()
+		log.Warn("Peer handshake timeout", "PeerID", n.peer.ID, "StreamId", stream.ID(), "ProtocolId", n.config.Protocol)
+		_ = stream.Close()
 	case err, ok := <-errCh:
 		if ok {
 			if err != nil {
 				return err
 			}
-
 			return err
 		}
 	}
@@ -206,7 +212,7 @@ func (n *Node) ProcessHandshake(h *msg_proto.ProtocolHandshakeMessage) error {
 	return fmt.Errorf("unknown cause failure")
 }
 
-func (n *Node) AcceptHandshake(h *msg_proto.ProtocolHandshakeMessage, version string, genesisHash types.Hash, currentHeight types.Int256) error {
+func (n *Node) AcceptHandshake(h *msg_proto.ProtocolHandshakeMessage, version string, genesisHash types.Hash, currentHeight *uint256.Int) error {
 	if err := n.ProcessHandshake(h); err != nil {
 		return err
 	}
@@ -218,11 +224,12 @@ func (n *Node) AcceptHandshake(h *msg_proto.ProtocolHandshakeMessage, version st
 	return nil
 }
 
-func (n *Node) ProtocolHandshake(h *msg_proto.ProtocolHandshakeMessage, version string, genesisHash types.Hash, currentHeight types.Int256, process bool) error {
+// ProtocolHandshake send current peer's genesisHash and height
+func (n *Node) ProtocolHandshake(h *msg_proto.ProtocolHandshakeMessage, version string, genesisHash types.Hash, currentHeight *uint256.Int, process bool) error {
 	phm := msg_proto.ProtocolHandshakeMessage{
 		Version:       version,
-		GenesisHash:   genesisHash.String(),
-		CurrentHeight: currentHeight,
+		GenesisHash:   utils.ConvertHashToH256(genesisHash),
+		CurrentHeight: utils.ConvertUint256IntToH256(currentHeight),
 	}
 
 	b, err := proto.Marshal(&phm)
@@ -285,7 +292,7 @@ func (n *Node) readData(stream network.Stream) error {
 			var header Header
 			msgType, payloadLen, err := header.Decode(reader)
 			if err != nil {
-				log.Error("failed read msg from: ", stream.Conn().RemotePeer().String(), err)
+				log.Error("failed read msg", "StreamID", stream.ID(), "PeerID", stream.Conn().RemotePeer().String(), "err", err)
 				return err
 			}
 			//
@@ -307,19 +314,19 @@ func (n *Node) readData(stream network.Stream) error {
 
 			switch msgType {
 			case message.MsgPingReq:
-				//log.Debugf("receive ping msg %s", string(msg.Payload))
+				log.Tracef("receive ping msg %s", string(msg.Payload))
 				msg := P2PMessage{
 					MsgType: message.MsgPingResp,
 					Payload: []byte("Hi boy!"),
 				}
 				n.Write(&msg)
 			case message.MsgPingResp:
-				//log.Debugf("receive pong msg %s", string(msg.Payload))
+				log.Tracef("receive pong msg %s", string(msg.Payload))
 			default:
 				n.msgLock.RLock()
-				log.Debugf("handler count: %v", len(n.msgCallback))
 
 				if h, ok := n.msgCallback[msgType]; ok {
+					log.Debug("receive a p2p msg ", "msgType", msgType, "PeerID", n.ID(), "Content", hexutil.Encode(msg.Payload))
 					if err := h(msg.Payload, n.ID()); err != nil {
 						n.msgLock.RUnlock()
 						log.Errorf("failed dispense data err: %v", err)
@@ -339,7 +346,7 @@ func (n *Node) makeMsg(payload []byte) proto.Message {
 	//log.Errorf("id: %v", n.Host.ID())
 	sign, err := key.Sign(payload)
 	if err != nil {
-		log.Errorf("failed to sign ping msg", err)
+		log.Error("failed to sign ping msg", "err", err)
 		return nil
 	}
 
@@ -434,7 +441,6 @@ func (n *Node) writeData(stream network.Stream) error {
 
 func (n *Node) writeMsg(stream network.Stream, msg message.IMessage) error {
 	var header Header
-	//log.Debugf("send msg to peer[%s] type %d", stream.Conn().ID(), msg.Type())
 	payload, err := msg.Encode()
 	if err != nil {
 		log.Errorf("failed to encode msg")
@@ -445,14 +451,17 @@ func (n *Node) writeMsg(stream network.Stream, msg message.IMessage) error {
 		if err != nil {
 			log.Errorf("failed marshal message data to byts")
 		} else {
-			if err := header.Encode(stream, msg.Type(), int32(len(data))); err != nil {
+			var buf = new(bytes.Buffer)
+			if err := header.Encode(buf, msg.Type(), int32(len(data))); err != nil {
 				log.Error("failed to send header", msg.Type(), len(data))
 				return err
 			} else {
-				if _, err := stream.Write(data); err != nil {
+				buf.Write(data)
+				if _, err := stream.Write(buf.Bytes()); err != nil {
 					log.Errorf("failed to send payload node:%s", stream.Conn().ID())
 				} else {
-					//log.Debugf("send %d size to node:%s", c, stream.Conn().ID())
+					//Trace
+					log.Debug("send data to peer", "data", hexutil.Encode(buf.Bytes()), "PeerID", stream.Conn().RemotePeer(), "ProtocolID", stream.Protocol(), "StreamID", stream.Conn().ID(), "StreamDirection", stream.Stat().Direction)
 				}
 			}
 		}

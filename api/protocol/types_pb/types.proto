@@ -15,57 +15,108 @@
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 syntax = "proto3";
-package types.pb;
-
-import "gogoproto/gogo.proto";
+package types_pb;
 
 option go_package = "github.com/amazechain/amc/api/protocol/types_pb";
 
-message PBlock{
-  PBHeader Header = 1;
-  PBody txs = 2;
+
+message H128 {
+  uint64 hi = 1;
+  uint64 lo = 2;
 }
 
-message PBHeader {
-//  option (gogoproto.goproto_getters) = false;
+message H160 {
+  H128 hi = 1;
+  uint32 lo = 2;
+}
 
-  bytes ParentHash = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  bytes Coinbase = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
-  bytes Root = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  bytes TxHash = 4 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  bytes ReceiptHash = 5 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  string Difficulty = 6 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  string Number = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+message H256 {
+  H128 hi = 1;
+  H128 lo = 2;
+}
+
+message H384{  // 48 byte
+  H256 hi = 1;
+  H128 lo = 2;
+}
+
+message H768 { // 96 byte
+  H384 hi = 1;
+  H384 lo = 2;
+}
+
+message H512 {
+  H256 hi = 1;
+  H256 lo = 2;
+}
+
+message H1024 {
+  H512 hi = 1;
+  H512 lo = 2;
+}
+
+message H2048 {
+  H1024 hi = 1;
+  H1024 lo = 2;
+}
+
+
+message Block{
+  Header Header = 1;
+  Body body = 2;
+}
+
+message Header {
+  H256 ParentHash = 1 ;
+  H160 Coinbase = 2 ;
+  H256 Root = 3 ;
+  H256 TxHash = 4 ;
+  H256 ReceiptHash = 5 ;
+  H256 Difficulty = 6;
+  H256 Number = 7;
   uint64 GasLimit = 8;
   uint64 GasUsed = 9;
   uint64 Time = 10;
   uint64 Nonce = 11;
-  string BaseFee = 12 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  H256 BaseFee = 12 ;
   bytes Extra = 13;
+  H768 Signature = 14;
+  H2048 Bloom = 15;
 }
 
-message PBody {
+message Verifier {
+  H384 PublicKey = 1;
+  H160 Address = 2;
+}
+
+message Reward {
+  H256 Amount = 1;
+  H160 Address = 2;
+}
+
+message Body {
   repeated Transaction txs = 1;
+  repeated Verifier verifiers = 2;
+  repeated Reward rewards = 3;
 }
 
 message Transaction {
-//  option (gogoproto.goproto_getters) = false;
   uint64 type = 1;
   uint64 nonce = 2;
-  string gasPrice = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  H256 gasPrice = 3;
   uint64 gas = 4;
-  string feePerGas = 5 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  string priorityFeePerGas = 6 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  string value = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  H256 feePerGas = 5;
+  H256 priorityFeePerGas = 6;
+  H256 value = 7;
   bytes data = 8;
-  bytes sing = 9;
-  string to = 10 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = true];
-  string from = 11 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  bytes sign = 9;
+  H160 to = 10;
+  H160 from = 11;
   uint64 chainID = 12;
-  bytes hash = 13 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  string r = 14 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  string s = 15 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  string v = 16 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  H256 hash = 13;
+  H256 r = 14;
+  H256 s = 15;
+  H256 v = 16;
 }
 
 message Receipts {
@@ -73,30 +124,33 @@ message Receipts {
 }
 
 message Receipt {
-  uint64   Type = 1;
+  uint32   Type = 1;
   bytes    PostState = 2;
   uint64   Status = 3;
   uint64   CumulativeGasUsed = 4;
-  bytes    Bloom = 5;
+  H2048   Bloom = 5;
   repeated Log Logs = 6;
-  bytes    TxHash = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  bytes    ContractAddress = 8 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
+  H256    TxHash = 7 ;
+  H160    ContractAddress = 8;
   uint64   GasUsed = 9;
-  bytes    BlockHash = 10 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  string   BlockNumber = 11 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  H256    BlockHash = 10;
+  H256   BlockNumber = 11;
   uint64   TransactionIndex = 12;
 }
 
 message Log {
-  bytes Address = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Address", (gogoproto.nullable) = false];
-  repeated bytes Topics = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  H160 Address = 1;
+  repeated H256 Topics = 2;
   bytes Data = 3;
-  string BlockNumber = 4 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  bytes TxHash = 5 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  H256 BlockNumber = 4;
+  H256 TxHash = 5;
   uint64 TxIndex = 6;
-  bytes BlockHash = 7 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
+  H256 BlockHash = 7;
   uint64 Index = 8;
   bool Removed = 9;
 }
 
+message Logs {
+  repeated Log logs = 1;
+}
 

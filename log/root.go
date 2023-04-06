@@ -2,10 +2,11 @@ package log
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/amazechain/amc/conf"
 	prefixed "github.com/amazechain/amc/log/logrus-prefixed-formatter"
 	"github.com/sirupsen/logrus"
-	"os"
 
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
@@ -50,6 +51,29 @@ func Init(nodeConfig conf.NodeConfig, config conf.LoggerConfig) {
 	})
 }
 
+func InitMobileLogger(filepath string, isDebug bool) {
+	if !isDebug {
+		return
+	}
+	formatter := new(prefixed.TextFormatter)
+	formatter.TimestampFormat = "2006-01-02 15:04:05"
+	formatter.FullTimestamp = true
+	formatter.DisableColors = false
+	logrus.SetFormatter(formatter)
+	if isDebug {
+		terminal.SetLevel(logrus.DebugLevel)
+	} else {
+		terminal.SetLevel(logrus.InfoLevel)
+	}
+	terminal.SetOutput(&lumberjack.Logger{
+		Filename:   filepath,
+		MaxSize:    10, //10MB
+		MaxBackups: 2,
+		LocalTime:  false,
+		Compress:   false,
+	})
+}
+
 // New returns a new logger with the given context.
 // New is a convenient alias for Root().New
 func New(ctx ...interface{}) Logger {
@@ -67,7 +91,7 @@ func Trace(msg string, ctx ...interface{}) {
 }
 
 func Tracef(msg string, ctx ...interface{}) {
-	root.write(fmt.Sprintf(msg, ctx), LvlTrace, []interface{}{}, skipLevel)
+	root.write(fmt.Sprintf(msg, ctx...), LvlTrace, []interface{}{}, skipLevel)
 }
 
 // Debug is a convenient alias for Root().Debug
@@ -76,7 +100,7 @@ func Debug(msg string, ctx ...interface{}) {
 }
 
 func Debugf(msg string, ctx ...interface{}) {
-	root.write(fmt.Sprintf(msg, ctx), LvlDebug, []interface{}{}, skipLevel)
+	root.write(fmt.Sprintf(msg, ctx...), LvlDebug, []interface{}{}, skipLevel)
 }
 
 // Info is a convenient alias for Root().Info
@@ -86,7 +110,7 @@ func Info(msg string, ctx ...interface{}) {
 
 // Infof is a convenient alias for Root().Info
 func Infof(msg string, ctx ...interface{}) {
-	root.write(fmt.Sprintf(msg, ctx), LvlInfo, []interface{}{}, skipLevel)
+	root.write(fmt.Sprintf(msg, ctx...), LvlInfo, []interface{}{}, skipLevel)
 }
 
 // Warn is a convenient alias for Root().Warn
@@ -96,7 +120,7 @@ func Warn(msg string, ctx ...interface{}) {
 
 // Warnf is a convenient alias for Root().Warn
 func Warnf(msg string, ctx ...interface{}) {
-	root.write(fmt.Sprintf(msg, ctx), LvlWarn, []interface{}{}, skipLevel)
+	root.write(fmt.Sprintf(msg, ctx...), LvlWarn, []interface{}{}, skipLevel)
 }
 
 // Error is a convenient alias for Root().Error
@@ -106,7 +130,7 @@ func Error(msg string, ctx ...interface{}) {
 
 // Errorf is a convenient alias for Root().Error
 func Errorf(msg string, ctx ...interface{}) {
-	root.write(fmt.Sprintf(msg, ctx), LvlError, []interface{}{}, skipLevel)
+	root.write(fmt.Sprintf(msg, ctx...), LvlError, []interface{}{}, skipLevel)
 }
 
 // Crit is a convenient alias for Root().Crit
@@ -117,7 +141,7 @@ func Crit(msg string, ctx ...interface{}) {
 
 // Critf is a convenient alias for Root().Crit
 func Critf(msg string, ctx ...interface{}) {
-	root.write(fmt.Sprintf(msg, ctx), LvlCrit, []interface{}{}, skipLevel)
+	root.write(fmt.Sprintf(msg, ctx...), LvlCrit, []interface{}{}, skipLevel)
 	os.Exit(1)
 }
 

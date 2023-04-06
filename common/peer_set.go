@@ -17,14 +17,14 @@
 package common
 
 import (
-	"github.com/amazechain/amc/common/types"
+	"github.com/holiman/uint256"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"time"
 )
 
 type Peer struct {
 	IPeer
-	CurrentHeight types.Int256
+	CurrentHeight *uint256.Int
 	AddTimer      time.Time
 }
 
@@ -45,7 +45,7 @@ func (ps PeerSet) Len() int {
 }
 
 func (ps PeerSet) Less(i, j int) bool {
-	if ps[i].CurrentHeight.Compare(ps[j].CurrentHeight) == 1 {
+	if ps[i].CurrentHeight.Cmp(ps[j].CurrentHeight) == 1 {
 		return true
 	}
 	return false

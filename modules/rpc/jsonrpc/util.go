@@ -19,7 +19,7 @@ package jsonrpc
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/amazechain/amc/internal/avm/common"
+	"github.com/amazechain/amc/common/types"
 	"strconv"
 )
 
@@ -143,7 +143,7 @@ func decodeNibble(in byte) uint64 {
 		return badNibble
 	}
 }
-func UnmarshalText(h common.Hash, input []byte) error {
+func UnmarshalText(h types.Hash, input []byte) error {
 	return UnmarshalFixedText("Hash", input, h[:])
 }
 

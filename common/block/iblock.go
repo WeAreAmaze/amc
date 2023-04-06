@@ -19,20 +19,24 @@ package block
 import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 )
 
 type IHeader interface {
-	Number64() types.Int256
-	BaseFee64() types.Int256
+	Number64() *uint256.Int
+	BaseFee64() *uint256.Int
 	Hash() types.Hash
 	ToProtoMessage() proto.Message
 	FromProtoMessage(message proto.Message) error
 	Marshal() ([]byte, error)
+	Unmarshal(data []byte) error
 	StateRoot() types.Hash
 }
 
 type IBody interface {
+	Verifier() []*Verify
+	Reward() []*Reward
 	Transactions() []*transaction.Transaction
 	ToProtoMessage() proto.Message
 	FromProtoMessage(message proto.Message) error
@@ -44,8 +48,8 @@ type IBlock interface {
 	Body() IBody
 	Transaction(hash types.Hash) *transaction.Transaction
 	Transactions() []*transaction.Transaction
-	Number64() types.Int256
-	Difficulty() types.Int256
+	Number64() *uint256.Int
+	Difficulty() *uint256.Int
 	Time() uint64
 	GasLimit() uint64
 	GasUsed() uint64
@@ -53,7 +57,7 @@ type IBlock interface {
 	Coinbase() types.Address
 	ParentHash() types.Hash
 	TxHash() types.Hash
-	Size() types.StorageSize
+	WithSeal(header IHeader) *Block
 	//ToProtoMessage() proto.Message
 	//FromProtoMessage(message proto.Message) error
 }

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/types"
 	mvm_common "github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"math/big"
@@ -93,7 +93,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	}
 
 	// topics is an array consisting of strings and/or arrays of strings.
-	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
+	// JSON null values are converted to types.Hash{} and ignored by the filter manager.
 	if len(raw.Topics) > 0 {
 		args.Topics = make([][]types.Hash, len(raw.Topics))
 		for i, t := range raw.Topics {

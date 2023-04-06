@@ -16,7 +16,7 @@
 
 package miner
 
-import "github.com/amazechain/amc/internal/avm/params"
+import "github.com/amazechain/amc/params"
 
 func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 	delta := parentGasLimit/params.GasLimitBoundDivisor - 1

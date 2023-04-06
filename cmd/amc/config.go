@@ -20,17 +20,14 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"github.com/amazechain/amc/params"
+	"math/big"
+
 	"github.com/amazechain/amc/conf"
-	"time"
 )
 
 //go:embed allocs
 var allocs embed.FS
-
-const (
-	genesisTime  = "2022/01/01 00:00:00"
-	timeTemplate = "2006/01/02 15:04:05"
-)
 
 var DefaultConfig = conf.Config{
 	NodeCfg: conf.NodeConfig{
@@ -76,48 +73,27 @@ var DefaultConfig = conf.Config{
 		InfluxDBOrganization: "",
 	},
 
-	GenesisBlockCfg: conf.GenesisBlockConfig{
-		ChainID: 0,
-		Engine: conf.ConsensusConfig{
-			EngineName: "APoaEngine",
-			BlsKey:     "bls",
-			Period:     8,
-			GasCeil:    30000000,
-			APoa: conf.APoaConfig{
-				Epoch:              30000,
-				CheckpointInterval: 0,
-				InmemorySnapshots:  0,
-				InmemorySignatures: 0,
-				InMemory:           false,
-			},
-		},
-		Miners:     []string{"AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21"},
-		Validators: []string{"AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21", "AMC3CA698823AE0474EE80D2F4BF29EC649474F4040", "AMC781ACBE8BECB693098D36875D48E967C92DB3A4E"},
-		Number:     0,
-		Timestamp:  toLocation(),
-		Alloc:      readPrealloc("allocs/amc.json"),
+	GenesisBlockCfg: ReadGenesis("allocs/genesis.json"),
+	GPO:             conf.FullNodeGPO,
+	Miner: conf.MinerConfig{
+		GasCeil:  30000000,
+		GasPrice: big.NewInt(params.GWei),
 	},
 }
 
-func toLocation() int64 {
-	if stamp, err := time.ParseInLocation(timeTemplate, genesisTime, time.Local); err != nil {
-		return time.Now().Unix()
-	} else {
-		return stamp.Unix()
-	}
-}
-
-func readPrealloc(filename string) []conf.Allocate {
+func ReadGenesis(filename string) *conf.GenesisBlockConfig {
 	f, err := allocs.Open(filename)
-	if err != nil {
-		panic(fmt.Sprintf("Could not open genesis preallocation for %s: %v", filename, err))
-	}
 	defer f.Close()
+
+	if err != nil {
+		panic(fmt.Sprintf("%s not found, use default genesis", filename))
+	}
+
 	decoder := json.NewDecoder(f)
-	ga := []conf.Allocate{}
-	err = decoder.Decode(&ga)
+	gc := new(conf.GenesisBlockConfig)
+	err = decoder.Decode(gc)
 	if err != nil {
 		panic(fmt.Sprintf("Could not parse genesis preallocation for %s: %v", filename, err))
 	}
-	return ga
+	return gc
 }

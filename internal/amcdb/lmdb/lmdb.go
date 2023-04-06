@@ -50,7 +50,7 @@ type Lmdb struct {
 	mDBI map[string]*DBI
 }
 
-func NewLMDB(c context.Context, nodeConfig *conf.NodeConfig, config *conf.DatabaseConfig) (*Lmdb, error) { //db.IDatabase
+func NewLMDB(c context.Context, nodeConfig *conf.NodeConfig, config *conf.DatabaseConfig) (*Lmdb, error) { //ethdb.Database
 	if _lmdb.running {
 		return &_lmdb, nil
 	}

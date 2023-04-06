@@ -15,11 +15,9 @@
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 syntax = "proto3";
-import "types_pb/types.proto";
-
-import "gogoproto/gogo.proto";
-
 package msg_proto;
+
+import "types_pb/types.proto";
 option go_package = "github.com/amazechain/amc/api/protocol/msg_proto";
 
 message MessageData {
@@ -34,13 +32,13 @@ message MessageData {
 }
 
 message NewBlockMessageData {
-  bytes hash = 1 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Hash", (gogoproto.nullable) = false];
-  bytes Number = 2 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
-  types.pb.PBlock block = 3;
+  types_pb.H256 hash = 1 ;
+  types_pb.H256 Number = 2;
+  types_pb.Block block = 3;
 }
 
 message ProtocolHandshakeMessage {
   string version = 1;
-  string genesisHash = 2;
-  bytes currentHeight = 3 [(gogoproto.customtype) = "github.com/amazechain/amc/common/types.Int256", (gogoproto.nullable) = false];
+  types_pb.H256 genesisHash = 2;
+  types_pb.H256 currentHeight = 3;
 }

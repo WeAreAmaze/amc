@@ -638,7 +638,7 @@ func TestUnmarshal(t *testing.T) {
 	buff.Reset()
 	buff.Write(common.RightPadBytes([]byte("hello"), 32))
 
-	var hash common.Hash
+	var hash types.Hash
 	err = abi.UnpackIntoInterface(&hash, "fixed", buff.Bytes())
 	if err != nil {
 		t.Error(err)

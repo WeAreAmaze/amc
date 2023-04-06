@@ -106,6 +106,7 @@ type requestOp struct {
 	ids  []json.RawMessage
 	err  error
 	resp chan *jsonrpcMessage
+	sub  *ClientSubscription
 }
 
 func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, error) {
@@ -135,6 +136,8 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	switch u.Scheme {
 	case "http", "https":
 		return DialHTTP(rawurl)
+	case "ws", "wss":
+		return DialWebsocket(ctx, rawurl, "")
 	case "":
 		return DialIPC(ctx, rawurl)
 	default:
@@ -418,4 +421,38 @@ func (c *Client) read(codec ServerCodec) {
 		}
 		c.readOp <- readOp{msgs, batch}
 	}
+}
+
+func (c *Client) Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	// Check type of channel first.
+	chanVal := reflect.ValueOf(channel)
+	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
+		panic(fmt.Sprintf("channel argument of Subscribe has type %T, need writable channel", channel))
+	}
+	if chanVal.IsNil() {
+		panic("channel given to Subscribe must not be nil")
+	}
+	if c.isHTTP {
+		return nil, ErrNotificationsUnsupported
+	}
+
+	msg, err := c.newMessage(namespace+subscribeMethodSuffix, args...)
+	if err != nil {
+		return nil, err
+	}
+	op := &requestOp{
+		ids:  []json.RawMessage{msg.ID},
+		resp: make(chan *jsonrpcMessage),
+		sub:  newClientSubscription(c, namespace, chanVal),
+	}
+
+	// Send the subscription request.
+	// The arrival and validity of the response is signaled on sub.quit.
+	if err := c.send(ctx, op, msg); err != nil {
+		return nil, err
+	}
+	if _, err := op.wait(ctx, c); err != nil {
+		return nil, err
+	}
+	return op.sub, nil
 }

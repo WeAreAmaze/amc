@@ -22,8 +22,8 @@ import (
 	"math/big"
 	"reflect"
 
+	"github.com/amazechain/amc/common/math"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/math"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation

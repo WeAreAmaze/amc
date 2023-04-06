@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common/types"
-	"github.com/gogo/protobuf/proto"
+
+	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
+	"github.com/holiman/uint256"
 )
 
 type Log struct {
@@ -35,7 +38,7 @@ type Log struct {
 	// Derived fields. These fields are filled in by the node
 	// but not secured by consensus.
 	// block in which the transaction was included
-	BlockNumber types.Int256 `json:"blockNumber"`
+	BlockNumber *uint256.Int `json:"blockNumber"`
 	// hash of the transaction
 	TxHash types.Hash `json:"transactionHash" gencodec:"required"`
 	// index of the transaction in the block
@@ -50,21 +53,21 @@ type Log struct {
 	Removed bool `json:"removed"`
 }
 
-func (l *Log) toProtoMessage() proto.Message {
+func (l *Log) ToProtoMessage() proto.Message {
 	return &types_pb.Log{
-		Address:     l.Address,
-		Topics:      l.Topics,
+		Address:     utils.ConvertAddressToH160(l.Address),
+		Topics:      utils.ConvertHashesToH256(l.Topics),
 		Data:        l.Data,
-		BlockNumber: l.BlockNumber,
-		TxHash:      l.TxHash,
+		BlockNumber: utils.ConvertUint256IntToH256(l.BlockNumber),
+		TxHash:      utils.ConvertHashToH256(l.TxHash),
 		TxIndex:     uint64(l.TxIndex),
-		BlockHash:   l.BlockHash,
+		BlockHash:   utils.ConvertHashToH256(l.BlockHash),
 		Index:       uint64(l.Index),
 		Removed:     l.Removed,
 	}
 }
 
-func (l *Log) fromProtoMessage(message proto.Message) error {
+func (l *Log) FromProtoMessage(message proto.Message) error {
 	var (
 		pLog *types_pb.Log
 		ok   bool
@@ -74,15 +77,42 @@ func (l *Log) fromProtoMessage(message proto.Message) error {
 		return fmt.Errorf("type conversion failure")
 	}
 
-	l.Address = pLog.Address
-	l.Topics = pLog.Topics
+	l.Address = utils.ConvertH160toAddress(pLog.Address)
+	l.Topics = utils.H256sToHashes(pLog.Topics)
 	l.Data = pLog.Data
-	l.BlockNumber = pLog.BlockNumber
-	l.TxHash = pLog.TxHash
+	l.BlockNumber = utils.ConvertH256ToUint256Int(pLog.BlockNumber)
+	l.TxHash = utils.ConvertH256ToHash(pLog.TxHash)
 	l.TxIndex = uint(pLog.TxIndex)
-	l.BlockHash = pLog.BlockHash
+	l.BlockHash = utils.ConvertH256ToHash(pLog.BlockHash)
 	l.Index = uint(pLog.Index)
 	l.Removed = pLog.Removed
 
+	return nil
+}
+
+type Logs []*Log
+
+func (l *Logs) Marshal() ([]byte, error) {
+	pb := new(types_pb.Logs)
+	for _, log := range *l {
+		pb.Logs = append(pb.Logs, log.ToProtoMessage().(*types_pb.Log))
+	}
+
+	return proto.Marshal(pb)
+}
+
+func (l *Logs) Unmarshal(data []byte) error {
+	pb := new(types_pb.Logs)
+	if err := proto.Unmarshal(data, pb); nil != err {
+		return err
+	}
+
+	body := make([]*Log, len(pb.Logs))
+	for i, p := range pb.Logs {
+		if err := body[i].FromProtoMessage(p); nil != err {
+			return err
+		}
+	}
+	*l = body
 	return nil
 }

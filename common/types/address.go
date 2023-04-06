@@ -18,18 +18,22 @@ package types
 
 import (
 	"bytes"
+	"database/sql/driver"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
 const (
 	AddressLength = 20
+	// IncarnationLength length of uint64 for contract incarnations
+	IncarnationLength = 2
+	// Address32Length is the expected length of the Starknet address (in bytes)
+	Address32Length = 32
 )
 
 var (
@@ -85,17 +89,42 @@ func HexToString(hexs string) (Address, error) {
 	return a, nil
 }
 
-func (a Address) String() string {
-	return strings.ToUpper(prefixAddress + hex.EncodeToString(a[:]))
+// IsHexAddress verifies whether a string can represent a valid hex-encoded
+// Ethereum address or not.
+func IsHexAddress(s string) bool {
+	if has0xPrefix(s) {
+		s = s[2:]
+	}
+	return len(s) == 2*AddressLength && isHex(s)
 }
 
-func (a Address) Bytes() []byte {
-	return a[:]
-}
+// Bytes gets the string representation of the underlying address.
+func (a Address) Bytes() []byte { return a[:] }
+
+// Hash converts an address to a hash by left-padding it with zeros.
+func (a Address) Hash() Hash { return BytesToHash(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
 	return string(a.checksumHex())
+}
+
+// String implements fmt.Stringer.
+func (a Address) String() string {
+	return a.Hex()
+}
+
+// Addresses is a slice of common.Address, implementing sort.Interface
+type Addresses []Address
+
+func (addrs Addresses) Len() int {
+	return len(addrs)
+}
+func (addrs Addresses) Less(i, j int) bool {
+	return bytes.Compare(addrs[i][:], addrs[j][:]) == -1
+}
+func (addrs Addresses) Swap(i, j int) {
+	addrs[i], addrs[j] = addrs[j], addrs[i]
 }
 
 func (a *Address) checksumHex() []byte {
@@ -103,6 +132,7 @@ func (a *Address) checksumHex() []byte {
 
 	// compute checksum
 	sha := sha3.NewLegacyKeccak256()
+	//nolint:errcheck
 	sha.Write(buf[2:])
 	hash := sha.Sum(nil)
 	for i := 2; i < len(buf); i++ {
@@ -116,7 +146,7 @@ func (a *Address) checksumHex() []byte {
 			buf[i] -= 32
 		}
 	}
-	return buf[:]
+	return buf
 }
 
 func (a Address) hex() []byte {
@@ -124,21 +154,6 @@ func (a Address) hex() []byte {
 	copy(buf[:2], "0x")
 	hex.Encode(buf[2:], a[:])
 	return buf[:]
-}
-
-func (a Address) HexBytes() []byte {
-	s := strings.ToUpper(hex.EncodeToString(a[:]))
-	return []byte(s)
-}
-
-func (a *Address) DecodeHexBytes(b []byte) bool {
-	d, err := hex.DecodeString(string(b))
-	if err != nil {
-		return false
-	}
-
-	copy(a[:], d)
-	return true
 }
 
 func (a *Address) DecodeBytes(b []byte) bool {
@@ -193,11 +208,12 @@ func (a *Address) Unmarshal(data []byte) error {
 
 // SetBytes sets the address to the value of b.
 // If b is larger than len(a), b will be cropped from the left.
-func (a *Address) SetBytes(b []byte) {
+func (a *Address) SetBytes(b []byte) *Address {
 	if len(b) > len(a) {
 		b = b[len(b)-AddressLength:]
 	}
 	copy(a[AddressLength-len(b):], b)
+	return a
 }
 
 // MarshalText returns the hex representation of a.
@@ -205,30 +221,52 @@ func (a Address) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(a[:]).MarshalText()
 }
 
-func (a *Address) UnmarshalJSON(data []byte) error {
-	v := new([]byte)
-	err := json.Unmarshal(data, v)
-	if err != nil {
-		return err
+// UnmarshalText parses a hash in hex syntax.
+func (a *Address) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("Address", input, a[:])
+}
+
+// UnmarshalJSON parses a hash in hex syntax.
+func (a *Address) UnmarshalJSON(input []byte) error {
+	return hexutil.UnmarshalFixedJSON(addressT, input, a[:])
+}
+
+// Scan implements Scanner for database/sql.
+func (a *Address) Scan(src interface{}) error {
+	srcB, ok := src.([]byte)
+	if !ok {
+		return fmt.Errorf("can't scan %T into Address", src)
 	}
-
-	return a.Unmarshal(*v)
+	if len(srcB) != AddressLength {
+		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
+	}
+	copy(a[:], srcB)
+	return nil
 }
 
-func (a *Address) Size() int {
-	return len(a.Bytes())
+// Value implements valuer for database/sql.
+func (a Address) Value() (driver.Value, error) {
+	return a[:], nil
 }
 
-type Addresses []Address
-
-func (a Addresses) Len() int {
-	return len(a)
+func (a Address) Size() int {
+	return AddressLength
 }
 
-func (a Addresses) Less(i, j int) bool {
-	return bytes.Compare(a[i][:], a[j][:]) < 0
+// isHex validates whether each byte is valid hexadecimal string.
+func isHex(str string) bool {
+	if len(str)%2 != 0 {
+		return false
+	}
+	for _, c := range []byte(str) {
+		if !isHexCharacter(c) {
+			return false
+		}
+	}
+	return true
 }
 
-func (a Addresses) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
+// isHexCharacter returns bool of c being a valid hexadecimal.
+func isHexCharacter(c byte) bool {
+	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
 }

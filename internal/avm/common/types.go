@@ -28,7 +28,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
+	"github.com/amazechain/amc/common/hexutil"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -48,11 +48,23 @@ var (
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
-// BytesToHash sets b to hash.
-// If b is larger than len(h), b will be cropped from the left.
 func BytesToHash(b []byte) Hash {
+	h3 := sha3.New256()
+	h3.Write(b)
+	r := h3.Sum(nil)
 	var h Hash
-	h.SetBytes(b)
+	copy(h[:], r[:HashLength])
+	return h
+}
+
+func StringToHash(s string) Hash {
+	var h Hash
+	b, err := hex.DecodeString(s)
+	if err == nil {
+		//copy(h[:], b[:HashLength])
+		return BytesToHash(b)
+	}
+
 	return h
 }
 
@@ -239,6 +251,10 @@ func (a Address) Hex() string {
 // String implements fmt.Stringer.
 func (a Address) String() string {
 	return a.Hex()
+}
+
+func (a Address) IsNull() bool {
+	return a == Address{}
 }
 
 func (a *Address) checksumHex() []byte {

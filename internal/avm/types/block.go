@@ -4,10 +4,15 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"github.com/amazechain/amc/common/hexutil"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
 	"math/big"
+	"reflect"
 )
+
+// var EmptyUncleHash = rlpHash([]*Header(nil))
+var EmptyUncleHash = types.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
 
 type BlockNonce [8]byte
 
@@ -64,6 +69,18 @@ type Header struct {
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
+}
+
+var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
+
+// Size returns the approximate memory used by all internal contents. It is used
+// to approximate and limit the memory consumption of various caches.
+func (h *Header) Size() common.StorageSize {
+	var baseFeeBits int
+	if h.BaseFee != nil {
+		baseFeeBits = h.BaseFee.BitLen()
+	}
+	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+baseFeeBits)/8)
 }
 
 // MarshalJSON marshals as JSON.

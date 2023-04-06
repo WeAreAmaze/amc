@@ -20,24 +20,26 @@ package apoa
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/accounts"
 	"github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/db"
+	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
-	"github.com/amazechain/amc/internal/avm/crypto"
-	"github.com/amazechain/amc/internal/avm/params"
 	"github.com/amazechain/amc/internal/avm/rlp"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
-	"github.com/amazechain/amc/modules/statedb"
+	"github.com/amazechain/amc/modules/state"
+	"github.com/amazechain/amc/params"
+	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"io"
 	"math/rand"
 	"sync"
@@ -67,8 +69,8 @@ var (
 
 	//uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 
-	diffInTurn = types.NewInt64(2) // Block difficulty for in-turn signatures
-	diffNoTurn = types.NewInt64(1) // Block difficulty for out-of-turn signatures
+	diffInTurn = uint256.NewInt(2) // Block difficulty for in-turn signatures
+	diffNoTurn = uint256.NewInt(1) // Block difficulty for out-of-turn signatures
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -167,13 +169,6 @@ func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, er
 	var signer types.Address
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
 
-	//
-	if header.Number.IsZero() {
-		return types.Address{0}, nil
-	}
-
-	//log.Trace("sign recover", "hash", header.Hash(), "address", signer)
-
 	sigcache.Add(hash, signer)
 	return signer, nil
 }
@@ -182,7 +177,7 @@ func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, er
 // Ethereum testnet following the Ropsten attacks.
 type Apoa struct {
 	config *conf.ConsensusConfig // Consensus engine configuration parameters
-	db     db.IDatabase          // Database to store and retrieve snapshot checkpoints
+	db     kv.RwDB               // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -199,7 +194,7 @@ type Apoa struct {
 
 // New creates a Apoa proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *conf.ConsensusConfig, db db.IDatabase) consensus.Engine {
+func New(config *conf.ConsensusConfig, db kv.RwDB) consensus.Engine {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.APoa.Epoch == 0 {
@@ -302,7 +297,7 @@ func (c *Apoa) verifyHeader(chain consensus.ChainHeaderReader, iHeader block.IHe
 	//}
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
-		if header.Difficulty.IsZero() || (header.Difficulty.Compare(diffInTurn) != 0 && header.Difficulty.Compare(diffNoTurn) != 0) {
+		if header.Difficulty.IsZero() || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
 			return errInvalidDifficulty
 		}
 	}
@@ -335,7 +330,7 @@ func (c *Apoa) verifyCascadingFields(chain consensus.ChainHeaderReader, iHeader 
 	if len(parents) > 0 {
 		parent = parents[len(parents)-1]
 	} else {
-		parent = chain.GetHeader(header.ParentHash, types.NewInt64(number-1))
+		parent = chain.GetHeader(header.ParentHash, uint256.NewInt(number-1))
 	}
 	if parent == nil || parent.Number64().Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return errUnknownBlock
@@ -388,6 +383,12 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		headers []block.IHeader
 		snap    *Snapshot
 	)
+	tx, err := c.db.BeginRo(context.Background())
+	if nil != err {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	for snap == nil {
 		// If an in-memory snapshot was found, use that
 		if s, ok := c.recents.Get(hash); ok {
@@ -396,8 +397,8 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			if s, err := loadSnapshot(&c.config.APoa, c.signatures, c.db, hash); err == nil {
-				log.Debugf("Loaded voting snapshot from disk", "number", number, "hash", hash)
+			if s, err := loadSnapshot(c.config.APoa, c.signatures, tx, hash); err == nil {
+				log.Debug("Loaded voting snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
 			}
@@ -406,9 +407,9 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		// at a checkpoint block without a parent (light client CHT), or we have piled
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
-		h, _ := chain.GetHeaderByNumber(types.NewInt64(number - 1))
+		h := chain.GetHeaderByNumber(uint256.NewInt(number - 1))
 		if number == 0 || (number%c.config.APoa.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || h == nil)) {
-			checkpoint, _ := chain.GetHeaderByNumber(types.NewInt64(number))
+			checkpoint := chain.GetHeaderByNumber(uint256.NewInt(number))
 			if checkpoint != nil {
 				rawCheckpoint := checkpoint.(*block.Header)
 				hash := checkpoint.Hash()
@@ -417,8 +418,13 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 				for i := 0; i < len(signers); i++ {
 					copy(signers[i][:], rawCheckpoint.Extra[extraVanity+i*types.AddressLength:])
 				}
-				snap = newSnapshot(&c.config.APoa, c.signatures, number, hash, signers)
-				if err := snap.store(c.db); err != nil {
+				snap = newSnapshot(c.config.APoa, c.signatures, number, hash, signers)
+				if err := c.db.Update(context.Background(), func(tx kv.RwTx) error {
+					if err := snap.store(tx); err != nil {
+						return err
+					}
+					return nil
+				}); nil != err {
 					return nil, err
 				}
 				log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
@@ -436,7 +442,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 			parents = parents[:len(parents)-1]
 		} else {
 			// No explicit parents (or no more left), reach out to the database
-			header = chain.GetHeader(hash, types.NewInt64(number))
+			header = chain.GetHeader(hash, uint256.NewInt(number))
 			if header == nil {
 				return nil, errUnknownBlock
 			}
@@ -448,7 +454,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 	for i := 0; i < len(headers)/2; i++ {
 		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i]
 	}
-	snap, err := snap.apply(headers)
+	snap, err = snap.apply(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -456,9 +462,15 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 
 	// If we've generated a new checkpoint snapshot, save to disk
 	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
-		if err = snap.store(c.db); err != nil {
+		if err = c.db.Update(context.Background(), func(tx kv.RwTx) error {
+			if err := snap.store(tx); err != nil {
+				return err
+			}
+			return nil
+		}); nil != err {
 			return nil, err
 		}
+
 		log.Debugf("Stored voting snapshot to disk", "number", snap.Number, "hash", snap.Hash)
 	}
 	return snap, err
@@ -503,10 +515,10 @@ func (c *Apoa) verifySeal(snap *Snapshot, h block.IHeader, parents []block.IHead
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
 		inturn := snap.inturn(header.Number.Uint64(), signer)
-		if inturn && header.Difficulty.Compare(diffInTurn) != 0 {
+		if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
 			return errWrongDifficulty
 		}
-		if !inturn && header.Difficulty.Compare(diffNoTurn) != 0 {
+		if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
 			return errWrongDifficulty
 		}
 	}
@@ -571,7 +583,7 @@ func (c *Apoa) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 	rawHeader.MixDigest = types.Hash{}
 
 	// Ensure the timestamp has the correct delay
-	parent := chain.GetHeader(rawHeader.ParentHash, rawHeader.Number.Sub(types.NewInt64(1)))
+	parent := chain.GetHeader(rawHeader.ParentHash, rawHeader.Number.Sub(rawHeader.Number, uint256.NewInt(1)))
 	if parent == nil {
 		return errors.New("unknown ancestor")
 	}
@@ -582,25 +594,30 @@ func (c *Apoa) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 	return nil
 }
 
+func (c *Apoa) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlockState, setRewards bool) ([]*block.Reward, error) {
+	return nil, nil
+}
+
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Apoa) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *statedb.StateDB, txs []*transaction.Transaction, uncles []block.IHeader) {
+func (c *Apoa) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	//chain.Config().IsEIP158(header.Number)
 	rawHeader := header.(*block.Header)
 	rawHeader.Root = state.IntermediateRoot()
+
 	//todo
 	//rawHeader.UncleHash = types.CalcUncleHash(nil)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (c *Apoa) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *statedb.StateDB, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt) (block.IBlock, error) {
+func (c *Apoa) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt, reward []*block.Reward) (block.IBlock, error) {
 	// Finalize block
 	c.Finalize(chain, header, state, txs, uncles)
 
 	// Assemble and return the final block for sealing
-	return block.NewBlockFromReceipt(header, txs, uncles, receipts), nil
+	return block.NewBlockFromReceipt(header, txs, uncles, receipts, reward), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
@@ -651,9 +668,10 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 			}
 		}
 	}
+
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	if header.Difficulty.Compare(diffNoTurn) == 0 {
+	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		//wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
 		//rand.Seed(time.Now().UnixNano())
@@ -662,7 +680,7 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		delay += time.Duration(rand.Int63n(int64(wiggle)))
 
 		log.Infof("wiggle %s , time %s, number %d", common.PrettyDuration(wiggle), common.PrettyDuration(delay), header.Number.Uint64())
-		log.Debugf("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
+		log.Debug("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, ApoaProto(header))
@@ -672,7 +690,7 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
 	// Wait until sealing is terminated or delay timeout.
-	log.Debugf("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
+	log.Debug("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
 	reTimer:
 		select {
@@ -685,7 +703,7 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		}
 
 		select {
-		case results <- b: // todo block.WithSeal(header)
+		case results <- b.WithSeal(header):
 		default:
 			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
 		}
@@ -698,10 +716,10 @@ func (c *Apoa) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 // that a new block should have:
 // * DIFF_NOTURN(2) if BLOCK_NUMBER % SIGNER_COUNT != SIGNER_INDEX
 // * DIFF_INTURN(1) if BLOCK_NUMBER % SIGNER_COUNT == SIGNER_INDEX
-func (c *Apoa) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent block.IHeader) types.Int256 {
+func (c *Apoa) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent block.IHeader) *uint256.Int {
 	snap, err := c.snapshot(chain, parent.Number64().Uint64(), parent.Hash(), nil)
 	if err != nil {
-		return types.NewInt64(0)
+		return uint256.NewInt(0)
 	}
 	c.lock.RLock()
 	signer := c.signer
@@ -709,7 +727,7 @@ func (c *Apoa) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, pa
 	return calcDifficulty(snap, signer)
 }
 
-func calcDifficulty(snap *Snapshot, signer types.Address) types.Int256 {
+func calcDifficulty(snap *Snapshot, signer types.Address) *uint256.Int {
 	if snap.inturn(snap.Number+1, signer) {
 		return diffInTurn
 	}
@@ -733,6 +751,10 @@ func (c *Apoa) APIs(chain consensus.ChainReader) []jsonrpc.API {
 		Namespace: "apoa",
 		Service:   &API{chain: chain, apoa: c},
 	}}
+}
+
+func (c *Apoa) Type() params.ConsensusType {
+	return params.CliqueConsensus
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -774,4 +796,8 @@ func encodeSigHeader(w io.Writer, iHeader block.IHeader) {
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
 	}
+}
+
+func (c *Apoa) IsServiceTransaction(sender types.Address, syscall consensus.SystemCall) bool {
+	return false
 }

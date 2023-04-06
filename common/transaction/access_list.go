@@ -18,7 +18,8 @@ package transaction
 
 import (
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/avm/common"
+	"github.com/amazechain/amc/utils"
+	"github.com/holiman/uint256"
 )
 
 type AccessList []AccessTuple
@@ -39,17 +40,17 @@ func (al AccessList) StorageKeys() int {
 }
 
 type AccessListTx struct {
-	ChainID    types.Int256   // destination chain ID
+	ChainID    *uint256.Int   // destination chain ID
 	Nonce      uint64         // nonce of sender account
-	GasPrice   types.Int256   // wei per gas
+	GasPrice   *uint256.Int   // wei per gas
 	Gas        uint64         // gas limit
 	To         *types.Address `rlp:"nil"` // nil means contract creation
 	From       *types.Address `rlp:"nil"` // nil means contract creation
-	Value      types.Int256   // wei amount
+	Value      *uint256.Int   // wei amount
 	Data       []byte         // contract invocation input data
 	AccessList AccessList     // EIP-2930 access list
 	Sign       []byte         // signature values
-	V, R, S    types.Int256   // signature values
+	V, R, S    *uint256.Int   // signature values
 }
 
 func (tx *AccessListTx) copy() TxData {
@@ -57,31 +58,31 @@ func (tx *AccessListTx) copy() TxData {
 		Nonce: tx.Nonce,
 		To:    copyAddressPtr(tx.To),
 		From:  copyAddressPtr(tx.From),
-		Data:  common.CopyBytes(tx.Data),
+		Data:  types.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
-		Value:      types.NewInt64(0),
-		ChainID:    types.NewInt64(0),
-		GasPrice:   types.NewInt64(0),
+		Value:      new(uint256.Int),
+		ChainID:    new(uint256.Int),
+		GasPrice:   new(uint256.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
-	if !tx.Value.IsEmpty() {
+	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
-	if !tx.ChainID.IsEmpty() {
+	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
-	if !tx.GasPrice.IsEmpty() {
+	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
 	}
-	if !tx.V.IsEmpty() {
+	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
-	if !tx.R.IsEmpty() {
+	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
-	if !tx.S.IsEmpty() {
+	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
 
@@ -93,23 +94,38 @@ func (tx *AccessListTx) copy() TxData {
 
 // accessors for innerTx.
 func (tx *AccessListTx) txType() byte            { return AccessListTxType }
-func (tx *AccessListTx) chainID() types.Int256   { return tx.ChainID }
+func (tx *AccessListTx) chainID() *uint256.Int   { return tx.ChainID }
 func (tx *AccessListTx) accessList() AccessList  { return tx.AccessList }
 func (tx *AccessListTx) data() []byte            { return tx.Data }
 func (tx *AccessListTx) gas() uint64             { return tx.Gas }
-func (tx *AccessListTx) gasPrice() types.Int256  { return tx.GasPrice }
-func (tx *AccessListTx) gasTipCap() types.Int256 { return tx.GasPrice }
-func (tx *AccessListTx) gasFeeCap() types.Int256 { return tx.GasPrice }
-func (tx *AccessListTx) value() types.Int256     { return tx.Value }
+func (tx *AccessListTx) gasPrice() *uint256.Int  { return tx.GasPrice }
+func (tx *AccessListTx) gasTipCap() *uint256.Int { return tx.GasPrice }
+func (tx *AccessListTx) gasFeeCap() *uint256.Int { return tx.GasPrice }
+func (tx *AccessListTx) value() *uint256.Int     { return tx.Value }
 func (tx *AccessListTx) nonce() uint64           { return tx.Nonce }
 func (tx *AccessListTx) to() *types.Address      { return tx.To }
 func (tx *AccessListTx) from() *types.Address    { return tx.From }
 func (tx *AccessListTx) sign() []byte            { return tx.Sign }
 
-func (tx *AccessListTx) rawSignatureValues() (v, r, s types.Int256) {
+func (tx *AccessListTx) hash() types.Hash {
+	hash := utils.PrefixedRlpHash(AccessListTxType, []interface{}{
+		tx.ChainID,
+		tx.Nonce,
+		tx.GasPrice,
+		tx.Gas,
+		tx.To,
+		tx.Value,
+		tx.Data,
+		tx.AccessList,
+		tx.V, tx.R, tx.S,
+	})
+	return hash
+}
+
+func (tx *AccessListTx) rawSignatureValues() (v, r, s *uint256.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *AccessListTx) setSignatureValues(chainID, v, r, s types.Int256) {
+func (tx *AccessListTx) setSignatureValues(chainID, v, r, s *uint256.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }

@@ -17,20 +17,20 @@
 package txspool
 
 import (
-	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/internal/vm/evmtypes"
 	"sync"
 )
 
 // txNoncer nonce database
 type txNoncer struct {
-	fallback common.IStateDB
+	fallback evmtypes.IntraBlockState
 	nonces   map[types.Address]uint64
 	lock     sync.Mutex
 }
 
 // newTxNoncer creates a new virtual state database to track the pool nonces.
-func newTxNoncer(db common.IStateDB) *txNoncer {
+func newTxNoncer(db evmtypes.IntraBlockState) *txNoncer {
 	return &txNoncer{
 		fallback: db,
 		nonces:   make(map[types.Address]uint64),

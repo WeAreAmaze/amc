@@ -231,7 +231,9 @@ func (h *handler) handleResponse(msg *jsonrpcMessage) {
 func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
 	start := time.Now()
 	switch {
+	//case msg.isNotification():
 	case msg.isCall():
+		//log.Trace("begin "+msg.Method, "p", string(msg.Params))
 		resp := h.handleCall(ctx, msg)
 		var ctx []interface{}
 		ctx = append(ctx, "reqid", idForLog{msg.ID}, "t", time.Since(start), "p", string(msg.Params), "r", string(resp.Result))
@@ -240,9 +242,9 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			log.Warnf("Served "+msg.Method, ctx)
+			log.Warn("Served "+msg.Method, ctx...)
 		} else {
-			log.Tracef("Served "+msg.Method, ctx)
+			log.Trace("Served "+msg.Method, ctx...)
 		}
 		return resp
 	case msg.hasValidID():

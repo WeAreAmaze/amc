@@ -19,21 +19,23 @@ package transaction
 import (
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
+	"github.com/amazechain/amc/utils"
+	"github.com/holiman/uint256"
 )
 
 type DynamicFeeTx struct {
-	ChainID    types.Int256
+	ChainID    *uint256.Int
 	Nonce      uint64
-	GasTipCap  types.Int256 // a.k.a. maxPriorityFeePerGas
-	GasFeeCap  types.Int256 // a.k.a. maxFeePerGas
+	GasTipCap  *uint256.Int // a.k.a. maxPriorityFeePerGas
+	GasFeeCap  *uint256.Int // a.k.a. maxFeePerGas
 	Gas        uint64
 	To         *types.Address `rlp:"nil"` // nil means contract creation
 	From       *types.Address `rlp:"nil"` // nil means contract creation
-	Value      types.Int256
+	Value      *uint256.Int
 	Data       []byte
 	AccessList AccessList
 	Sign       []byte       // Signature values
-	V, R, S    types.Int256 // signature values
+	V, R, S    *uint256.Int // signature values
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -46,31 +48,34 @@ func (tx *DynamicFeeTx) copy() TxData {
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
-		Value:      types.NewInt64(0),
-		ChainID:    types.NewInt64(0),
-		GasTipCap:  types.NewInt64(0),
-		GasFeeCap:  types.NewInt64(0),
+		Value:      new(uint256.Int),
+		ChainID:    new(uint256.Int),
+		GasTipCap:  new(uint256.Int),
+		GasFeeCap:  new(uint256.Int),
+		V:          new(uint256.Int),
+		R:          new(uint256.Int),
+		S:          new(uint256.Int),
 	}
 	copy(cpy.AccessList, tx.AccessList)
-	if !tx.Value.IsEmpty() {
+	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
 	}
-	if !tx.ChainID.IsEmpty() {
+	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
 	}
-	if !tx.GasTipCap.IsEmpty() {
+	if tx.GasTipCap != nil {
 		cpy.GasTipCap.Set(tx.GasTipCap)
 	}
-	if !tx.GasFeeCap.IsEmpty() {
+	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
-	if !tx.V.IsEmpty() {
+	if tx.V != nil {
 		cpy.V.Set(tx.V)
 	}
-	if !tx.R.IsEmpty() {
+	if tx.R != nil {
 		cpy.R.Set(tx.R)
 	}
-	if !tx.S.IsEmpty() {
+	if tx.S != nil {
 		cpy.S.Set(tx.S)
 	}
 	if tx.Sign != nil {
@@ -81,23 +86,40 @@ func (tx *DynamicFeeTx) copy() TxData {
 
 // accessors for innerTx.
 func (tx *DynamicFeeTx) txType() byte            { return DynamicFeeTxType }
-func (tx *DynamicFeeTx) chainID() types.Int256   { return tx.ChainID }
+func (tx *DynamicFeeTx) chainID() *uint256.Int   { return tx.ChainID }
 func (tx *DynamicFeeTx) accessList() AccessList  { return tx.AccessList }
 func (tx *DynamicFeeTx) data() []byte            { return tx.Data }
 func (tx *DynamicFeeTx) gas() uint64             { return tx.Gas }
-func (tx *DynamicFeeTx) gasFeeCap() types.Int256 { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) gasTipCap() types.Int256 { return tx.GasTipCap }
-func (tx *DynamicFeeTx) gasPrice() types.Int256  { return tx.GasFeeCap }
-func (tx *DynamicFeeTx) value() types.Int256     { return tx.Value }
+func (tx *DynamicFeeTx) gasFeeCap() *uint256.Int { return tx.GasFeeCap }
+func (tx *DynamicFeeTx) gasTipCap() *uint256.Int { return tx.GasTipCap }
+func (tx *DynamicFeeTx) gasPrice() *uint256.Int  { return tx.GasFeeCap }
+func (tx *DynamicFeeTx) value() *uint256.Int     { return tx.Value }
 func (tx *DynamicFeeTx) nonce() uint64           { return tx.Nonce }
 func (tx *DynamicFeeTx) to() *types.Address      { return tx.To }
 func (tx *DynamicFeeTx) from() *types.Address    { return tx.From }
 func (tx *DynamicFeeTx) sign() []byte            { return tx.Sign }
 
-func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s types.Int256) {
+// Hash computes the hash (but not for signatures!)
+func (tx *DynamicFeeTx) hash() types.Hash {
+	hash := utils.PrefixedRlpHash(DynamicFeeTxType, []interface{}{
+		tx.ChainID,
+		tx.Nonce,
+		tx.GasTipCap,
+		tx.GasFeeCap,
+		tx.Gas,
+		tx.To,
+		tx.Value,
+		tx.Data,
+		tx.AccessList,
+		tx.V, tx.R, tx.S,
+	})
+	return hash
+}
+
+func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *uint256.Int) {
 	return tx.V, tx.R, tx.S
 }
 
-func (tx *DynamicFeeTx) setSignatureValues(chainID, v, r, s types.Int256) {
+func (tx *DynamicFeeTx) setSignatureValues(chainID, v, r, s *uint256.Int) {
 	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }

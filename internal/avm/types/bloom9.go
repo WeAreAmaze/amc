@@ -19,8 +19,8 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/amazechain/amc/internal/avm/common/hexutil"
-	"github.com/amazechain/amc/internal/avm/crypto"
+	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/hexutil"
 	"math/big"
 )
 

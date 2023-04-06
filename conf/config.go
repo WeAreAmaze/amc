@@ -25,14 +25,17 @@ import (
 )
 
 type Config struct {
-	NodeCfg         NodeConfig         `json:"node" yaml:"node"`
-	NetworkCfg      NetWorkConfig      `json:"network" yaml:"network"`
-	LoggerCfg       LoggerConfig       `json:"logger" yaml:"logger"`
-	DatabaseCfg     DatabaseConfig     `json:"database" yaml:"database"`
-	PprofCfg        PprofConfig        `json:"pprof" yaml:"pprof"`
-	GenesisBlockCfg GenesisBlockConfig `json:"genesis" yaml:"genesis"`
-	AccountCfg      AccountConfig      `json:"account" yaml:"account"`
-	MetricsCfg      MetricsConfig      `json:"metrics" yaml:"metrics"`
+	NodeCfg         NodeConfig          `json:"node" yaml:"node"`
+	NetworkCfg      NetWorkConfig       `json:"network" yaml:"network"`
+	LoggerCfg       LoggerConfig        `json:"logger" yaml:"logger"`
+	DatabaseCfg     DatabaseConfig      `json:"database" yaml:"database"`
+	PprofCfg        PprofConfig         `json:"pprof" yaml:"pprof"`
+	GenesisBlockCfg *GenesisBlockConfig `json:"genesis" yaml:"genesis"`
+	AccountCfg      AccountConfig       `json:"account" yaml:"account"`
+	MetricsCfg      MetricsConfig       `json:"metrics" yaml:"metrics"`
+	// Gas Price Oracle options
+	GPO   GpoConfig   `json:"gpo" yaml:"gpo"`
+	Miner MinerConfig `json:"miner"`
 }
 
 func SaveConfigToFile(file string, config Config) error {

@@ -18,8 +18,8 @@ package params
 
 import (
 	"fmt"
-	"github.com/amazechain/amc/internal/kv"
-	//"github.com/ledgerwatch/erigon-lib/kv"
+	"github.com/amazechain/amc/modules"
+	"github.com/ledgerwatch/erigon-lib/kv"
 )
 
 var (
@@ -85,15 +85,12 @@ func VersionWithCommit(gitCommit, gitDate string) string {
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
 	}
-	if !isRelease() && (gitDate != "") {
-		vsn += "-" + gitDate
-	}
 	return vsn
 }
 
 func SetAmcVersion(tx kv.RwTx, versionKey string) error {
 	versionKeyByte := []byte(versionKey)
-	hasVersion, err := tx.Has(kv.DatabaseInfo, versionKeyByte)
+	hasVersion, err := tx.Has(modules.DatabaseInfo, versionKeyByte)
 	if err != nil {
 		return err
 	}
@@ -101,7 +98,7 @@ func SetAmcVersion(tx kv.RwTx, versionKey string) error {
 		return nil
 	}
 	// Save version if it does not exist
-	if err := tx.Put(kv.DatabaseInfo, versionKeyByte, []byte(Version)); err != nil {
+	if err := tx.Put(modules.DatabaseInfo, versionKeyByte, []byte(Version)); err != nil {
 		return err
 	}
 	return nil

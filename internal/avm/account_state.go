@@ -5,7 +5,7 @@ package avm
 //	"encoding/json"
 //	"fmt"
 //	"github.com/amazechain/amc/internal/avm/common"
-//	"github.com/amazechain/amc/internal/avm/crypto"
+//	"github.com/amazechain/amc/common/crypto"
 //	"github.com/amazechain/amc/internal/avm/types"
 //	"math/big"
 //	"os"
@@ -15,16 +15,16 @@ package avm
 //
 //type accountObject struct {
 //	Address      common.Address              `json:"address,omitempty"`
-//	AddrHash     common.Hash                 `json:"addr_hash,omitempty"` // hash of ethereum address of the account
+//	AddrHash     types.Hash                 `json:"addr_hash,omitempty"` // hash of ethereum address of the account
 //	ByteCode     []byte                      `json:"byte_code,omitempty"`
 //	Data         accountData                 `json:"data,omitempty"`
-//	CacheStorage map[common.Hash]common.Hash `json:"cache_storage,omitempty"` //
+//	CacheStorage map[types.Hash]types.Hash `json:"cache_storage,omitempty"` //
 //}
 //
 //type accountData struct {
 //	Nonce    uint64      `json:"nonce,omitempty"`
 //	Balance  *big.Int    `json:"balance,omitempty"`
-//	Root     common.Hash `json:"root,omitempty"` // merkle root of the storage trie
+//	Root     types.Hash `json:"root,omitempty"` // merkle root of the storage trie
 //	CodeHash []byte      `json:"code_hash,omitempty"`
 //}
 //
@@ -40,7 +40,7 @@ package avm
 //		Address:      address,
 //		AddrHash:     common.BytesToHash(crypto.Keccak256(address[:])),
 //		Data:         data,
-//		CacheStorage: make(map[common.Hash]common.Hash),
+//		CacheStorage: make(map[types.Hash]types.Hash),
 //	}
 //}
 //
@@ -88,16 +88,16 @@ package avm
 //}
 //
 //// storage sate-------
-//func (object *accountObject) GetStorageState(key common.Hash) common.Hash {
+//func (object *accountObject) GetStorageState(key types.Hash) types.Hash {
 //	value, exist := object.CacheStorage[key]
 //	if exist {
 //		// fmt.Println("exist cache ", " key: ", key, " value: ", value)
 //		return value
 //	}
-//	return common.Hash{}
+//	return types.Hash{}
 //}
 //
-//func (object *accountObject) SetStorageState(key, value common.Hash) {
+//func (object *accountObject) SetStorageState(key, value types.Hash) {
 //	object.CacheStorage[key] = value
 //}
 //
@@ -193,10 +193,10 @@ package avm
 //}
 //
 //// GetCodeHash
-//func (accSt *AccountState) GetCodeHash(addr common.Address) common.Hash {
+//func (accSt *AccountState) GetCodeHash(addr common.Address) types.Hash {
 //	stateObject := accSt.getAccountObject(addr)
 //	if stateObject == nil {
-//		return common.Hash{}
+//		return types.Hash{}
 //	}
 //	return common.BytesToHash(stateObject.CodeHash())
 //}
@@ -241,16 +241,16 @@ package avm
 //}
 //
 //// GetState SetState
-//func (accSt *AccountState) GetState(addr common.Address, key common.Hash) common.Hash {
+//func (accSt *AccountState) GetState(addr common.Address, key types.Hash) types.Hash {
 //	stateObject := accSt.getAccountObject(addr)
 //	if stateObject != nil {
 //		return stateObject.GetStorageState(key)
 //	}
-//	return common.Hash{}
+//	return types.Hash{}
 //}
 //
 //// SetState
-//func (accSt *AccountState) SetState(addr common.Address, key common.Hash, value common.Hash) {
+//func (accSt *AccountState) SetState(addr common.Address, key types.Hash, value types.Hash) {
 //	stateObject := accSt.getOrsetAccountObject(addr)
 //	if stateObject != nil {
 //		fmt.Printf("SetState key: %x value: %s", key, new(big.Int).SetBytes(value[:]).String())
@@ -295,12 +295,12 @@ package avm
 //}
 //
 //// AddPreimage
-//func (accSt *AccountState) AddPreimage(common.Hash, []byte) {
+//func (accSt *AccountState) AddPreimage(types.Hash, []byte) {
 //
 //}
 //
 //// ForEachStorage
-//func (accSt *AccountState) ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) {
+//func (accSt *AccountState) ForEachStorage(common.Address, func(types.Hash, types.Hash) bool) {
 //
 //}
 //

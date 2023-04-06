@@ -1,0 +1,47 @@
+{
+  "miners": [
+    "AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21"
+  ],
+  "timestamp": 1678174066,
+  "config": {
+    "chainId": 100100100,
+    "homesteadBlock": 0,
+    "daoForkBlock": null,
+    "daoForkSupport": false,
+    "eip150Block": 0,
+    "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "muirGlacierBlock": 0,
+    "berlinBlock": 0,
+    "londonBlock": 0,
+    "arrowGlacierBlock": 0,
+    "beijingBlock": 40000
+  },
+  "engine": {
+    "name": "APosEngine",
+    "period": 8,
+    "gasFloor": 0,
+    "gasCeil": 30000000,
+    "apos": {
+      "epoch": 3000,
+      "checkpointInterval": 0,
+      "inmemorySnapshots": 0,
+      "inmemorySignatures": 0,
+      "inMemory": false,
+      "rewardEpoch": 10800,
+      "rewardLimit": 1000000000000000000,
+      "depositContract": "0x6C2b775e6A334E83AC467F2cAB29fb2bCF0e2236"
+    }
+  },
+  "alloc": [
+    {
+      "address": "AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21",
+      "balance": "100000000000000000000000000"
+    }
+  ]
+}

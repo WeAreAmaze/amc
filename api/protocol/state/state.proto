@@ -1,0 +1,35 @@
+// Copyright 2022 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
+syntax = "proto3";
+package state_pb;
+
+import "types_pb/types.proto";
+option go_package = "github.com/amazechain/amc/api/protocol/state";
+
+message HashMap {
+  types_pb.H256 key = 1;
+  types_pb.H256 value = 2 ;
+}
+
+message Account {
+  bool Initialised = 1;
+  uint64 Nonce = 2;
+  types_pb.H256 Balance = 3;
+  types_pb.H256 Root = 4;
+  types_pb.H256 CodeHash = 5;
+  uint64 Incarnation = 6;
+}

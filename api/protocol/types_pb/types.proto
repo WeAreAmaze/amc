@@ -1,0 +1,156 @@
+// Copyright 2022 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
+syntax = "proto3";
+package types_pb;
+
+option go_package = "github.com/amazechain/amc/api/protocol/types_pb";
+
+
+message H128 {
+  uint64 hi = 1;
+  uint64 lo = 2;
+}
+
+message H160 {
+  H128 hi = 1;
+  uint32 lo = 2;
+}
+
+message H256 {
+  H128 hi = 1;
+  H128 lo = 2;
+}
+
+message H384{  // 48 byte
+  H256 hi = 1;
+  H128 lo = 2;
+}
+
+message H768 { // 96 byte
+  H384 hi = 1;
+  H384 lo = 2;
+}
+
+message H512 {
+  H256 hi = 1;
+  H256 lo = 2;
+}
+
+message H1024 {
+  H512 hi = 1;
+  H512 lo = 2;
+}
+
+message H2048 {
+  H1024 hi = 1;
+  H1024 lo = 2;
+}
+
+
+message Block{
+  Header Header = 1;
+  Body body = 2;
+}
+
+message Header {
+  H256 ParentHash = 1 ;
+  H160 Coinbase = 2 ;
+  H256 Root = 3 ;
+  H256 TxHash = 4 ;
+  H256 ReceiptHash = 5 ;
+  H256 Difficulty = 6;
+  H256 Number = 7;
+  uint64 GasLimit = 8;
+  uint64 GasUsed = 9;
+  uint64 Time = 10;
+  uint64 Nonce = 11;
+  H256 BaseFee = 12 ;
+  bytes Extra = 13;
+  H768 Signature = 14;
+  H2048 Bloom = 15;
+}
+
+message Verifier {
+  H384 PublicKey = 1;
+  H160 Address = 2;
+}
+
+message Reward {
+  H256 Amount = 1;
+  H160 Address = 2;
+}
+
+message Body {
+  repeated Transaction txs = 1;
+  repeated Verifier verifiers = 2;
+  repeated Reward rewards = 3;
+}
+
+message Transaction {
+  uint64 type = 1;
+  uint64 nonce = 2;
+  H256 gasPrice = 3;
+  uint64 gas = 4;
+  H256 feePerGas = 5;
+  H256 priorityFeePerGas = 6;
+  H256 value = 7;
+  bytes data = 8;
+  bytes sign = 9;
+  H160 to = 10;
+  H160 from = 11;
+  uint64 chainID = 12;
+  H256 hash = 13;
+  H256 r = 14;
+  H256 s = 15;
+  H256 v = 16;
+}
+
+message Receipts {
+  repeated Receipt receipts = 1;
+}
+
+message Receipt {
+  uint32   Type = 1;
+  bytes    PostState = 2;
+  uint64   Status = 3;
+  uint64   CumulativeGasUsed = 4;
+  H2048   Bloom = 5;
+  repeated Log Logs = 6;
+  H256    TxHash = 7 ;
+  H160    ContractAddress = 8;
+  uint64   GasUsed = 9;
+  H256    BlockHash = 10;
+  H256   BlockNumber = 11;
+  uint64   TransactionIndex = 12;
+}
+
+message Log {
+  H160 Address = 1;
+  repeated H256 Topics = 2;
+  bytes Data = 3;
+  H256 BlockNumber = 4;
+  H256 TxHash = 5;
+  uint64 TxIndex = 6;
+  H256 BlockHash = 7;
+  uint64 Index = 8;
+  bool Removed = 9;
+}
+
+message Logs {
+  repeated Log logs = 1;
+}
+

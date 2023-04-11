@@ -1,0 +1,5 @@
+[default]
+  url = "http://influxdb:8086"
+  token = "ksLlfJ0cRCNXRtrFVpKiZ2au3-pOWL-hgVhgsCqivAlq7Vf0VdyjjVMWA__IhjkcI_GbWccpwRDpQiIGdm2FpA=="
+  org = "amazechain"
+  active = true

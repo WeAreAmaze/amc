@@ -127,9 +127,11 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
+// NewBlockChain creates a new instance of blockchain
 func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, pubsub common.IPubSub, config *params.ChainConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	var current *block2.Block
+	// Read the current block from the database
 	_ = db.View(c, func(tx kv.Tx) error {
 		current = rawdb.ReadCurrentBlock(tx)
 		if current == nil {
@@ -138,9 +140,12 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		return nil
 	})
 
+	// Create LRU caches
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
+
+	// Instantiate the blockchain object
 	bc := &BlockChain{
 		chainConfig:   config, // Chain & network configuration
 		genesisBlock:  genesisBlock,
@@ -214,7 +219,9 @@ func (bc *BlockChain) Start() error {
 
 	bc.wg.Add(3)
 	go bc.runLoop()
+	//add blocks from pubsub
 	go bc.newBlockLoop()
+	//orderly add future blocks
 	go bc.updateFutureBlocksLoop()
 
 	return nil
@@ -381,7 +388,9 @@ func (bc *BlockChain) LatestBlockCh() (block2.IBlock, error) {
 	}
 }
 
+// newBlockLoop creates a loop that listens for new blocks on  pubsub  and adds them to the blockchain.
 func (bc *BlockChain) newBlockLoop() {
+	//不需要defer？直接执行？（如果不需要defer，该字段又是什么意义）
 	bc.wg.Done()
 	if bc.pubsub == nil {
 		bc.errorCh <- ErrInvalidPubSub
@@ -399,7 +408,7 @@ func (bc *BlockChain) newBlockLoop() {
 		bc.errorCh <- ErrInvalidPubSub
 		return
 	}
-
+	// Receive new Block messages and insert them into the BlockChain
 	for {
 		select {
 		case <-bc.ctx.Done():
@@ -419,6 +428,8 @@ func (bc *BlockChain) newBlockLoop() {
 				if err := block.FromProtoMessage(&newBlock); err == nil {
 					var inserted bool
 					// if future block
+					// If the new received block is a future block, add it to the future blocks list
+					// Otherwise insert it into the BlockChain
 					if block.Number64().Uint64() > bc.CurrentBlock().Number64().Uint64()+1 {
 						inserted = false
 						bc.addFutureBlock(&block)
@@ -445,6 +456,7 @@ func (bc *BlockChain) newBlockLoop() {
 
 }
 
+// runLoop end of run ，the BlockChain can`t be inserted
 func (bc *BlockChain) runLoop() {
 	defer func() {
 		bc.wg.Done()
@@ -468,6 +480,8 @@ func (bc *BlockChain) runLoop() {
 }
 
 // updateFutureBlocksLoop
+// if there are any future blocks waiting to be added to the blockchain, retrieves them and sorts them by block number.
+// If the first block in the sorted list has a block number greater than the current block plus one, then the loop continues without doing anything.
 func (bc *BlockChain) updateFutureBlocksLoop() {
 	futureTimer := time.NewTicker(2 * time.Second)
 	defer futureTimer.Stop()

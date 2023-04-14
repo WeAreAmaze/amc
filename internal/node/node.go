@@ -408,11 +408,18 @@ func (n *Node) Start() error {
 	return nil
 }
 
+// ProtocolHandshake is part of the node's protocol handshake process,
+// where the node checks the consistency of the blockchain with the peer and updates its list of connected peers.
 func (n *Node) ProtocolHandshake(peer common.IPeer, genesisHash types.Hash, currentHeight *uint256.Int) (common.Peer, bool) {
+
+	//Compares the hash of the peer's genesis block with the hash of the node's genesis block,
+	//and returns (common.Peer{}, false) if they are not equal.
 	if n.blocks.GenesisBlock().Hash().String() != genesisHash.String() {
 		return common.Peer{}, false
 	}
 
+	//is part of the node's protocol handshake process,
+	//where the node checks the consistency of the blockchain with the peer and updates its list of connected peers.
 	if _, ok := n.peers[peer.ID()]; !ok {
 		return common.Peer{
 			IPeer:         peer,
@@ -424,12 +431,15 @@ func (n *Node) ProtocolHandshake(peer common.IPeer, genesisHash types.Hash, curr
 	return common.Peer{}, false
 }
 
+// ProtocolHandshakeInfo provides information about the local peer's blockchain to other peers during the protocol handshake process.
 func (n *Node) ProtocolHandshakeInfo() (types.Hash, *uint256.Int, error) {
-	current := n.blocks.CurrentBlock()
+	current := n.blocks.CurrentBlock() //Calls the CurrentBlock method of the blocks object to get the current block in the blockchain.
 	log.Infof("local peer info: height %d, genesis hash %v", current.Number64().Uint64(), n.blocks.GenesisBlock().Hash())
 	return n.blocks.GenesisBlock().Hash(), current.Number64(), nil
 }
 
+//Network provides access to an object that can be used to communicate with other nodes
+//in the network, or returns nil if the node has not yet initialized its network service.
 func (n *Node) Network() common.INetwork {
 	if n.service != nil {
 		return n.service
@@ -459,6 +469,7 @@ func (n *Node) txsBroadcastLoop() {
 		}
 	}
 }
+
 
 // txBroadcastLoop announces new transactions to all.
 func (n *Node) txsMessageFetcherLoop() {

@@ -20,6 +20,7 @@ import (
 	"github.com/amazechain/amc/params"
 )
 
+// maxStack returns the limit of the Stack
 func maxStack(pop, push int) int {
 	return int(params.StackLimit) + pop - push
 }

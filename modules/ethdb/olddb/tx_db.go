@@ -45,6 +45,9 @@ func (m *TxDb) Begin(ctx context.Context, flags ethdb.TxFlags) (ethdb.DbWithPend
 	return batch, nil
 }
 
+// cursor returns a cursor for the given bucket. If the
+// cursor does not exist, it creates one.
+// The cursor is used to iterate over the key-value pairs in the bucket.
 func (m *TxDb) cursor(bucket string) (kv.Cursor, error) {
 	c, ok := m.cursors[bucket]
 	if !ok {
@@ -102,6 +105,7 @@ func (m *TxDb) Delete(table string, k []byte) error {
 	return c.(kv.RwCursor).Delete(k)
 }
 
+// begin starts a new transaction with the specified context and flags.
 func (m *TxDb) begin(ctx context.Context, flags ethdb.TxFlags) error {
 	db := m.db.(ethdb.HasRwKV).RwKV()
 

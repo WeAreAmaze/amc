@@ -40,6 +40,7 @@ type fe6 [3]fe2
 // Representation follows c[0] + c[1] * w encoding order.
 type fe12 [2]fe6
 
+// fromBytes convert a [48]byte to fe.
 func (fe *fe) setBytes(in []byte) *fe {
 	size := 48
 	l := len(in)

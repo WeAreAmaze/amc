@@ -21,6 +21,8 @@ import (
 	"math/big"
 )
 
+// fp2.go contains some calculation methods for fe2 in Montgomery form.
+
 type fp2Temp struct {
 	t [4]*fe
 }

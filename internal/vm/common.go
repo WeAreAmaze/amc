@@ -83,6 +83,7 @@ func ToWordSize(size uint64) uint64 {
 	return (size + 31) / 32
 }
 
+// allZero returns whether the elements int the slice of type byte are all zero
 func allZero(b []byte) bool {
 	for _, byte := range b {
 		if byte != 0 {

@@ -96,6 +96,8 @@ var PrecompiledContractsIstanbulForBSC = map[types.Address]PrecompiledContract{
 	//types.BytesToAddress([]byte{101}): &iavlMerkleProofValidate{},
 }
 
+// PrecompiledContractsNano contains the default set of pre-compiled Ethereum
+// contracts used in the Nano release.
 var PrecompiledContractsNano = map[types.Address]PrecompiledContract{
 	types.BytesToAddress([]byte{1}): &ecrecover{},
 	types.BytesToAddress([]byte{2}): &sha256hash{},
@@ -111,6 +113,8 @@ var PrecompiledContractsNano = map[types.Address]PrecompiledContract{
 	//types.BytesToAddress([]byte{101}): &iavlMerkleProofValidateNano{},
 }
 
+// PrecompiledContractsIsMoran contains the default set of pre-compiled Ethereum
+// contracts used in the IsMoran release.
 var PrecompiledContractsIsMoran = map[types.Address]PrecompiledContract{
 	types.BytesToAddress([]byte{1}): &ecrecover{},
 	types.BytesToAddress([]byte{2}): &sha256hash{},

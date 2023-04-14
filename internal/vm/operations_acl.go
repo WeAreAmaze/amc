@@ -26,6 +26,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// makeGasSStoreFunc creates a gasFunc which can calculate the gas cost in different clearingRefund
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		// If we fail the minimum gas availability invariant, fail (0)

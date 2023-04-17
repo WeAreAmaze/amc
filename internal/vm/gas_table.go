@@ -95,6 +95,7 @@ var (
 	gasReturnDataCopy = memoryCopierGas(2)
 )
 
+// gasSStore returns the amount of dynamicGas when excuting the SStore operation.
 func gasSStore(evm VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	value, x := stack.Back(1), stack.Back(0)
 	key := types.Hash(x.Bytes32())
@@ -221,6 +222,7 @@ func gasSStoreEIP2200(evm VMInterpreter, contract *Contract, stack *stack.Stack,
 	return params.SloadGasEIP2200, nil // dirty update (2.2)
 }
 
+// makeGasLog returns a function which calculates the gas consumed by memory and Log.
 func makeGasLog(n uint64) gasFunc {
 	return func(_ VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
@@ -233,6 +235,7 @@ func makeGasLog(n uint64) gasFunc {
 			return 0, err
 		}
 
+		// SafeAdd to detect overflow error
 		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
 			return 0, ErrGasUintOverflow
 		}
@@ -251,6 +254,7 @@ func makeGasLog(n uint64) gasFunc {
 	}
 }
 
+// gasKeccak256 returns the gas consumed when excuting the Keccak256.
 func gasKeccak256(_ VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {

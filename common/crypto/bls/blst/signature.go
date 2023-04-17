@@ -46,7 +46,7 @@ func SignatureFromBytes(sig []byte) (common.Signature, error) {
 // AggregateCompressedSignatures converts a list of compressed signatures into a single, aggregated sig.
 func AggregateCompressedSignatures(multiSigs [][]byte) (common.Signature, error) {
 	signature := new(blstAggregateSignature)
-	valid := signature.AggregateCompressed(multiSigs, true)
+	valssed(multiSigs, true)
 	if !valid {
 		return nil, errors.New("provided signatures fail the group check and cannot be compressed")
 	}
@@ -194,7 +194,7 @@ func AggregateSignatures(sigs []common.Signature) common.Signature {
 
 	// Signature and PKs are assumed to have been validated upon decompression!
 	signature := new(blstAggregateSignature)
-	signature.Aggregate(rawSigs, false)
+	signature.Aggregate(rawSigs, false) // Actually the cost for checking the membership on the el is not expensive
 	return &Signature{s: signature.ToAffine()}
 }
 

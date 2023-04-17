@@ -6,6 +6,8 @@ import (
 	"github.com/ledgerwatch/erigon-lib/kv"
 )
 
+// Walk iterates over all key-value pairs
+// in the database that have a key that matches a given prefix.
 func Walk(c kv.Cursor, startkey []byte, fixedbits int, walker func(k, v []byte) (bool, error)) error {
 	fixedbytes, mask := Bytesmask(fixedbits)
 	k, v, err := c.Seek(startkey)

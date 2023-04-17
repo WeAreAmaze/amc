@@ -31,6 +31,7 @@ type Body struct {
 	Rewards   []*Reward
 }
 
+// ToProtoMessage converts a Body object into a protocol buffer message.
 func (b *Body) ToProtoMessage() proto.Message {
 	var pbTxs []*types_pb.Transaction
 	var pbVerifiers []*types_pb.Verifier
@@ -66,6 +67,7 @@ func (b *Body) ToProtoMessage() proto.Message {
 	return &pBody
 }
 
+// FromProtoMessage  converts a protocol buffer message into a Body object.
 func (b *Body) FromProtoMessage(message proto.Message) error {
 	var (
 		pBody *types_pb.Body
@@ -77,14 +79,13 @@ func (b *Body) FromProtoMessage(message proto.Message) error {
 	}
 
 	var txs []*transaction.Transaction
-	//
+	//txs
 	for _, v := range pBody.Txs {
 		tx, err := transaction.FromProtoMessage(v)
 		if err == nil {
 			txs = append(txs, tx)
 		}
 	}
-	//
 	b.Txs = txs
 
 	//verifiers
@@ -106,9 +107,11 @@ func (b *Body) FromProtoMessage(message proto.Message) error {
 	return nil
 }
 
+// Transactions returns a slice of pointers to transaction.Transaction objects.
 func (b *Body) Transactions() []*transaction.Transaction {
 	return b.Txs
 }
+
 func (b *Body) Verifier() []*Verify {
 	return b.Verifiers
 }

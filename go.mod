@@ -15,6 +15,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-kit/kit v0.10.0
 	github.com/go-stack/stack v1.8.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/golang/protobuf v1.5.2
 	github.com/google/btree v1.1.2
@@ -47,6 +48,7 @@ require (
 	github.com/supranational/blst v0.3.10
 	github.com/torquem-ch/mdbx-go v0.29.1
 	github.com/urfave/cli/v2 v2.17.2-0.20221006022127-8f469abc00aa
+	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.23.0
 	golang.org/x/crypto v0.6.0
 	golang.org/x/sync v0.1.0
@@ -102,7 +104,6 @@ require (
 	github.com/goccy/go-json v0.9.11 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v2.0.5+incompatible // indirect
@@ -200,7 +201,6 @@ require (
 	github.com/xlab/treeprint v0.0.0-20180616005107-d6fb6747feb6 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2 // indirect
 	golang.org/x/mod v0.9.0 // indirect

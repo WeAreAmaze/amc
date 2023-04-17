@@ -21,6 +21,9 @@ import (
 	"math/big"
 )
 
+// fp.go contains some calculation methods for fe in Montgomery form.
+
+// fromBytes convert a [48]byte to fe in Montgomery form.
 func fromBytes(in []byte) (*fe, error) {
 	fe := &fe{}
 	if len(in) != 48 {
@@ -34,6 +37,8 @@ func fromBytes(in []byte) (*fe, error) {
 	return fe, nil
 }
 
+// fromBig convert a big.Int to fe in Montgomery form.
+// if big.Int.Bytes() more than 48 byte, will overflow
 func fromBig(in *big.Int) (*fe, error) {
 	fe := new(fe).setBig(in)
 	if !fe.isValid() {
@@ -43,6 +48,7 @@ func fromBig(in *big.Int) (*fe, error) {
 	return fe, nil
 }
 
+// fromString convert a hex string to fe in Montgomery form.
 func fromString(in string) (*fe, error) {
 	fe, err := new(fe).setString(in)
 	if err != nil {
@@ -55,32 +61,40 @@ func fromString(in string) (*fe, error) {
 	return fe, nil
 }
 
+// toBytes convert a fe in Montgomery form to []byte in normal form
 func toBytes(e *fe) []byte {
 	e2 := new(fe)
 	fromMont(e2, e)
 	return e2.bytes()
 }
 
+// toBig convert a fe in Montgomery form to big.Int
 func toBig(e *fe) *big.Int {
 	e2 := new(fe)
 	fromMont(e2, e)
 	return e2.big()
 }
 
+// toString convert a fe in Montgomery form to string in normal form
 func toString(e *fe) (s string) {
 	e2 := new(fe)
 	fromMont(e2, e)
 	return e2.string()
 }
 
+// toMont convert to Montgomery form.
+// first param is dst, second param is the number will be converted.
 func toMont(c, a *fe) {
 	mul(c, a, r2)
 }
 
+// fromMont convert out of Montgomery form.
+// first param is dst, second param is the number will be converted out.
 func fromMont(c, a *fe) {
 	mul(c, a, &fe{1})
 }
 
+// exp calculate c = a ^ e in Montgomery form.
 func exp(c, a *fe, e *big.Int) {
 	z := new(fe).set(r1)
 	for i := e.BitLen(); i >= 0; i-- {
@@ -92,6 +106,7 @@ func exp(c, a *fe, e *big.Int) {
 	c.set(z)
 }
 
+// inverse get the inverse element of a fe
 func inverse(inv, e *fe) {
 	if e.isZero() {
 		inv.zero()

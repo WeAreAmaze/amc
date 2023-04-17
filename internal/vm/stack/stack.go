@@ -37,6 +37,7 @@ type Stack struct {
 	Data []uint256.Int
 }
 
+// New is an object for creating a new stack for basic stack operations.
 func New() *Stack {
 	stack, ok := stackPool.Get().(*Stack)
 	if !ok {

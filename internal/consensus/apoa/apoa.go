@@ -16,7 +16,6 @@
 
 // Package Apoa implements the proof-of-authority consensus engine.
 
-
 package apoa
 
 import (

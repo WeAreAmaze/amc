@@ -20,7 +20,7 @@ func (e nonCanonocalHashError) Error() string {
 
 func GetBlockNumber(blockNrOrHash jsonrpc.BlockNumberOrHash, tx kv.Tx) (*uint256.Int, types.Hash, error) {
 	if tx == nil {
-		
+
 	}
 	return _GetBlockNumber(blockNrOrHash.RequireCanonical, blockNrOrHash, tx)
 }

@@ -470,7 +470,6 @@ func (n *Node) txsBroadcastLoop() {
 	}
 }
 
-
 // txBroadcastLoop announces new transactions to all.
 func (n *Node) txsMessageFetcherLoop() {
 

@@ -67,6 +67,8 @@ func AggregatePublicKeys(pubs [][]byte) (common.PublicKey, error) {
 	// No group check needed here since it is done in PublicKeyFromBytes
 	// Note the checks could be moved from PublicKeyFromBytes into Aggregate
 	// and take advantage of multi-threading.
+	//The anonymous function getter provides a function parameter for subsequent methods to obtain a pointer
+	//to the element at the specified index in the elmts slice
 	agg.Aggregate(mulP1, false)
 	return &PublicKey{p: agg.ToAffine()}, nil
 }

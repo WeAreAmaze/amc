@@ -21,6 +21,7 @@ type pair struct {
 	g2 *PointG2
 }
 
+// newPair  just a pair which g1 lies on Group G1, g2 lies on Group G2
 func newPair(g1 *PointG1, g2 *PointG2) pair {
 	return pair{g1, g2}
 }
@@ -254,6 +255,7 @@ func (e *Engine) finalExp(f *fe12) {
 	fp12.mul(f, &t[3], &t[4])
 }
 
+// calculate The behavior of paring
 func (e *Engine) calculate() *fe12 {
 	f := e.fp12.one()
 	if len(e.pairs) == 0 {

@@ -23,6 +23,7 @@ type bls12SecretKey struct {
 func RandKey() (common.SecretKey, error) {
 	// Generate 32 bytes of randomness
 	var ikm [32]byte
+	//Pass in slice reference and initialize ikm [].
 	_, err := rand.NewGenerator().Read(ikm[:])
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-# AmazeChain
+# AmazeChain 
 AmazeChain(AMC) is an implementation of public blockchain (execution client), on the efficiency frontier, written in Go.AmazeChain(AMC) uses modern cryptography methods and other techniques to increase submission efficiency and security.Join our world to develop.
 
 **Disclaimer: this software is currently a tech preview. We will do our best to keep it stable and make no breaking changes, but we don't guarantee anything. Things can and will break.**

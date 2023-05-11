@@ -24,12 +24,11 @@ import (
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 type IHeaderChain interface {
 	GetHeaderByNumber(number *uint256.Int) block.IHeader
-	GetHeaderByNumberTxn(tx kv.Tx, number *uint256.Int) block.IHeader
 	GetHeaderByHash(h types.Hash) (block.IHeader, error)
 	InsertHeader(headers []block.IHeader) (int, error)
 	GetBlockByHash(h types.Hash) (block.IBlock, error)

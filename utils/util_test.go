@@ -20,7 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"github.com/amazechain/amc/common/types"
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"testing"
 )
 

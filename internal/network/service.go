@@ -27,13 +27,13 @@ import (
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/utils"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	tls "github.com/libp2p/go-libp2p-tls"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/security/tls"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/rcrowley/go-metrics"
 	"os"
@@ -118,7 +118,7 @@ func NewService(ctx context.Context, config *conf.NetWorkConfig, peers common.Pe
 		}
 	}
 
-	h, err := libp2p.New(libp2p.Identity(peerKey), libp2p.ListenAddrStrings(s.networkConfig.ListenersAddress...), libp2p.Security(tls.ID, tls.New))
+	h, err := libp2p.New(libp2p.Identity(peerKey), libp2p.ListenAddrStrings(s.networkConfig.ListenersAddress...), libp2p.Security(libp2ptls.ID, libp2ptls.New))
 	if err != nil {
 		log.Error("create p2p host failed", "err", err)
 		return nil, err

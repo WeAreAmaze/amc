@@ -1,3 +1,19 @@
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -75,7 +91,7 @@ func verify(ctx context.Context, msg *state.EntireCode) types.Hash {
 	return root
 }
 
-func checkBlock(getHashF func(n uint64) types.Hash, block *block2.Block, ibs *state.IntraBlockState, coinbase types.Address, rewards []block2.Reward) (types.Hash, error) {
+func checkBlock(getHashF func(n uint64) types.Hash, block *block2.Block, ibs *state.IntraBlockState, coinbase types.Address, rewards []*block2.Reward) (types.Hash, error) {
 	header := block.Header().(*block2.Header)
 	chainConfig := params.AmazeChainConfig
 	if chainConfig.DAOForkSupport && chainConfig.DAOForkBlock != nil && chainConfig.DAOForkBlock.Cmp(block.Number64().ToBig()) == 0 {
@@ -87,6 +103,7 @@ func checkBlock(getHashF func(n uint64) types.Hash, block *block2.Block, ibs *st
 	gp := new(common2.GasPool)
 	gp.AddGas(block.GasLimit())
 	cfg := vm.Config{}
+	//cfg := vm.Config{Debug: true, Tracer: logger.NewMarkdownLogger(nil, os.Stdout)}
 
 	engine := apos.NewFaker()
 	for i, tx := range block.Transactions() {

@@ -53,7 +53,7 @@ import (
 	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"github.com/amazechain/amc/params"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -157,26 +157,10 @@ func (n *API) GetEvm(ctx context.Context, msg internal.Message, ibs evmtypes.Int
 }
 
 func (n *API) State(tx kv.Tx, blockNrOrHash jsonrpc.BlockNumberOrHash) evmtypes.IntraBlockState {
-	// todo if header not found
-	var blockHash types.Hash
 
-	if blockNr, ok := blockNrOrHash.Number(); ok {
-		//todo
-		var header block.IHeader
-		if blockNr < jsonrpc.EarliestBlockNumber {
-			header = n.BlockChain().CurrentBlock().Header()
-		} else {
-			header = n.BlockChain().GetHeaderByNumber(uint256.NewInt(uint64(blockNr.Int64())))
-			if header == nil {
-				return nil
-			}
-		}
-
-		blockHash = header.Hash()
-	} else if hash, ok := blockNrOrHash.Hash(); ok {
-		blockHash = hash
-	} else {
-		blockHash = n.BlockChain().CurrentBlock().Header().Hash()
+	_, blockHash, err := rpchelper.GetCanonicalBlockNumber(blockNrOrHash, tx)
+	if err != nil {
+		return nil
 	}
 
 	blockNr := rawdb.ReadHeaderNumber(tx, blockHash)
@@ -587,6 +571,9 @@ func DoCall(ctx context.Context, api *API, args TransactionArgs, blockNrOrHash j
 	//reader := state.NewPlainStateReader(tx)
 	//ibs := state.New(reader)
 	ibs := api.State(tx, blockNrOrHash)
+	if ibs == nil {
+		return nil, errors.New("cannot load state")
+	}
 	if err := overrides.Apply(ibs.(*state.IntraBlockState)); err != nil {
 		return nil, err
 	}
@@ -979,7 +966,7 @@ func (s *BlockChainAPI) MinedBlock(ctx context.Context, address types.Address) (
 
 	rpcSub := notifier.CreateSubscription()
 	go func() {
-		entire := make(chan common.MinedEntireEvent)
+		entire := make(chan common.MinedEntireEvent, 20)
 		blocksSub := event.GlobalFeed.Subscribe(entire)
 		for {
 			select {
@@ -991,6 +978,7 @@ func (s *BlockChainAPI) MinedBlock(ctx context.Context, address types.Address) (
 				pushData.Codes = b.Entire.Codes
 				pushData.Rewards = b.Entire.Rewards
 				pushData.CoinBase = b.Entire.CoinBase
+				log.Trace("send mining block", "addr", address, "blockNr", b.Entire.Entire.Header.Number.Hex(), "blockTime", time.Unix(int64(b.Entire.Entire.Header.Time), 0).Format(time.RFC3339))
 				notifier.Notify(rpcSub.ID, pushData)
 			case <-rpcSub.Err():
 				blocksSub.Unsubscribe()

@@ -1,18 +1,18 @@
-// Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The AmazeChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The AmazeChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 package vm
 
@@ -26,7 +26,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// makeGasSStoreFunc creates a gasFunc which can calculate the gas cost in different clearingRefund
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		// If we fail the minimum gas availability invariant, fail (0)

@@ -1,18 +1,18 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The AmazeChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The AmazeChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package state provides a caching layer atop the Ethereum state trie.
 package state
@@ -346,7 +346,11 @@ func (sdb *IntraBlockState) GetCode(addr types.Address) []byte {
 		if sdb.trace {
 			fmt.Printf("GetCode %x, returned %d\n", addr, len(stateObject.Code()))
 		}
-		return stateObject.Code()
+		code := stateObject.Code()
+		if len(code) > 0 && sdb.codeMap != nil {
+			sdb.codeMap[types.BytesToHash(stateObject.CodeHash())] = code
+		}
+		return code
 	}
 	if sdb.trace {
 		fmt.Printf("GetCode %x, returned nil\n", addr)
@@ -372,6 +376,10 @@ func (sdb *IntraBlockState) GetCodeSize(addr types.Address) int {
 	len, err := sdb.stateReader.ReadAccountCodeSize(addr, stateObject.data.Incarnation, stateObject.data.CodeHash)
 	if err != nil {
 		sdb.setErrorUnsafe(err)
+	}
+	if len > 0 && sdb.codeMap != nil {
+		code, _ := sdb.stateReader.ReadAccountCode(addr, stateObject.data.Incarnation, types.BytesToHash(stateObject.CodeHash()))
+		sdb.codeMap[types.BytesToHash(stateObject.CodeHash())] = code
 	}
 	return len
 }

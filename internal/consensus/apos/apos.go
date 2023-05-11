@@ -606,8 +606,8 @@ func (c *APos) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 		return errors.New("unknown ancestor")
 	}
 	rawHeader.Time = parent.(*block.Header).Time + c.config.Period
-	if rawHeader.Time < uint64(time.Now().Unix()) {
-		rawHeader.Time = uint64(time.Now().Unix()) + c.config.Period
+	if rawHeader.Time < uint64(time.Now().Unix())+4 {
+		rawHeader.Time = uint64(time.Now().Unix()) + 4
 	}
 	return nil
 }
@@ -630,7 +630,7 @@ func (c *APos) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlock
 
 		for _, detail := range accRewards {
 			if detail.Value.Cmp(uint256.NewInt(0)) > 0 {
-				addr := types.HexToAddress(detail.Account)
+				addr := detail.Account
 				if !state.Exist(addr) {
 					state.CreateAccount(addr, false)
 				}
@@ -753,7 +753,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		if nil != err {
 			return err
 		}
-		if false && !sig.FastAggregateVerify(ss, header.Root) {
+		if !sig.FastAggregateVerify(ss, header.Root) {
 			return fmt.Errorf("AggSignature verify falied")
 		}
 
@@ -783,6 +783,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 			return
 		case <-time.After(delay):
 			if header.Time > uint64(time.Now().Unix()) {
+				delay = 50 * time.Millisecond
 				goto reTimer
 			}
 		}

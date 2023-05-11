@@ -32,7 +32,7 @@ import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"go.uber.org/zap"
 )
 

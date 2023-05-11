@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/amazechain/amc/modules"
 	"sync"
 	"time"
 	"unsafe"
-
-	"github.com/amazechain/amc/modules"
 
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -60,7 +59,6 @@ func (m *mapmutation) RwKV() kv.RwDB {
 	return nil
 }
 
-// getMem get the value of a key from the in-memory map.
 func (m *mapmutation) getMem(table string, key []byte) ([]byte, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -74,8 +72,6 @@ func (m *mapmutation) getMem(table string, key []byte) ([]byte, bool) {
 	return nil, false
 }
 
-// IncrementSequence increments a sequence number for a given bucket
-// by a specified amount and returns the new value.
 func (m *mapmutation) IncrementSequence(bucket string, amount uint64) (res uint64, err error) {
 	v, ok := m.getMem(modules.Sequence, []byte(bucket))
 	if !ok && m.db != nil {
@@ -98,9 +94,6 @@ func (m *mapmutation) IncrementSequence(bucket string, amount uint64) (res uint6
 
 	return currentV, nil
 }
-
-// ReadSequence reads the sequence value for a given bucket from memory
-// or disk and returns it.
 func (m *mapmutation) ReadSequence(bucket string) (res uint64, err error) {
 	v, ok := m.getMem(modules.Sequence, []byte(bucket))
 	if !ok && m.db != nil {
@@ -222,9 +215,6 @@ func (m *mapmutation) Delete(table string, k []byte) error {
 	return m.Put(table, k, nil)
 }
 
-// doCommit commits a batch of changes to the database. It is called
-// by the Commit function which is used to commit a batch of changes
-// made to the database.
 func (m *mapmutation) doCommit(tx kv.RwTx) error {
 	logEvery := time.NewTicker(30 * time.Second)
 	defer logEvery.Stop()

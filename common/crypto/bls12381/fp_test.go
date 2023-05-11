@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// TestFpSerialization test fe point serialize to common types: byte[], string, big.Int
 func TestFpSerialization(t *testing.T) {
-	t.Run("zero", func(t *testing.T) { // test fix value serialization
+	t.Run("zero", func(t *testing.T) {
 		in := make([]byte, 48)
 		fe, err := fromBytes(in)
 		if err != nil {
@@ -60,7 +59,6 @@ func TestFpSerialization(t *testing.T) {
 	})
 }
 
-// TestFpAdditionCrossAgainstBigInt test fe point addition compare with big.Int addition result to ensure calculation is correct.
 func TestFpAdditionCrossAgainstBigInt(t *testing.T) {
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)
@@ -96,8 +94,6 @@ func TestFpAdditionCrossAgainstBigInt(t *testing.T) {
 	}
 }
 
-// TestFpAdditionCrossAgainstBigIntAssigned test fe point addition compare with big.Int addition result to ensure calculation is correct.
-// use addAssign method here.
 func TestFpAdditionCrossAgainstBigIntAssigned(t *testing.T) {
 	for i := 0; i < fuz; i++ {
 		a, _ := new(fe).rand(rand.Reader)

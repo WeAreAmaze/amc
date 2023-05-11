@@ -24,8 +24,8 @@ import (
 	"github.com/amazechain/amc/common/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 

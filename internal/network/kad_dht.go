@@ -22,38 +22,32 @@ import (
 	"github.com/amazechain/amc/log"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-	discovery "github.com/libp2p/go-libp2p-discovery"
 	kademliaDHT "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/peer"
+	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 )
 
-// The structure of Kademlia Distributed Hash Table includes IpfsDHT that is an implementation of Kademlia with S/Kademlia modifications.
-// It is used to implement the base Routing module.
 type KadDHT struct {
 	*kademliaDHT.IpfsDHT
 
 	service *Service
 
-	routingDiscovery *discovery.RoutingDiscovery // calculate the distance of nodes.
+	routingDiscovery *discovery.RoutingDiscovery
 
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-// The function allows the user to specify whether the node is a server or a client, and what peers to bootstrap from.
-// It also sets up a routing discovery service for finding other peers in the network.
-// The function returns a pointer to the KadDHT object and an error value if any.
 func NewKadDht(ctx context.Context, s *Service, isServer bool, bootstrappers ...peer.AddrInfo) (*KadDHT, error) {
 
 	c, cancel := context.WithCancel(ctx)
-	var mode kademliaDHT.ModeOpt //  the kademliaDHT of Server or Client
+	var mode kademliaDHT.ModeOpt
 	if isServer {
 		mode = kademliaDHT.ModeServer
 	} else {
 		mode = kademliaDHT.ModeClient
 	}
-	// create new Distributed Hash Table.
-	//creates a new KadDHT struct with the fields initialized from the parameters and the created dht and routingDiscovery.
+
 	dht, err := kademliaDHT.New(c, s.host, kademliaDHT.Mode(mode), kademliaDHT.BootstrapPeers(bootstrappers...))
 
 	if err != nil {
@@ -70,11 +64,11 @@ func NewKadDht(ctx context.Context, s *Service, isServer bool, bootstrappers ...
 		service:          s,
 	}
 
-	return kDHT, nil //It returns a pointer to a KadDHT struct and an error value.
+	return kDHT, nil
 }
 
 func (k *KadDHT) Start() error {
-	err := k.Bootstrap(k.ctx) //  Bootstrap tells the DHT to get into a bootstrapped state satisfying the IpfsRouter interface and build the connection with other nodes.
+	err := k.Bootstrap(k.ctx)
 	if err != nil {
 		log.Error("setup bootstrap failed", err)
 		return err
@@ -82,31 +76,29 @@ func (k *KadDHT) Start() error {
 
 	//todo
 	//if err := k.discoverLocal(); err != nil {
-	//	log.Error("setup mdns discover failed", err)  //use mdns to discover other nodes of the local net.
+	//	log.Error("setup mdns discover failed", err)
 	//	return err
 	//}
 
-	discovery.Advertise(k.ctx, k.routingDiscovery, DiscoverProtocol) //it advertises the KadDHT instance using its routingDiscovery field and the DiscoverProtocol constant.
-	go k.loopDiscoverRemote()                                        //starts a goroutine to loop over the discovered remote peers and handle them.
+	k.routingDiscovery.Advertise(k.ctx, DiscoverProtocol)
+	go k.loopDiscoverRemote()
 
 	return nil
 }
 
-// takes a pointer to a KadDHT struct as a receiver. The function creates a timer that executes every 10 seconds.
-// This function uses the time package to create a timer, the log package to log messages, and the discovery package to discover peers.
 func (k *KadDHT) loopDiscoverRemote() {
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-k.ctx.Done(): // the k.ctx.Done() channel has a value, it means the context has been canceled and the function returns.
+		case <-k.ctx.Done():
 			return
 		case <-ticker.C:
 			peerChan, err := k.routingDiscovery.FindPeers(k.ctx, DiscoverProtocol)
 			if err != nil {
 				log.Warn("find peers failed", err)
-			} else { //iterates over the peer channel, filters out its own ID, prints out the peer information, and calls the k.service.HandlePeerFound method to handle the peer.
+			} else {
 				for p := range peerChan {
 					if p.ID != k.service.host.ID() {
 						log.Tracef("find peer %s", fmt.Sprintf("info: %s", p.String()))
@@ -115,19 +107,19 @@ func (k *KadDHT) loopDiscoverRemote() {
 				}
 			}
 
-			ticker.Reset(60 * time.Second) //resets the timer to 60 seconds
+			ticker.Reset(60 * time.Second)
 		}
 	}
 }
 
-func (k *KadDHT) findPeers() []peer.AddrInfo {
-	peers, err := discovery.FindPeers(k.ctx, k.routingDiscovery, DiscoverProtocol)
-	if err != nil {
-		return nil
-	} else {
-		return peers
-	}
-}
+//func (k *KadDHT) findPeers() []peer.AddrInfo {
+	//peers, err := k.routingDiscovery.FindPeers(k.ctx, DiscoverProtocol)
+	//if err != nil {
+	//	return nil
+	//} else {
+	//	return peers
+	//}
+//}
 
 func (k *KadDHT) discoverLocal() error {
 

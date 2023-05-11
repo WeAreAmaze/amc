@@ -1,3 +1,19 @@
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
 package apos
 
 import (
@@ -45,8 +61,6 @@ func (r RewardResponseValues) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
-type RewardEpochMap rawdb.RewardEntry
-
 type Reward struct {
 	config      *conf.ConsensusConfig
 	chainConfig *params.ChainConfig
@@ -57,7 +71,7 @@ type Reward struct {
 }
 
 type AccountReward struct {
-	Account string
+	Account types.Address
 	Number  *uint256.Int
 	Value   *uint256.Int
 }
@@ -68,7 +82,7 @@ func (r AccountRewards) Len() int {
 }
 
 func (r AccountRewards) Less(i, j int) bool {
-	return strings.Compare(r[i].Account, r[j].Account) > 0
+	return strings.Compare(r[i].Account.String(), r[j].Account.String()) > 0
 }
 
 func (r AccountRewards) Swap(i, j int) {
@@ -104,7 +118,7 @@ func (r *Reward) GetRewards(tx kv.Getter, addr types.Address, from *uint256.Int,
 			return nil, err
 		}
 
-		if entry, ok := reward[addr.String()]; ok && entry != nil && entry.Cmp(uint256.NewInt(0)) == 1 {
+		if entry, ok := reward[addr]; ok && entry != nil && entry.Cmp(uint256.NewInt(0)) == 1 {
 			blockNumber := r.epoch2number(i)
 			hash, err := rawdb.ReadCanonicalHash(tx, blockNumber.Uint64())
 			if nil != err {
@@ -132,19 +146,14 @@ func (r *Reward) GetRewards(tx kv.Getter, addr types.Address, from *uint256.Int,
 	return resp, nil
 }
 
-func (r *Reward) GetBlockRewards(tx kv.Getter, header block.IHeader) (map[types.Address]uint256.Int, error) {
+func (r *Reward) GetBlockRewards(tx kv.Getter, header block.IHeader) (map[types.Address]*uint256.Int, error) {
 
 	reward, err := rawdb.GetEpochReward(tx, r.number2epoch(header.Number64()))
 
 	if err != nil {
 		return nil, err
 	}
-	resp := make(map[types.Address]uint256.Int, len(reward))
-	for addr, value := range reward {
-		resp[types.HexToAddress(addr)] = *value
-	}
-
-	return resp, nil
+	return reward, nil
 }
 
 func (r *Reward) SetRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) (AccountRewards, error) {
@@ -163,7 +172,7 @@ func (r *Reward) SetRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) (A
 	return resp, nil
 }
 
-func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) (rawdb.RewardEntry, error) {
+func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) (map[types.Address]*uint256.Int, error) {
 
 	epoch := r.number2epoch(number)
 	endNumber := new(uint256.Int).Sub(number, r.rewardEpoch)
@@ -171,7 +180,7 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 	//calculate last batch but this one
 	currentNr := number.Clone()
 	currentNr.SubUint64(currentNr, 1)
-	rewardMap := rawdb.NewRewardEntry()
+	rewardMap := make(map[types.Address]*uint256.Int, 0)
 	depositeMap := map[types.Address]*deposit.Info{}
 
 	for currentNr.Cmp(endNumber) >= 0 {
@@ -195,7 +204,7 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 
 		verifiers := block.Body().Verifier()
 		for _, verifier := range verifiers {
-			addrReward, ok := rewardMap[verifier.Address.Hex()]
+			addrReward, ok := rewardMap[verifier.Address]
 			if !ok {
 				addrReward = uint256.NewInt(0)
 			}
@@ -210,16 +219,14 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 				log.Debug("account deposite infos", "addr", verifier.Address, "perblock", depositInfo.RewardPerBlock, "perepoch", depositInfo.MaxRewardPerEpoch)
 			}
 
-			rewardMap[verifier.Address.Hex()] = math.Min256(addrReward.Add(addrReward, depositInfo.RewardPerBlock), depositInfo.MaxRewardPerEpoch)
+			rewardMap[verifier.Address] = math.Min256(addrReward.Add(addrReward, depositInfo.RewardPerBlock), depositInfo.MaxRewardPerEpoch.Clone())
 		}
 
 		currentNr.SubUint64(currentNr, 1)
 	}
 
-	for rk, _ := range rewardMap {
-		var amount = rewardMap[rk]
-		var payAmount, unpayAmount uint256.Int
-		addr := types.HexToAddress(rk)
+	for addr, amount := range rewardMap {
+		var payAmount, unpayAmount *uint256.Int
 
 		lastSedi, err := r.getAccountRewardUnpaid(tx, addr)
 		if err != nil {
@@ -227,19 +234,18 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 			return nil, err
 		}
 		if lastSedi != nil {
-			added := uint256.NewInt(0).Add(amount, lastSedi)
-			amount = &(*added)
+			amount.Add(amount, lastSedi)
 		}
 
 		if amount.Cmp(r.rewardLimit) >= 0 {
-			payAmount = *amount
-			unpayAmount = *uint256.NewInt(0)
+			payAmount = amount.Clone()
+			unpayAmount = uint256.NewInt(0)
 		} else {
-			payAmount = *uint256.NewInt(0)
-			unpayAmount = *amount
+			payAmount = uint256.NewInt(0)
+			unpayAmount = amount.Clone()
 		}
 
-		rewardMap[rk] = &payAmount
+		rewardMap[addr] = payAmount
 
 		if setRewards {
 			log.Info("🔨 set account reward unpaid", "addr", addr, "non-pay amount", unpayAmount.Uint64(), "pay amount", payAmount.Uint64(), "number", currentNr.String())
@@ -260,7 +266,7 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 	return rewardMap, nil
 }
 
-func (r *Reward) setRewardByEpochPaid(tx kv.RwTx, epoch *uint256.Int, rewardMap rawdb.RewardEntry) error {
+func (r *Reward) setRewardByEpochPaid(tx kv.RwTx, epoch *uint256.Int, rewardMap map[types.Address]*uint256.Int) error {
 	if tx == nil {
 		return errors.New("setrewardepoch tx nil")
 	}
@@ -285,7 +291,7 @@ func (r *Reward) getAccountRewardUnpaid(tx kv.Getter, account types.Address) (*u
 	return value, nil
 }
 
-func (r *Reward) setAccountRewardUnpaid(tx kv.Putter, account types.Address, val uint256.Int) error {
+func (r *Reward) setAccountRewardUnpaid(tx kv.Putter, account types.Address, val *uint256.Int) error {
 	key := fmt.Sprintf("account:%s", account.String())
 	err := rawdb.PutAccountReward(tx, key, val)
 	if err != nil {
@@ -295,11 +301,14 @@ func (r *Reward) setAccountRewardUnpaid(tx kv.Putter, account types.Address, val
 }
 
 func (r *Reward) number2epoch(number *uint256.Int) *uint256.Int {
-	// todo
-	epoch, _ := new(uint256.Int).DivMod(number, r.rewardEpoch, uint256.NewInt(0))
-	return epoch
+	beijingBlock, _ := uint256.FromBig(r.chainConfig.BeijingBlock)
+	if beijingBlock.Cmp(number) == 1 {
+		return uint256.NewInt(0)
+	}
+	return new(uint256.Int).Div(new(uint256.Int).Sub(number, beijingBlock), r.rewardEpoch)
 }
 
 func (r *Reward) epoch2number(epoch *uint256.Int) *uint256.Int {
-	return new(uint256.Int).Mul(epoch, r.rewardEpoch)
+	beijingBlock, _ := uint256.FromBig(r.chainConfig.BeijingBlock)
+	return new(uint256.Int).Add(new(uint256.Int).Mul(epoch, r.rewardEpoch), beijingBlock)
 }

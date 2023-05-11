@@ -12,22 +12,35 @@ contract Deposit is Ownable, IDeposit {
     mapping(address => uint256) private deposits;
     mapping(address => uint64) private depositTime;
     uint64 private depositLockingTime;
-    uint64 private tenDepositLimit;
+    uint64 private fiftyDepositLimit;
+    uint64 private oneHundredDepositLimit;
+    uint64 private fiveHundredDepositLimit;
+    //
     uint256 private allDeposits = 0;
+    uint64 private fiftyDepositCount = 0;
+    uint64 private oneHundredDepositCount = 0;
+    uint64 private fiveHundredDepositCount = 0;
 
-    uint256 constant private tenDeposit = 10 ether;
+    uint256 constant private fiftyDeposit = 50 ether;
     uint256 constant private oneHundredDeposit = 100 ether;
     uint256 constant private fiveHundredDeposit = 500 ether;
 
 
     modifier onlyOperator() {
-        require(deposits[msg.sender] > 0 || msg.sender == owner(), "Caller is not Operator");
+        require(msg.sender == owner(), "Caller is not Operator");
         _;
     }
 
-    constructor (uint64 _depositLockingTime, uint64 _tenDepositLimit) Ownable() {
+    modifier onlyDeposit() {
+        require(deposits[msg.sender] > 0, "Do not have deposit");
+        _;
+    }
+
+    constructor (uint64 _depositLockingTime, uint64 _fiftyDepositLimit, uint64 _oneHundredDepositLimit, uint64 _fiveHundredDepositLimit) Ownable() {
         depositLockingTime = _depositLockingTime;
-        tenDepositLimit = _tenDepositLimit;
+        fiftyDepositLimit = _fiftyDepositLimit;
+        oneHundredDepositLimit = _oneHundredDepositLimit;
+        fiveHundredDepositLimit = _fiveHundredDepositLimit;
     }
 
     function depositsOf(address payee) public view  override returns (uint256) {
@@ -45,10 +58,18 @@ contract Deposit is Ownable, IDeposit {
 
     function depositAllowed(uint256 amount) public view returns (bool) {
         require(deposits[msg.sender] == 0, "DepositContract: you already deposited");
-        require(amount == oneHundredDeposit || amount == fiveHundredDeposit || amount == tenDeposit, "DepositContract: payee is not allowed to deposit");
+        require(amount == oneHundredDeposit || amount == fiveHundredDeposit || amount == fiftyDeposit, "DepositContract: payee is not allowed to deposit");
         //
-        if (amount == tenDeposit) {
-            require(tenDepositLimit > 0, "10 AMC Deposit Limit has been reached");
+        if (amount == fiftyDeposit) {
+            require(fiftyDepositLimit > fiftyDepositCount, "10 AMC Deposit Limit has been reached");
+        }
+        //
+        if (amount == oneHundredDeposit) {
+            require(oneHundredDepositLimit > oneHundredDepositCount , "100 AMC Deposit Limit has been reached");
+        }
+        //
+        if (amount == fiveHundredDeposit) {
+            require(fiveHundredDepositLimit > fiveHundredDepositCount, "500 AMC Deposit Limit has been reached");
         }
         return true;
     }
@@ -65,8 +86,16 @@ contract Deposit is Ownable, IDeposit {
         depositTime[msg.sender] = uint64(block.timestamp);
         allDeposits += amount;
         //
-        if (amount == tenDeposit) {
-            tenDepositLimit--;
+        if (amount == fiftyDeposit) {
+            fiftyDepositCount++;
+        }
+        //
+        if (amount == oneHundredDeposit) {
+            oneHundredDepositCount++;
+        }
+        //
+        if (amount == fiveHundredDeposit) {
+            fiveHundredDepositCount++;
         }
 
         emit DepositEvent(pubkey, amount, signature);
@@ -79,7 +108,7 @@ contract Deposit is Ownable, IDeposit {
         return true;
     }
 
-    function withdraw() public payable virtual override onlyOperator {
+    function withdraw() public payable virtual override onlyDeposit {
 
         require(withdrawalAllowed(uint64(block.timestamp)), "DepositContract: payee is not allowed to deposit");
         uint256 amount = deposits[msg.sender];
@@ -87,8 +116,60 @@ contract Deposit is Ownable, IDeposit {
         sendValue(payable(msg.sender), amount);
         delete deposits[msg.sender];
         delete depositTime[msg.sender];
+
+        //
+        if (amount == fiftyDeposit) {
+            fiftyDepositCount--;
+        }
+        //
+        if (amount == oneHundredDeposit) {
+            oneHundredDepositCount--;
+        }
+        //
+        if (amount == fiveHundredDeposit) {
+            fiveHundredDepositCount--;
+        }
+
         allDeposits -= amount;
         emit WithdrawnEvent(amount);
+    }
+
+    function addDepositLimit(uint256 amount, uint64 limit) public  virtual  onlyOperator {
+        //
+        if (amount == fiftyDeposit) {
+            fiftyDepositLimit += limit;
+        }
+        //
+        if (amount == oneHundredDeposit) {
+            oneHundredDepositLimit += limit;
+        }
+        //
+        if (amount == fiveHundredDeposit) {
+            fiveHundredDepositLimit += limit;
+        }
+    }
+    function getDepositLimit(uint256 amount) public view  returns(uint64) {
+        //
+        if (amount == fiftyDeposit) {
+            return fiftyDepositLimit;
+        }
+        //
+        if (amount == oneHundredDeposit) {
+            return oneHundredDepositLimit;
+        }
+        //
+        if (amount == fiveHundredDeposit) {
+            return fiveHundredDepositLimit;
+        }
+
+        return 0;
+    }
+
+    function getDepositRemain() public view returns(uint64, uint64, uint64) {
+        uint64 fiftyDepositRemain = fiftyDepositLimit - fiftyDepositCount;
+        uint64 oneHundredDepositRemain = oneHundredDepositLimit - oneHundredDepositCount;
+        uint64 fiveHundredDepositRemain = fiveHundredDepositLimit - fiveHundredDepositCount;
+        return (fiftyDepositRemain, oneHundredDepositRemain, fiveHundredDepositRemain);
     }
 
     function sendValue(address payable recipient, uint256 amount) private {

@@ -1,12 +1,31 @@
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
 package evmsdk
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/crypto/ecies"
 	"github.com/holiman/uint256"
 	"io"
 	"io/ioutil"
@@ -120,7 +139,12 @@ func Emit(jsonText string) string {
 		}
 		er.Data = data
 	case "encrypt":
-
+		data, err := EE.Encrypt(eq)
+		if err != nil {
+			er.Code, er.Message = 1, err.Error()
+			return emitJSON(er)
+		}
+		er.Data = data
 	case "test":
 		er.Message = Test()
 	}
@@ -448,38 +472,101 @@ func (e *EvmEngine) verificationTaskBg() error {
 }
 
 func (e *EvmEngine) Decrypt(req *EmitRequest) (interface{}, error) {
-	params, ok := req.Val.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("type assert error,any==>smap")
+
+	var (
+		params              map[string]interface{}
+		privateKeyInterface interface{}
+		privateKeyString    string
+		privateKey          *ecdsa.PrivateKey
+		messageInterface    interface{}
+		message             string
+		messageBytes        []byte
+		ok                  bool
+		err                 error
+	)
+
+	if params, ok = req.Val.(map[string]interface{}); !ok {
+		return nil, fmt.Errorf("empty input value")
 	}
 
-	privateKey, ok := params["private_key"]
-	if !ok {
-		return nil, fmt.Errorf("type assert error,any==>smap")
+	if privateKeyInterface, ok = params["priv_key"]; !ok {
+		return nil, fmt.Errorf("privateKey is empty")
 	}
 
-	message, ok := params["message"]
-	if !ok {
-		return nil, fmt.Errorf("type assert error,any==>smap")
+	if privateKeyString, ok = privateKeyInterface.(string); !ok {
+		return nil, fmt.Errorf("privateKey type is not string")
 	}
 
-	privateKeyString, ok := privateKey.(string)
-	if !ok {
-		return nil, fmt.Errorf("type assert error,any==>smap")
+	if privateKey, err = crypto.HexToECDSA(privateKeyString); err != nil {
+		return nil, fmt.Errorf("cannot decode private key")
 	}
 
-	messageString, ok := message.(string)
-	if !ok {
-		return nil, fmt.Errorf("type assert error,any==>smap")
+	if messageInterface, ok = params["msg"]; !ok {
+		return nil, fmt.Errorf("msg is empty")
+	}
+	if message, ok = messageInterface.(string); !ok {
+		return nil, fmt.Errorf("msg type is not string")
+	}
+	if messageBytes, err = hex.DecodeString(message); err != nil {
+		return nil, fmt.Errorf("msg cannote decode to bytes")
 	}
 
-	ecdsaPrivateKey, err := crypto.HexToECDSA(privateKeyString)
-	if err != nil {
-		return nil, fmt.Errorf("type assert error,any==>smap")
+	priKey := ecies.ImportECDSA(privateKey)
+
+	ms, err := priKey.Decrypt(messageBytes, nil, nil)
+	return hex.EncodeToString(ms), err
+}
+
+func (e *EvmEngine) Encrypt(req *EmitRequest) (interface{}, error) {
+
+	var (
+		params             map[string]interface{}
+		publicKeyInterface interface{}
+		publicKeyString    string
+		publicKeyBytes     []byte
+		publicKey          *ecdsa.PublicKey
+		messageInterface   interface{}
+		message            string
+		messageBytes       []byte
+		ok                 bool
+		err                error
+	)
+
+	if params, ok = req.Val.(map[string]interface{}); !ok {
+		return nil, fmt.Errorf("empty input value")
 	}
 
-	ecdsaPrivateKey.Decrypt
+	if publicKeyInterface, ok = params["public_key"]; !ok {
+		return nil, fmt.Errorf("public_key is empty")
+	}
 
+	if publicKeyString, ok = publicKeyInterface.(string); !ok {
+		return nil, fmt.Errorf("public_key type is not string")
+	}
+
+	if publicKeyBytes, err = hex.DecodeString(publicKeyString); err != nil {
+		return nil, fmt.Errorf("public_key cannote decode to bytes")
+	}
+
+	if publicKey, err = crypto.DecompressPubkey(publicKeyBytes); err != nil {
+		return nil, fmt.Errorf("cannot decode public key")
+	}
+
+	if messageInterface, ok = params["msg"]; !ok {
+		return nil, fmt.Errorf("msg is empty")
+	}
+	if message, ok = messageInterface.(string); !ok {
+		return nil, fmt.Errorf("msg type is not string")
+	}
+
+	if messageBytes, err = hex.DecodeString(message); err != nil {
+		return nil, fmt.Errorf("msg cannote decode to bytes")
+	}
+
+	pubKey := ecies.ImportECDSAPublic(publicKey)
+	ct, err := ecies.Encrypt(rand.Reader, pubKey, messageBytes, nil, nil)
+
+	return hex.EncodeToString(ct), err
 }
 
 //type innerEntireCode state.EntireCode

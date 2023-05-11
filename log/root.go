@@ -1,8 +1,25 @@
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
 package log
 
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/amazechain/amc/conf"
 	prefixed "github.com/amazechain/amc/log/logrus-prefixed-formatter"
@@ -12,16 +29,21 @@ import (
 )
 
 var (
-	root     = &logger{[]interface{}{}}
+	root = &logger{ctx: []interface{}{}, mapPool: sync.Pool{
+		New: func() any {
+			return map[string]interface{}{}
+		},
+	}}
 	terminal = logrus.New()
 )
 
 type Lvl int
 
-const skipLevel = 2
+const skipLevel = 3
 
 const (
 	LvlCrit Lvl = iota
+	LvlFatal
 	LvlError
 	LvlWarn
 	LvlInfo

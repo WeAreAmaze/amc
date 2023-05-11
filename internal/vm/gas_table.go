@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The AmazeChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The AmazeChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 package vm
 
@@ -95,7 +95,6 @@ var (
 	gasReturnDataCopy = memoryCopierGas(2)
 )
 
-// gasSStore returns the amount of dynamicGas when excuting the SStore operation.
 func gasSStore(evm VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	value, x := stack.Back(1), stack.Back(0)
 	key := types.Hash(x.Bytes32())
@@ -222,7 +221,6 @@ func gasSStoreEIP2200(evm VMInterpreter, contract *Contract, stack *stack.Stack,
 	return params.SloadGasEIP2200, nil // dirty update (2.2)
 }
 
-// makeGasLog returns a function which calculates the gas consumed by memory and Log.
 func makeGasLog(n uint64) gasFunc {
 	return func(_ VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
@@ -235,7 +233,6 @@ func makeGasLog(n uint64) gasFunc {
 			return 0, err
 		}
 
-		// SafeAdd to detect overflow error
 		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
 			return 0, ErrGasUintOverflow
 		}
@@ -254,7 +251,6 @@ func makeGasLog(n uint64) gasFunc {
 	}
 }
 
-// gasKeccak256 returns the gas consumed when excuting the Keccak256.
 func gasKeccak256(_ VMInterpreter, contract *Contract, stack *stack.Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {

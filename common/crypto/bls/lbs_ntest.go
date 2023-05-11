@@ -79,23 +79,21 @@ func TestAggregateVerify_CompressedSignatures2() error {
 	if !aggSig.AggregateVerify(pubkeys, msgs) {
 		return errors.New("Signature did not verify")
 	}
-	//compressed Signature is not the array of sigs but the two dimension byte array
+
 	aggSig2, err := AggregateCompressedSignatures(sigBytes)
 	if err != nil {
 		return err
 	}
-	// The aggregateSign and the compressed sign should be same
 	if bytes.Compare(aggSig.Marshal(), aggSig2.Marshal()) != 0 {
 		return errors.New("Signature did not match up")
 	}
 	return nil
 }
 
-// TestFastAggregateVerify2 is the case that multi people sign the same message,it can reduce the store cost
 func TestFastAggregateVerify2() error {
 	pubkeys := make([]common.PublicKey, 0, 100)
 	sigs := make([]common.Signature, 0, 100)
-	msg := [32]byte{'h', 'e', 'l', 'l', 'o'} // same messgae
+	msg := [32]byte{'h', 'e', 'l', 'l', 'o'}
 	for i := 0; i < 100; i++ {
 		priv, err := RandKey()
 		if err != nil {

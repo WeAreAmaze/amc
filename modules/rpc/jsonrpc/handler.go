@@ -233,7 +233,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	switch {
 	//case msg.isNotification():
 	case msg.isCall():
-		//log.Trace("begin "+msg.Method, "p", string(msg.Params))
+		log.Trace("begin "+msg.Method, "p", string(msg.Params))
 		resp := h.handleCall(ctx, msg)
 		var ctx []interface{}
 		ctx = append(ctx, "reqid", idForLog{msg.ID}, "t", time.Since(start), "p", string(msg.Params), "r", string(resp.Result))

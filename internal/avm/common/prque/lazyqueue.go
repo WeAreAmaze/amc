@@ -1,18 +1,18 @@
-// Copyright 2019 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The AmazeChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The AmazeChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 package prque
 
@@ -26,9 +26,10 @@ import (
 // LazyQueue is a priority queue data structure where priorities can change over
 // time and are only evaluated on demand.
 // Two callbacks are required:
-// - priority evaluates the actual priority of an item
-// - maxPriority gives an upper estimate for the priority in any moment between
-//   now and the given absolute time
+//   - priority evaluates the actual priority of an item
+//   - maxPriority gives an upper estimate for the priority in any moment between
+//     now and the given absolute time
+//
 // If the upper estimate is exceeded then Update should be called for that item.
 // A global Refresh function should also be called periodically.
 type LazyQueue struct {

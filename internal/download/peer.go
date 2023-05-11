@@ -25,7 +25,7 @@ import (
 	"github.com/amazechain/amc/utils"
 	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"go.uber.org/zap"
 	"math/rand"
 	"sync"

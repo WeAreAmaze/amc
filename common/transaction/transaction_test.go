@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"github.com/amazechain/amc/common/types"
 	"github.com/holiman/uint256"
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"testing"
 )
 

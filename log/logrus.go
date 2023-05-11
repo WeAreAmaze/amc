@@ -1,10 +1,28 @@
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
 package log
 
 import (
 	"fmt"
 	"github.com/go-stack/stack"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/maps"
 	"os"
+	"sync"
 )
 
 var (
@@ -12,45 +30,72 @@ var (
 )
 
 type logger struct {
-	ctx []interface{}
+	ctx     []interface{}
+	mapPool sync.Pool
+}
+
+func (l *logger) newMap() map[string]interface{} {
+	m, ok := l.mapPool.Get().(map[string]interface{})
+	if ok {
+		return m
+	}
+
+	return map[string]interface{}{}
+}
+
+func (l *logger) returnMap(m map[string]interface{}) {
+	maps.Clear(m)
+	l.mapPool.Put(m)
 }
 
 func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
-	var field = make(map[string]interface{})
-	field["prefix"] = fmt.Sprintf("%k", stack.Caller(skip))
-	ctx = newContext(l.ctx, ctx)
-	for i := 0; i < len(ctx); i += 2 {
-		k, ok := ctx[i].(string)
-		if !ok {
+	field := l.newMap()
+	defer l.returnMap(field)
+	var prepareFields = func() {
+		field["prefix"] = fmt.Sprintf("%k", stack.Caller(skip))
+		ctx = newContext(l.ctx, ctx)
+		for i := 0; i < len(ctx); i += 2 {
+			k, ok := ctx[i].(string)
+			if !ok {
 
+			}
+			if s, ok := ctx[i+1].(TerminalStringer); ok {
+				field[k] = s.TerminalString()
+			} else {
+				field[k] = ctx[i+1]
+			}
 		}
-		if s, ok := ctx[i+1].(TerminalStringer); ok {
-			field[k] = s.TerminalString()
-		} else {
-			field[k] = ctx[i+1]
-		}
+	}
 
+	if terminal.IsLevelEnabled(logrus.Level(lvl)) {
+		prepareFields()
+		terminal.WithFields(field).Log(logrus.Level(lvl), msg)
 	}
-	switch lvl {
-	case LvlCrit:
-		terminal.WithFields(field).Panic(msg)
-		std.WithFields(field).Panic(msg)
-	case LvlError:
-		terminal.WithFields(field).Error(msg)
-		std.WithFields(field).Error(msg)
-	case LvlWarn:
-		terminal.WithFields(field).Warn(msg)
-		std.WithFields(field).Warn(msg)
-	case LvlInfo:
-		terminal.WithFields(field).Info(msg)
-		std.WithFields(field).Info(msg)
-	case LvlDebug:
-		terminal.WithFields(field).Debug(msg)
-		std.WithFields(field).Debug(msg)
-	case LvlTrace:
-		terminal.WithFields(field).Trace(msg)
-		std.WithFields(field).Trace(msg)
+
+	if std.IsLevelEnabled(logrus.Level(lvl)) {
+		prepareFields()
+		std.WithFields(field).Log(logrus.Level(lvl), msg)
 	}
+	//switch lvl {
+	//case LvlCrit:
+	//	terminal.WithFields(field).Panic(msg)
+	//	std.WithFields(field).Panic(msg)
+	//case LvlError:
+	//	terminal.WithFields(field).Error(msg)
+	//	std.WithFields(field).Error(msg)
+	//case LvlWarn:
+	//	terminal.WithFields(field).Warn(msg)
+	//	std.WithFields(field).Warn(msg)
+	//case LvlInfo:
+	//	terminal.WithFields(field).Info(msg)
+	//	std.WithFields(field).Info(msg)
+	//case LvlDebug:
+	//	terminal.WithFields(field).Debug(msg)
+	//	std.WithFields(field).Debug(msg)
+	//case LvlTrace:
+	//	terminal.WithFields(field).Trace(msg)
+	//	std.WithFields(field).Trace(msg)
+	//}
 }
 
 func (l *logger) New(ctx ...interface{}) Logger {

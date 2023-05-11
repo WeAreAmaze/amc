@@ -14,7 +14,7 @@ import (
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"math/big"
 )
 

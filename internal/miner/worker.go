@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/core"
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/holiman/uint256"
@@ -481,9 +482,18 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, ibs *state
 	for _, tx := range txs {
 		// Start executing the transaction
 		_, err := miningCommitTx(tx, env.coinbase, &vm2.Config{}, w.chainConfig, ibs, env)
-		if nil != err {
+
+		switch {
+		case errors.Is(err, core.ErrGasLimitReached):
+			continue
+		case errors.Is(err, core.ErrNonceTooHigh):
+			continue
+		case errors.Is(err, core.ErrNonceTooLow):
+			continue
+		case errors.Is(err, nil):
+			continue
+		default:
 			log.Error("miningCommitTx failed ", "error", err)
-			//continue
 		}
 	}
 

@@ -1,17 +1,30 @@
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
 package evmsdk
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"github.com/amazechain/amc/common/crypto"
 	"reflect"
 	"sync"
 	"testing"
-
-	"github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/types"
 )
 
 func TestGetNetInfos(t *testing.T) {
@@ -410,40 +423,14 @@ func TestEngineStop(t *testing.T) {
 }
 */
 
-func Test_innerEntireCode_UnmarshalJSON(t *testing.T) {
-	/*
-			CoinBase types.Address   `json:"coinBase"`
-			Entire   Entire          `json:"entire"`
-			Codes    []*HashCode     `json:"codes"`
-			Headers  []*block.Header `json:"headers"`
-			Rewards  []block.Reward  `json:"rewards"`
+func TestBeanchMark(t *testing.T) {
 
-			type Reward struct {
-			Address types.Address
-			Amount  uint256.Int
-		}
-	*/
-	inBytes := []byte(`{"coinBase":"0x0000000000000000000000000000000000000000","entire":{"header":null,"uncles":null,"transactions":null,"snap":null,"proof":"0x0000000000000000000000000000000000000000000000000000000000000000","senders":null},"codes":null,"headers":null,"rewards":[{"Address":"0x0000000000000000000000000000000000000000","Amount":"0x21"}]}`)
-	h := new(innerEntireCode)
-	if err := json.Unmarshal(inBytes, h); err != nil {
-		t.Errorf("innerEntireCode.UnmarshalJSON() error = %v", err)
-	}
-}
+	var (
+		key, _ = crypto.HexToECDSA("d6d8d19bd786d6676819b806694b1100a4414a94e51e9a82a351bd8f7f3f3658")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		//signer  = new(types.HomesteadSigner)
+		//content = context.Background()
+	)
 
-func TestBlockRewardJson(t *testing.T) {
-	bs := []block.Reward{block.Reward{
-		Address: types.Address{},
-		Amount:  uint256.NewInt(33),
-	}}
-	h := &innerEntireCode{
-		CoinBase: types.Address{},
-		Rewards:  bs,
-	}
-
-	bytes, err := json.Marshal(h)
-	s := string(bytes)
-	fmt.Println(s)
-	if err != nil {
-		t.Error(err)
-	}
+	fmt.Println(addr)
 }

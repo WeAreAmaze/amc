@@ -29,3 +29,5 @@ mobile/
 
 .DS_Store
 amc
+
+genesis*.json

@@ -19,7 +19,7 @@ package network
 import (
 	"bytes"
 	"github.com/amazechain/amc/common/message"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"io"
 )
 

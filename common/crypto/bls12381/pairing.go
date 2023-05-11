@@ -1,18 +1,18 @@
-// Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The AmazeChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The AmazeChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 package bls12381
 
@@ -21,7 +21,6 @@ type pair struct {
 	g2 *PointG2
 }
 
-// newPair  just a pair which g1 lies on Group G1, g2 lies on Group G2
 func newPair(g1 *PointG1, g2 *PointG2) pair {
 	return pair{g1, g2}
 }
@@ -255,7 +254,6 @@ func (e *Engine) finalExp(f *fe12) {
 	fp12.mul(f, &t[3], &t[4])
 }
 
-// calculate The behavior of paring
 func (e *Engine) calculate() *fe12 {
 	f := e.fp12.one()
 	if len(e.pairs) == 0 {

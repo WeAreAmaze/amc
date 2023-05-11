@@ -28,7 +28,7 @@ NDK_VERSION=21.1.6352462
 NDK_HOME=$(ANDROID_SDK)/ndk/$(NDK_VERSION)
 #ANDROID_SDK=/Users/mac/Library/Android/sdk
 MOBILE_GO_FLAGS = -ldflags "-X ${PACKAGE}/cmd/evmsdk/common.VERSION=${GIT_COMMIT}"
-MOBILE_PACKAGE= $(shell pwd)/cmd/evm
+MOBILE_PACKAGE= $(shell pwd)/cmd/evmsdk
 BUILD_MOBILE_PATH = ./build/mobile/
 
 
@@ -96,15 +96,15 @@ dev:
 	--account.unlock=0x588639773bc6f163aa262245cda746c120676431 --account.allow.insecure.unlock --account.password $(HOME)/.metachain/passwd
 
 #== mobiles start
-mobile: clean mobile-dir ios android
+mobile: clean mobile-dir android ios
 
 mobile-dir:
 	#go get golang.org/x/mobile/bind/objc
 	mkdir -p $(BUILD_MOBILE_PATH)/android
 ios:
-	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/evm.xcframework -target=ios $(MOBILE_PACKAGE)
+	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/evmsdk.xcframework -target=ios $(MOBILE_PACKAGE)
 android:
-	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind -x ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/android/evm.aar -target=android $(MOBILE_PACKAGE)
+	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind -x ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/android/evmsdk.aar -target=android $(MOBILE_PACKAGE)
 
 open-output:
 	open ./mobile

@@ -14,12 +14,12 @@ import (
 )
 
 func TestSignVerify(t *testing.T) {
-	priv, err := RandKey() // RandKey will return a random secret key which actually is a scalar
+	priv, err := RandKey()
 	require.NoError(t, err)
 	pub := priv.PublicKey()
 	msg := []byte("hello")
-	sig := priv.Sign(msg)                                                   // The secret key has a function Sign which can be used to sign a byte array
-	assert.Equal(t, true, sig.Verify(pub, msg), "Signature did not verify") // The output of Verify is a type of bool
+	sig := priv.Sign(msg)
+	assert.Equal(t, true, sig.Verify(pub, msg), "Signature did not verify")
 }
 
 func TestAggregateVerify(t *testing.T) {
@@ -36,11 +36,10 @@ func TestAggregateVerify(t *testing.T) {
 		sigs = append(sigs, sig)
 		msgs = append(msgs, msg)
 	}
-	aggSig := AggregateSignatures(sigs) // Using multi signs aggregate into a single AggregateSignatures
+	aggSig := AggregateSignatures(sigs)
 	assert.Equal(t, true, aggSig.AggregateVerify(pubkeys, msgs), "Signature did not verify")
 }
 
-// Compress aggregated signatures through Marshal
 func TestAggregateVerify_CompressedSignatures(t *testing.T) {
 	pubkeys := make([]common.PublicKey, 0, 100)
 	sigs := make([]common.Signature, 0, 100)
@@ -59,7 +58,7 @@ func TestAggregateVerify_CompressedSignatures(t *testing.T) {
 	}
 	aggSig := AggregateSignatures(sigs)
 	assert.Equal(t, true, aggSig.AggregateVerify(pubkeys, msgs), "Signature did not verify")
-	//Use SigBytes to compress the Signatures
+
 	aggSig2, err := AggregateCompressedSignatures(sigBytes)
 	assert.NoError(t, err)
 	assert.Equal(t, aggSig.Marshal(), aggSig2.Marshal(), "Signature did not match up")

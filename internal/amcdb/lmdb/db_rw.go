@@ -61,14 +61,10 @@ func newDBI(ctx context.Context, env *mdbx.Env, name string) (*DBI, error) {
 	return &dbi, nil
 }
 
-//Get retrieve the value of the given key from database dbi.
-//The function takes a byte array key as an argument and
-//returns two values: a byte array value and an error object err.
-
 func (db *DBI) Get(key []byte) (value []byte, err error) {
-	db.lock.RLock() //the function uses read-write locks RLock and RUnlock to guarantee concurrency safety.
+	db.lock.RLock()
 	defer db.lock.RUnlock()
-	err = db.env.View(func(txn *mdbx.Txn) error { //The View() method opens a read-only transaction and executes the given function
+	err = db.env.View(func(txn *mdbx.Txn) error {
 		value, err = txn.Get(*db.DBI, key)
 		return err
 	})
@@ -76,19 +72,17 @@ func (db *DBI) Get(key []byte) (value []byte, err error) {
 	return value, err
 }
 
-// Gets  The Gets function queries multiple key-value pairs based on a key
-// the count parameter is used to specify the number of returned key-value pairs through
 func (db *DBI) Gets(key []byte, count uint) (keys [][]byte, values [][]byte, err error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 	err = db.env.View(func(txn *mdbx.Txn) error {
-		cur, err := txn.OpenCursor(*db.DBI) //A cursor is open within the transaction
+		cur, err := txn.OpenCursor(*db.DBI)
 		if err != nil {
 			return err
 		}
 		defer cur.Close()
 
-		k, v, err := cur.Get(key, nil, mdbx.Set) //SetRange   set the range of key and value
+		k, v, err := cur.Get(key, nil, mdbx.Set) //SetRange
 		if err != nil {
 			return err
 		}
@@ -106,7 +100,7 @@ func (db *DBI) Gets(key []byte, count uint) (keys [][]byte, values [][]byte, err
 
 			keys = append(keys, k)
 			values = append(values, v)
-			if len(keys) >= int(count) { //When the specified number of key-value pairs is obtained, the loop exits
+			if len(keys) >= int(count) {
 				break
 			}
 		}

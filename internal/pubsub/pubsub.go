@@ -26,7 +26,7 @@ import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/log"
-	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p/core/host"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 

@@ -17,8 +17,8 @@
 package common
 
 import (
-	"errors"
 	"fmt"
+	"github.com/amazechain/amc/core"
 	"math"
 )
 
@@ -39,7 +39,7 @@ func (gp *GasPool) AddGas(amount uint64) *GasPool {
 // available and returns an error otherwise.
 func (gp *GasPool) SubGas(amount uint64) error {
 	if uint64(*gp) < amount {
-		return errors.New("gas limit reached")
+		return core.ErrGasLimitReached
 	}
 	*(*uint64)(gp) -= amount
 	return nil

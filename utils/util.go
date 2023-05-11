@@ -23,7 +23,7 @@ import (
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common/types"
 	"github.com/holiman/uint256"
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/sha3"
 	"os"
 )

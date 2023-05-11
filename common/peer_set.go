@@ -18,7 +18,7 @@ package common
 
 import (
 	"github.com/holiman/uint256"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"time"
 )
 

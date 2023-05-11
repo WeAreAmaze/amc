@@ -19,7 +19,9 @@ package apos
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/amazechain/amc/turbo/rpchelper"
 	"github.com/holiman/uint256"
 	"strconv"
@@ -36,7 +38,7 @@ import (
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 )
 
-const maxSearchBlock = 100000
+const maxSearchBlock = 1000
 
 type MinedBlock struct {
 	BlockNumber *uint256.Int `json:"blockNumber"`
@@ -297,14 +299,27 @@ func (api *API) GetDepositInfo(address common.Address) (*deposit.Info, error) {
 }
 
 // GetRewards
-func (api *API) GetBlockRewards(blockNr jsonrpc.BlockNumberOrHash) (map[types.Address]uint256.Int, error) {
+func (api *API) GetBlockRewards(blockNr jsonrpc.BlockNumberOrHash) (map[types.Address]*uint256.Int, error) {
 	rewardService := newReward(api.apos.config, api.apos.chainConfig)
 
-	resp := make(map[types.Address]uint256.Int, 0)
+	resp := make(map[types.Address]*uint256.Int, 0)
 	var err error
-	currentBlock := api.chain.CurrentBlock()
 	api.apos.db.View(context.Background(), func(tx kv.Tx) error {
-		resp, err = rewardService.GetBlockRewards(tx, currentBlock)
+
+		var resolvedBlockNr *uint256.Int
+		var hash types.Hash
+		resolvedBlockNr, hash, err = rpchelper.GetCanonicalBlockNumber(blockNr, tx)
+		if err != nil {
+			return err
+		}
+
+		header := rawdb.ReadHeader(tx, hash, resolvedBlockNr.Uint64())
+		if header == nil {
+			err = errors.New("cannot find header")
+			return err
+		}
+
+		resp, err = rewardService.GetBlockRewards(tx, header)
 		return nil
 	})
 

@@ -2,6 +2,24 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint64",
+        "name": "limit",
+        "type": "uint64"
+      }
+    ],
+    "name": "addDepositLimit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bytes",
         "name": "pubkey",
         "type": "bytes"
@@ -26,7 +44,17 @@
       },
       {
         "internalType": "uint64",
-        "name": "_tenDepositLimit",
+        "name": "_fiftyDepositLimit",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "_oneHundredDepositLimit",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "_fiveHundredDepositLimit",
         "type": "uint64"
       }
     ],
@@ -182,6 +210,48 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "getDepositLimit",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getDepositRemain",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
       }
     ],
     "stateMutability": "view",

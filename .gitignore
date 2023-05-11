@@ -17,4 +17,15 @@
 #
 build/
 .idea
+
+#vscode
+.vscode/
+
+# utests
+modules/rawdb/mdbx.db/
+
+# mobile outputs
+mobile/
+
+.DS_Store
 amc

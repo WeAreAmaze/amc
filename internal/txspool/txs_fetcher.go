@@ -31,7 +31,7 @@ import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"go.uber.org/zap"
 )
 

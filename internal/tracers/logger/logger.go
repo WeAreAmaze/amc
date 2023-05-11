@@ -1,18 +1,18 @@
-// Copyright 2021 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The AmazeChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The AmazeChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 package logger
 
@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"strings"
 	"sync/atomic"
 
@@ -329,27 +328,30 @@ func WriteLogs(writer io.Writer, logs []*types.Log) {
 type mdLogger struct {
 	out io.Writer
 	cfg *Config
-	env *vm.EVM
+	env vm.VMInterface
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
 // for human readability, and is also a valid markdown table
 func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
-	l := &mdLogger{out: writer, cfg: cfg}
+	l := &mdLogger{writer, cfg, nil}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
 	return l
 }
 
-func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
+func (t *mdLogger) CaptureTxStart(gasLimit uint64) {}
+
+func (t *mdLogger) CaptureTxEnd(restGas uint64) {}
+
+func (t *mdLogger) captureStartOrEnter(from, to common.Address, create bool, input []byte, gas uint64, value *uint256.Int) {
 	if !create {
-		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
 			input, gas, value)
 	} else {
-		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
 			input, gas, value)
 	}
@@ -360,16 +362,25 @@ func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 `)
 }
 
-// CaptureState also tracks SLOAD/SSTORE ops to track storage change.
+func (t *mdLogger) CaptureStart(env vm.VMInterface, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *uint256.Int) { //nolint:interfacer
+	t.env = env
+	t.captureStartOrEnter(from, to, create, input, gas, value)
+}
+
+func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *uint256.Int) { //nolint:interfacer
+	t.captureStartOrEnter(from, to, false, input, gas, value)
+}
+
 func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
+
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
 
 	if !t.cfg.DisableStack {
 		// format stack
 		var a []string
 		for _, elem := range stack.Data {
-			a = append(a, elem.Hex())
+			a = append(a, fmt.Sprintf("%v", elem.String()))
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
@@ -385,19 +396,18 @@ func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
-func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
-		output, gasUsed, err)
+func (t *mdLogger) captureEndOrExit(output []byte, usedGas uint64, err error) {
+	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
+		output, usedGas, err)
 }
 
-func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *mdLogger) CaptureEnd(output []byte, usedGas uint64, err error) {
+	t.captureEndOrExit(output, usedGas, err)
 }
 
-func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-func (*mdLogger) CaptureTxStart(gasLimit uint64) {}
-
-func (*mdLogger) CaptureTxEnd(restGas uint64) {}
+func (t *mdLogger) CaptureExit(output []byte, usedGas uint64, err error) {
+	t.captureEndOrExit(output, usedGas, err)
+}
 
 // ExecutionResult groups all structured logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction

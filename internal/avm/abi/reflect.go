@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The AmazeChain library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The AmazeChain library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -28,11 +28,13 @@ import (
 // given type
 // e.g. turn
 // var fields []reflect.StructField
-// fields = append(fields, reflect.StructField{
-// 		Name: "X",
-//		Type: reflect.TypeOf(new(big.Int)),
-//		Tag:  reflect.StructTag("json:\"" + "x" + "\""),
-// }
+//
+//	fields = append(fields, reflect.StructField{
+//			Name: "X",
+//			Type: reflect.TypeOf(new(big.Int)),
+//			Tag:  reflect.StructTag("json:\"" + "x" + "\""),
+//	}
+//
 // into
 // type TupleT struct { X *big.Int }
 func ConvertType(in interface{}, proto interface{}) interface{} {
@@ -171,10 +173,14 @@ func setStruct(dst, src reflect.Value) error {
 
 // mapArgNamesToStructFields maps a slice of argument names to struct fields.
 // first round: for each Exportable field that contains a `abi:""` tag
-//   and this field name exists in the given argument name list, pair them together.
+//
+//	and this field name exists in the given argument name list, pair them together.
+//
 // second round: for each argument name that has not been already linked,
-//   find what variable is expected to be mapped into, if it exists and has not been
-//   used, pair them.
+//
+//	find what variable is expected to be mapped into, if it exists and has not been
+//	used, pair them.
+//
 // Note this function assumes the given value is a struct value.
 func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[string]string, error) {
 	typ := value.Type()

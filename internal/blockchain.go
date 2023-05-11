@@ -41,8 +41,8 @@ import (
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rawdb"
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/libp2p/go-libp2p-core/peer"
+	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var (
@@ -67,10 +67,14 @@ const (
 
 const (
 	//maxTimeFutureBlocks
+	blockCacheLimit     = 1024
 	receiptsCacheLimit  = 32
 	maxFutureBlocks     = 256
-	tdCacheLimit        = 1024
 	maxTimeFutureBlocks = 5 * 60 // 5 min
+
+	headerCacheLimit = 1024
+	tdCacheLimit     = 1024
+	numberCacheLimit = 2048
 )
 
 type BlockChain struct {
@@ -103,10 +107,14 @@ type BlockChain struct {
 
 	wg sync.WaitGroup //
 
-	procInterrupt int32      // insert chain
-	tdCache       *lru.Cache //  map[types.Hash]*uint256.Int // td cache
-	futureBlocks  *lru.Cache //
-	receiptCache  *lru.Cache
+	procInterrupt int32 // insert chain
+	futureBlocks  *lru.Cache[types.Hash, *block2.Block]
+	receiptCache  *lru.Cache[types.Hash, []*block2.Receipt]
+	blockCache    *lru.Cache[types.Hash, *block2.Block]
+
+	headerCache *lru.Cache[types.Hash, *block2.Header]
+	numberCache *lru.Cache[types.Hash, uint64]
+	tdCache     *lru.Cache[types.Hash, *uint256.Int]
 
 	forker    *ForkChoice
 	validator Validator
@@ -127,11 +135,9 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-// NewBlockChain creates a new instance of blockchain
 func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, pubsub common.IPubSub, config *params.ChainConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	var current *block2.Block
-	// Read the current block from the database
 	_ = db.View(c, func(tx kv.Tx) error {
 		current = rawdb.ReadCurrentBlock(tx)
 		if current == nil {
@@ -140,12 +146,12 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		return nil
 	})
 
-	// Create LRU caches
-	futureBlocks, _ := lru.New(maxFutureBlocks)
-	receiptsCache, _ := lru.New(receiptsCacheLimit)
-	tdCache, _ := lru.New(tdCacheLimit)
-
-	// Instantiate the blockchain object
+	blockCache, _ := lru.New[types.Hash, *block2.Block](blockCacheLimit)
+	futureBlocks, _ := lru.New[types.Hash, *block2.Block](maxFutureBlocks)
+	receiptsCache, _ := lru.New[types.Hash, []*block2.Receipt](receiptsCacheLimit)
+	tdCache, _ := lru.New[types.Hash, *uint256.Int](tdCacheLimit)
+	numberCache, _ := lru.New[types.Hash, uint64](numberCacheLimit)
+	headerCache, _ := lru.New[types.Hash, *block2.Header](headerCacheLimit)
 	bc := &BlockChain{
 		chainConfig:   config, // Chain & network configuration
 		genesisBlock:  genesisBlock,
@@ -162,9 +168,13 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		downloader:    downloader,
 		latestBlockCh: make(chan block2.IBlock, 50),
 		engine:        engine,
+		blockCache:    blockCache,
 		tdCache:       tdCache,
 		futureBlocks:  futureBlocks,
 		receiptCache:  receiptsCache,
+
+		numberCache: numberCache,
+		headerCache: headerCache,
 	}
 
 	bc.forker = NewForkChoice(bc, nil)
@@ -219,9 +229,7 @@ func (bc *BlockChain) Start() error {
 
 	bc.wg.Add(3)
 	go bc.runLoop()
-	//add blocks from pubsub
 	go bc.newBlockLoop()
-	//orderly add future blocks
 	go bc.updateFutureBlocksLoop()
 
 	return nil
@@ -388,9 +396,7 @@ func (bc *BlockChain) LatestBlockCh() (block2.IBlock, error) {
 	}
 }
 
-// newBlockLoop creates a loop that listens for new blocks on  pubsub  and adds them to the blockchain.
 func (bc *BlockChain) newBlockLoop() {
-	//不需要defer？直接执行？（如果不需要defer，该字段又是什么意义）
 	bc.wg.Done()
 	if bc.pubsub == nil {
 		bc.errorCh <- ErrInvalidPubSub
@@ -408,7 +414,7 @@ func (bc *BlockChain) newBlockLoop() {
 		bc.errorCh <- ErrInvalidPubSub
 		return
 	}
-	// Receive new Block messages and insert them into the BlockChain
+
 	for {
 		select {
 		case <-bc.ctx.Done():
@@ -428,8 +434,6 @@ func (bc *BlockChain) newBlockLoop() {
 				if err := block.FromProtoMessage(&newBlock); err == nil {
 					var inserted bool
 					// if future block
-					// If the new received block is a future block, add it to the future blocks list
-					// Otherwise insert it into the BlockChain
 					if block.Number64().Uint64() > bc.CurrentBlock().Number64().Uint64()+1 {
 						inserted = false
 						bc.addFutureBlock(&block)
@@ -456,7 +460,6 @@ func (bc *BlockChain) newBlockLoop() {
 
 }
 
-// runLoop end of run ，the BlockChain can`t be inserted
 func (bc *BlockChain) runLoop() {
 	defer func() {
 		bc.wg.Done()
@@ -480,8 +483,6 @@ func (bc *BlockChain) runLoop() {
 }
 
 // updateFutureBlocksLoop
-// if there are any future blocks waiting to be added to the blockchain, retrieves them and sorts them by block number.
-// If the first block in the sorted list has a block number greater than the current block plus one, then the loop continues without doing anything.
 func (bc *BlockChain) updateFutureBlocksLoop() {
 	futureTimer := time.NewTicker(2 * time.Second)
 	defer futureTimer.Stop()
@@ -493,7 +494,7 @@ func (bc *BlockChain) updateFutureBlocksLoop() {
 				blocks := make([]block2.IBlock, 0, bc.futureBlocks.Len())
 				for _, key := range bc.futureBlocks.Keys() {
 					if value, ok := bc.futureBlocks.Get(key); ok {
-						blocks = append(blocks, value.(block2.IBlock))
+						blocks = append(blocks, value)
 					}
 				}
 				sort.Slice(blocks, func(i, j int) bool {
@@ -575,10 +576,22 @@ func (bc *BlockChain) syncChain(remoteBlock uint64, peerID peer.ID) {
 }
 
 func (bc *BlockChain) GetHeader(h types.Hash, number *uint256.Int) block2.IHeader {
-	header, err := bc.GetHeaderByHash(h)
-	if err != nil {
+	// Short circuit if the header's already in the cache, retrieve otherwise
+	if header, ok := bc.headerCache.Get(h); ok {
+		return header
+	}
+
+	tx, err := bc.ChainDB.BeginRo(bc.ctx)
+	if nil != err {
 		return nil
 	}
+	defer tx.Rollback()
+	header := rawdb.ReadHeader(tx, h, number.Uint64())
+	if nil == header {
+		return nil
+	}
+
+	bc.headerCache.Add(h, header)
 	return header
 }
 
@@ -599,58 +612,89 @@ func (bc *BlockChain) GetHeaderByNumber(number *uint256.Int) block2.IHeader {
 		return nil
 	}
 
-	return rawdb.ReadHeader(tx, hash, number.Uint64())
-}
-
-func (bc *BlockChain) GetHeaderByNumberTxn(tx kv.Tx, number *uint256.Int) block2.IHeader {
-	hash, err := rawdb.ReadCanonicalHash(tx, number.Uint64())
-	if nil != err {
-		log.Error("cannot open chain db", "err", err)
+	//return bc.GetHeader(hash, number)
+	if header, ok := bc.headerCache.Get(hash); ok {
+		return header
+	}
+	header := rawdb.ReadHeader(tx, hash, number.Uint64())
+	if nil == header {
 		return nil
 	}
-	if hash == (types.Hash{}) {
-		return nil
-	}
-
-	return rawdb.ReadHeader(tx, hash, number.Uint64())
+	bc.headerCache.Add(hash, header)
+	return header
 }
 
 func (bc *BlockChain) GetHeaderByHash(h types.Hash) (block2.IHeader, error) {
-	tx, err := bc.ChainDB.BeginRo(bc.ctx)
-	if nil != err {
-		return nil, err
+	number := bc.GetBlockNumber(h)
+	if number == nil {
+		return nil, nil
 	}
-	defer tx.Rollback()
-	return rawdb.ReadHeaderByHash(tx, h)
+
+	return bc.GetHeader(h, uint256.NewInt(*number)), nil
 }
 
 // GetCanonicalHash returns the canonical hash for a given block number
 func (bc *BlockChain) GetCanonicalHash(number *uint256.Int) types.Hash {
-	block, err := bc.GetBlockByNumber(number)
+	//block, err := bc.GetBlockByNumber(number)
+	//if nil != err {
+	//	return types.Hash{}
+	//}
+	//
+	//return block.Hash()
+	tx, err := bc.ChainDB.BeginRo(bc.ctx)
 	if nil != err {
 		return types.Hash{}
 	}
+	defer tx.Rollback()
 
-	return block.Hash()
+	hash, err := rawdb.ReadCanonicalHash(tx, number.Uint64())
+	if nil != err {
+		return types.Hash{}
+	}
+	return hash
+}
+
+// GetBlockNumber retrieves the block number belonging to the given hash
+// from the cache or database
+func (bc *BlockChain) GetBlockNumber(hash types.Hash) *uint64 {
+	if cached, ok := bc.numberCache.Get(hash); ok {
+		return &cached
+	}
+	tx, err := bc.ChainDB.BeginRo(bc.ctx)
+	if nil != err {
+		return nil
+	}
+	defer tx.Rollback()
+	number := rawdb.ReadHeaderNumber(tx, hash)
+	if number != nil {
+		bc.numberCache.Add(hash, *number)
+	}
+	return number
 }
 
 func (bc *BlockChain) GetBlockByHash(h types.Hash) (block2.IBlock, error) {
-	// todo mu?
-	tx, err := bc.ChainDB.BeginRo(bc.ctx)
-	if err != nil {
-		return nil, err
-	}
-	block, err := rawdb.ReadBlockByHash(tx, h)
+	//
+	//tx, err := bc.ChainDB.BeginRo(bc.ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//block, err := rawdb.ReadBlockByHash(tx, h)
+	//
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if block != nil {
+	//	return block, nil
+	//}
+	//
+	//return nil, errBlockDoesNotExist
 
-	if err != nil {
-		return nil, err
+	number := bc.GetBlockNumber(h)
+	if nil == number {
+		return nil, errBlockDoesNotExist
 	}
-
-	if block != nil {
-		return block, nil
-	}
-
-	return nil, errBlockDoesNotExist
+	return bc.GetBlock(h, *number), nil
 }
 
 func (bc *BlockChain) GetBlockByNumber(number *uint256.Int) (block2.IBlock, error) {
@@ -691,12 +735,17 @@ func (bc *BlockChain) SetEngine(engine consensus.Engine) {
 
 func (bc *BlockChain) GetBlocksFromHash(hash types.Hash, n int) (blocks []block2.IBlock) {
 	var number *uint64
-	bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
-		number = rawdb.ReadHeaderNumber(tx, hash)
-		return nil
-	})
-	if number == nil {
-		return nil
+	if num, ok := bc.numberCache.Get(hash); ok {
+		number = &num
+	} else {
+		bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
+			number = rawdb.ReadHeaderNumber(tx, hash)
+			return nil
+		})
+		if number == nil {
+			return nil
+		}
+		bc.numberCache.Add(hash, *number)
 	}
 
 	for i := 0; i < n; i++ {
@@ -716,6 +765,11 @@ func (bc *BlockChain) GetBlock(hash types.Hash, number uint64) block2.IBlock {
 	if hash == (types.Hash{}) {
 		return nil
 	}
+
+	if block, ok := bc.blockCache.Get(hash); ok {
+		return block
+	}
+
 	tx, err := bc.ChainDB.BeginRo(bc.ctx)
 	if nil != err {
 		return nil
@@ -725,6 +779,7 @@ func (bc *BlockChain) GetBlock(hash types.Hash, number uint64) block2.IBlock {
 	if block == nil {
 		return nil
 	}
+	bc.blockCache.Add(hash, block)
 	return block
 	//header, err := rawdb.ReadHeaderByHash(tx, hash)
 	//if err != nil {
@@ -798,7 +853,7 @@ func (bc *BlockChain) HasBlock(hash types.Hash, number uint64) bool {
 func (bc *BlockChain) GetTd(hash types.Hash, number *uint256.Int) *uint256.Int {
 
 	if td, ok := bc.tdCache.Get(hash); ok {
-		return td.(*uint256.Int)
+		return td
 	}
 
 	var td *uint256.Int
@@ -1442,7 +1497,7 @@ func (bc *BlockChain) addFutureBlock(block block2.IBlock) error {
 	}
 
 	log.Info("add future block", "hash", block.Hash(), "number", block.Number64().Uint64(), "stateRoot", block.StateRoot(), "txs", len(block.Body().Transactions()))
-	bc.futureBlocks.Add(block.Hash(), block)
+	bc.futureBlocks.Add(block.Hash(), block.(*block2.Block))
 	return nil
 }
 

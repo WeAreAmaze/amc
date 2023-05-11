@@ -1,6 +1,23 @@
+// Copyright 2023 The AmazeChain Authors
+// This file is part of the AmazeChain library.
+//
+// The AmazeChain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The AmazeChain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
+
 package deposit
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"github.com/amazechain/amc/common"
@@ -29,17 +46,17 @@ const (
 	//
 	DayPerMonth = 30
 	//
-	TenDeposit         = 10
+	fiftyDeposit       = 50
 	OneHundredDeposit  = 100
 	FiveHundredDeposit = 500
 	//
-	TenDepositMaxTaskPerEpoch         = 10
+	fiftyDepositMaxTaskPerEpoch       = 500
 	OneHundredDepositMaxTaskPerEpoch  = 100
-	FiveHundredDepositMaxTaskPerEpoch = 500
+	FiveHundredDepositMaxTaskPerEpoch = 100
 	//
-	TenDepositRewardPerMonth         = 1 * params.AMT
-	OneHundredDepositRewardPerMonth  = 2 * params.AMT
-	FiveHundredDepositRewardPerMonth = 15 * params.AMT //max uint64 = ^uint64(0) ≈ 18.44 AMT so 15 AMT is ok
+	fiftyDepositRewardPerMonth       = 0.375 * params.AMT
+	OneHundredDepositRewardPerMonth  = 1 * params.AMT
+	FiveHundredDepositRewardPerMonth = 6.25 * params.AMT //max uint64 = ^uint64(0) ≈ 18.44 AMT so 15 AMT is ok
 )
 
 func init() {
@@ -63,21 +80,20 @@ func GetDepositInfo(tx kv.Tx, addr types.Address) *Info {
 	)
 	depositEther := new(uint256.Int).Div(depositAmount, uint256.NewInt(params.AMT)).Uint64()
 	switch depositEther {
-	case TenDeposit:
-		rewardPerBlock = new(uint256.Int).Add(
-			new(uint256.Int).Div(uint256.NewInt(TenDepositRewardPerMonth), uint256.NewInt(DayPerMonth*TenDepositMaxTaskPerEpoch)),
-			uint256.NewInt(params.Wei),
-		)
-		maxRewardPerEpoch = new(uint256.Int).Mul(rewardPerBlock, uint256.NewInt(TenDepositMaxTaskPerEpoch))
+	case fiftyDeposit:
+		rewardPerBlock = new(uint256.Int).Div(uint256.NewInt(fiftyDepositRewardPerMonth), uint256.NewInt(DayPerMonth*fiftyDepositMaxTaskPerEpoch))
+		maxRewardPerEpoch = new(uint256.Int).Mul(rewardPerBlock, uint256.NewInt(fiftyDepositMaxTaskPerEpoch))
 	case OneHundredDeposit:
-		rewardPerBlock = new(uint256.Int).Add(
-			new(uint256.Int).Div(uint256.NewInt(OneHundredDepositRewardPerMonth), uint256.NewInt(DayPerMonth*OneHundredDepositMaxTaskPerEpoch)),
-			uint256.NewInt(params.Wei),
-		)
+		rewardPerBlock = new(uint256.Int).Div(uint256.NewInt(OneHundredDepositRewardPerMonth), uint256.NewInt(DayPerMonth*OneHundredDepositMaxTaskPerEpoch))
+		rewardPerBlock = new(uint256.Int).Add(rewardPerBlock, uint256.NewInt(params.Wei))
 		maxRewardPerEpoch = new(uint256.Int).Mul(rewardPerBlock, uint256.NewInt(OneHundredDepositMaxTaskPerEpoch))
 	case FiveHundredDeposit:
-		maxRewardPerEpoch = new(uint256.Int).Div(uint256.NewInt(FiveHundredDepositRewardPerMonth), uint256.NewInt(DayPerMonth))
-		rewardPerBlock = new(uint256.Int).Div(maxRewardPerEpoch, uint256.NewInt(FiveHundredDepositMaxTaskPerEpoch))
+		rewardPerBlock = new(uint256.Int).Div(uint256.NewInt(FiveHundredDepositRewardPerMonth), uint256.NewInt(DayPerMonth*FiveHundredDepositMaxTaskPerEpoch))
+		rewardPerBlock = new(uint256.Int).Add(rewardPerBlock, uint256.NewInt(params.Wei))
+		//
+		maxRewardPerEpoch = new(uint256.Int).Mul(rewardPerBlock, uint256.NewInt(FiveHundredDepositMaxTaskPerEpoch))
+	case 10: //todo
+		return nil
 	default:
 		panic("wrong deposit amount")
 	}
@@ -154,11 +170,12 @@ func (d Deposit) eventLoop() {
 		d.rmLogsSub.Unsubscribe()
 	}()
 
+	var depositContractByes, _ = hexutil.Decode(d.consensusConfig.APos.DepositContract)
 	for {
 		select {
 		case logEvent := <-d.logsCh:
 			for _, l := range logEvent.Logs {
-				if nil != d.consensusConfig.APos && l.Address.String() == d.consensusConfig.APos.DepositContract {
+				if nil != d.consensusConfig.APos && bytes.Compare(l.Address[:], depositContractByes[:]) == 0 {
 					log.Trace("log event topic[0]= ", "hash", l.Topics[0], "depositEventSignature", depositEventSignature, "withdrawnSignature", withdrawnSignature)
 					if l.Topics[0] == depositEventSignature {
 						d.handleDepositEvent(l.TxHash, l.Data)

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto"
 )
 
 func TestAddress_ed25519(t *testing.T) {

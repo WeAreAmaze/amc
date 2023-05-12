@@ -471,7 +471,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 			return nil, err
 		}
 
-		log.Debugf("Stored voting snapshot to disk", "number", snap.Number, "hash", snap.Hash)
+		log.Debug("Stored voting snapshot to disk", "number", snap.Number, "hash", snap.Hash)
 	}
 	return snap, err
 }

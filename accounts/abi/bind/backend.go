@@ -23,6 +23,7 @@ import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
+	"github.com/holiman/uint256"
 	"math/big"
 )
 
@@ -46,11 +47,11 @@ var (
 type ContractCaller interface {
 	// CodeAt returns the code of the given account. This is needed to differentiate
 	// between contract internal errors and the local chain being out of sync.
-	CodeAt(ctx context.Context, contract types.Address, blockNumber uint256.Int) ([]byte, error)
+	CodeAt(ctx context.Context, contract types.Address, blockNumber *uint256.Int) ([]byte, error)
 
 	// CallContract executes an Ethereum contract call with the specified data as the
 	// input.
-	CallContract(ctx context.Context, call amazechain.CallMsg, blockNumber uint256.Int) ([]byte, error)
+	CallContract(ctx context.Context, call amazechain.CallMsg, blockNumber *uint256.Int) ([]byte, error)
 }
 
 // PendingContractCaller defines methods to perform contract calls on the pending state.
@@ -71,7 +72,7 @@ type PendingContractCaller interface {
 type ContractTransactor interface {
 	// HeaderByNumber returns a block header from the current canonical chain. If
 	// number is nil, the latest known header is returned.
-	HeaderByNumber(ctx context.Context, number uint256.Int) (*block.Header, error)
+	HeaderByNumber(ctx context.Context, number *uint256.Int) (*block.Header, error)
 
 	// PendingCodeAt returns the code of the given account in the pending state.
 	PendingCodeAt(ctx context.Context, account types.Address) ([]byte, error)
@@ -81,11 +82,11 @@ type ContractTransactor interface {
 
 	// SuggestGasPrice retrieves the currently suggested gas price to allow a timely
 	// execution of a transaction.
-	SuggestGasPrice(ctx context.Context) (uint256.Int, error)
+	SuggestGasPrice(ctx context.Context) (*uint256.Int, error)
 
 	// SuggestGasTipCap retrieves the currently suggested 1559 priority fee to allow
 	// a timely execution of a transaction.
-	SuggestGasTipCap(ctx context.Context) (uint256.Int, error)
+	SuggestGasTipCap(ctx context.Context) (*uint256.Int, error)
 
 	// EstimateGas tries to estimate the gas needed to execute a specific
 	// transaction based on the current pending state of the backend blockchain.

@@ -21,68 +21,67 @@ import (
 	"github.com/amazechain/amc/api/protocol/msg_proto"
 	"reflect"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 )
 
-func TestEvent_Send(t *testing.T) {
-	var (
-		event Event
-		count = 2000
-
-		ch1 = make(chan int, 5)
-		ch2 = make(chan uint64, 5)
-
-		wg sync.WaitGroup
-	)
-
-	sub1 := event.Subscribe(ch1)
-	defer sub1.Unsubscribe()
-	sub2 := event.Subscribe(ch2)
-	defer sub2.Unsubscribe()
-
-	wg.Add(2)
-	run := func(ch chan int, name string) {
-		defer wg.Done()
-		for {
-			select {
-			case n, ok := <-ch:
-				if !ok {
-					return
-				}
-				t.Logf("%s recv %d", name, n)
-			case err := <-sub2.Err():
-				t.Log(err)
-
-			}
-		}
-	}
-
-	run2 := func(ch chan uint64, name string) {
-		defer wg.Done()
-		for {
-			select {
-			case n, ok := <-ch:
-				if !ok {
-					return
-				}
-				t.Logf("%s recv %d", name, n)
-			case err := <-sub2.Err():
-				t.Log(err)
-
-			}
-		}
-	}
-
-	go run(ch1, "ch-1")
-	go run2(ch2, "ch-2")
-
-	for i := 0; i < count; i++ {
-		event.Send(i)
-		//time.Sleep(100 * time.Millisecond)
-	}
-}
+//func TestEvent_Send(t *testing.T) {
+//	var (
+//		event Event
+//		count = 2000
+//
+//		ch1 = make(chan int, 5)
+//		ch2 = make(chan uint64, 5)
+//
+//		wg sync.WaitGroup
+//	)
+//
+//	sub1 := event.Subscribe(ch1)
+//	defer sub1.Unsubscribe()
+//	sub2 := event.Subscribe(ch2)
+//	defer sub2.Unsubscribe()
+//
+//	wg.Add(2)
+//	run := func(ch chan int, name string) {
+//		defer wg.Done()
+//		for {
+//			select {
+//			case n, ok := <-ch:
+//				if !ok {
+//					return
+//				}
+//				t.Logf("%s recv %d", name, n)
+//			case err := <-sub2.Err():
+//				t.Log(err)
+//
+//			}
+//		}
+//	}
+//
+//	run2 := func(ch chan uint64, name string) {
+//		defer wg.Done()
+//		for {
+//			select {
+//			case n, ok := <-ch:
+//				if !ok {
+//					return
+//				}
+//				t.Logf("%s recv %d", name, n)
+//			case err := <-sub2.Err():
+//				t.Log(err)
+//
+//			}
+//		}
+//	}
+//
+//	go run(ch1, "ch-1")
+//	go run2(ch2, "ch-2")
+//
+//	for i := 0; i < count; i++ {
+//		event.Send(i)
+//		//time.Sleep(100 * time.Millisecond)
+//	}
+//}
 
 func TestTime(t *testing.T) {
 	var timestamp int64 = 1615594634

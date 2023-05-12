@@ -233,6 +233,15 @@ var (
 		Value:       "./amc/",
 		Destination: &DefaultConfig.NodeCfg.DataDir,
 	}
+
+	FromDataDirFlag = &cli.StringFlag{
+		Name:  "chaindata.from",
+		Usage: "source data  dir",
+	}
+	ToDataDirFlag = &cli.StringFlag{
+		Name:  "chaindata.to",
+		Usage: "to data  dir",
+	}
 )
 
 var (

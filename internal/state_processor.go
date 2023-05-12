@@ -132,7 +132,7 @@ func (p *StateProcessor) Process(tx kv.RwTx, b *block.Block, ibs *state.IntraBlo
 
 	if !cfg.ReadOnly {
 		txs := b.Transactions()
-		if _, _, _, err := FinalizeBlockExecution(tx, p.engine, stateReader, b.Header().(*block.Header), txs, b.Uncles(), stateWriter, chainConfig, ibs, receipts, chainReader, false, p.config.IsBeijing(b.Number64().Uint64())); err != nil {
+		if _, _, _, err := FinalizeBlockExecution(tx, p.engine, b.Header().(*block.Header), txs, stateWriter, chainConfig, ibs, receipts, chainReader, false, p.config.IsBeijing(b.Number64().Uint64())); err != nil {
 			return nil, nil, 0, err
 		}
 	}

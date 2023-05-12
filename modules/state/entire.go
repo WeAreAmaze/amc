@@ -24,6 +24,7 @@ import (
 	"github.com/amazechain/amc/internal/avm/rlp"
 	types2 "github.com/amazechain/amc/internal/avm/types"
 	"github.com/amazechain/amc/modules"
+	"io"
 	"unsafe"
 )
 
@@ -226,4 +227,18 @@ func (s *Snapshot) AddStorage(address types.Address, key *types.Hash, incarnatio
 	s.Items = append(s.Items, &Item{Key: compositeKey, Value: value})
 	//fmt.Println("address", address.Hex(), key.Hex())
 	s.storage[*(*string)(unsafe.Pointer(&compositeKey))] = len(s.storage)
+}
+
+func EncodeBeforeState(w io.Writer, list Items, codeHash HashCodes) {
+	enc := make([]interface{}, 0, len(list)*2+len(codeHash)*2)
+	for _, i := range list {
+		enc = append(enc, i.Key, i.Value)
+	}
+
+	for _, h := range codeHash {
+		enc = append(enc, h.Hash, h.Code)
+	}
+	if err := rlp.Encode(w, enc); nil != err {
+		panic("before state encode failed:" + err.Error())
+	}
 }

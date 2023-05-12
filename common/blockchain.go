@@ -59,9 +59,12 @@ type IBlockChain interface {
 	StateAt(tx kv.Tx, blockNr uint64) *state.IntraBlockState
 
 	GetTd(hash types.Hash, number *uint256.Int) *uint256.Int
+	HasBlock(hash types.Hash, number uint64) bool
 
 	DB() kv.RwDB
 	Quit() <-chan struct{}
+
+	WriteBlockWithState(block block.IBlock, receipts []*block.Receipt) error
 }
 
 type IMiner interface {

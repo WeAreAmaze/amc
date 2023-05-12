@@ -135,6 +135,7 @@ func (h *Header) ToProtoMessage() proto.Message {
 		Extra:       h.Extra,
 		Signature:   utils.ConvertSignatureToH768(h.Signature),
 		Bloom:       utils.ConvertBytesToH2048(h.Bloom.Bytes()),
+		MixDigest:   utils.ConvertHashToH256(h.MixDigest),
 	}
 }
 
@@ -163,6 +164,7 @@ func (h *Header) FromProtoMessage(message proto.Message) error {
 	h.Extra = pbHeader.Extra
 	h.Signature = utils.ConvertH768ToSignature(pbHeader.Signature)
 	h.Bloom = utils.ConvertH2048ToBloom(pbHeader.Bloom)
+	h.MixDigest = utils.ConvertH256ToHash(pbHeader.MixDigest)
 	return nil
 }
 

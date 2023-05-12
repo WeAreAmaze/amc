@@ -84,7 +84,7 @@ type BlockChain struct {
 	genesisBlock block2.IBlock
 	blocks       []block2.IBlock
 	headers      []block2.IHeader
-	currentBlock block2.IBlock
+	currentBlock atomic.Pointer[block2.Block]
 	//state        *statedb.StateDB
 	ChainDB kv.RwDB
 	engine  consensus.Engine
@@ -153,10 +153,10 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	numberCache, _ := lru.New[types.Hash, uint64](numberCacheLimit)
 	headerCache, _ := lru.New[types.Hash, *block2.Header](headerCacheLimit)
 	bc := &BlockChain{
-		chainConfig:   config, // Chain & network configuration
-		genesisBlock:  genesisBlock,
-		blocks:        []block2.IBlock{},
-		currentBlock:  current,
+		chainConfig:  config, // Chain & network configuration
+		genesisBlock: genesisBlock,
+		blocks:       []block2.IBlock{},
+		//currentBlock:  current,
 		ChainDB:       db,
 		ctx:           c,
 		cancel:        cancel,
@@ -177,6 +177,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		headerCache: headerCache,
 	}
 
+	bc.currentBlock.Store(current)
 	bc.forker = NewForkChoice(bc, nil)
 	//bc.process = avm.NewVMProcessor(ctx, bc, engine)
 	bc.process = NewStateProcessor(config, bc, engine)
@@ -206,7 +207,7 @@ func (bc *BlockChain) Config() *params.ChainConfig {
 //}
 
 func (bc *BlockChain) CurrentBlock() block2.IBlock {
-	return bc.currentBlock
+	return bc.currentBlock.Load()
 }
 
 func (bc *BlockChain) Blocks() []block2.IBlock {
@@ -255,7 +256,7 @@ func (bc *BlockChain) AddPeer(hash string, remoteBlock uint64, peerID peer.ID) e
 		return fmt.Errorf("failed to addPeer, err: the peer already exists")
 	}
 
-	log.Debugf("local heigth:%d --> remote height: %d", bc.currentBlock.Number64(), remoteBlock)
+	log.Debugf("local heigth:%d --> remote height: %d", bc.CurrentBlock().Number64(), remoteBlock)
 
 	bc.peers[peerID] = true
 	//if remoteBlock > bc.currentBlock.Number64().Uint64() {
@@ -501,7 +502,7 @@ func (bc *BlockChain) updateFutureBlocksLoop() {
 					return blocks[i].Number64().Cmp(blocks[j].Number64()) < 0
 				})
 
-				if blocks[0].Number64().Uint64() > bc.currentBlock.Number64().Uint64()+1 {
+				if blocks[0].Number64().Uint64() > bc.CurrentBlock().Number64().Uint64()+1 {
 					continue
 				}
 
@@ -841,6 +842,10 @@ func (bc *BlockChain) HasState(hash types.Hash) bool {
 
 func (bc *BlockChain) HasBlock(hash types.Hash, number uint64) bool {
 	var flag bool
+	if bc.blockCache.Contains(hash) {
+		return true
+	}
+
 	bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
 		flag = rawdb.HasHeader(tx, hash, number)
 		return nil
@@ -1343,6 +1348,13 @@ func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock) (err error) {
 	})
 }
 
+func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block2.Receipt) error {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+	_, err := bc.writeBlockWithState(block, receipts)
+	return err
+}
+
 // WriteBlockWithState
 func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block2.Receipt) (status WriteStatus, err error) {
 	if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
@@ -1378,14 +1390,14 @@ func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block
 		return NonStatTy, err
 	}
 
-	reorg, err := bc.forker.ReorgNeeded(bc.currentBlock.Header(), block.Header())
+	reorg, err := bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), block.Header())
 	if nil != err {
 		return NonStatTy, err
 	}
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
-		if block.ParentHash() != bc.currentBlock.Hash() {
-			if err := bc.reorg(nil, bc.currentBlock, block); err != nil {
+		if block.ParentHash() != bc.CurrentBlock().Hash() {
+			if err := bc.reorg(nil, bc.CurrentBlock(), block); err != nil {
 				return NonStatTy, err
 			}
 		}
@@ -1428,7 +1440,7 @@ func (bc *BlockChain) writeHeadBlock(tx kv.RwTx, block block2.IBlock) error {
 	if err = rawdb.WriteCanonicalHash(tx, block.Hash(), block.Number64().Uint64()); nil != err {
 		return err
 	}
-	bc.currentBlock = block
+	bc.currentBlock.Store(block.(*block2.Block))
 	if notExternalTx {
 		if err = tx.Commit(); nil != err {
 			return err

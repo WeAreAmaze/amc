@@ -24,6 +24,7 @@ import (
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"sort"
 	"sync"
 
@@ -249,33 +250,75 @@ func (w *worker) resultLoop() error {
 		select {
 		case <-w.ctx.Done():
 			return w.ctx.Err()
-		case block := <-w.resultCh:
-			if block == nil {
+		case blk := <-w.resultCh:
+			if blk == nil {
 				continue
 			}
+
+			// Short circuit when receiving duplicate result caused by resubmitting.
+			if w.chain.HasBlock(blk.Hash(), blk.Number64().Uint64()) {
+				continue
+			}
+
 			var (
-				sealhash = w.engine.SealHash(block.Header())
-				hash     = block.Hash()
+				sealhash = w.engine.SealHash(blk.Header())
+				hash     = blk.Hash()
 			)
 			w.mu.RLock()
 			task, exist := w.pendingTasks[sealhash]
 			w.mu.RUnlock()
 			if !exist {
-				log.Error("Block found but no relative pending task", "number", block.Number64().Uint64(), "sealhash", sealhash, "hash", hash)
+				log.Error("Block found but no relative pending task", "number", blk.Number64().Uint64(), "sealhash", sealhash, "hash", hash)
 				w.startCh <- struct{}{}
 				continue
 			}
+
+			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
+			var (
+				receipts = make([]*block.Receipt, len(task.receipts))
+				// logs     []*block.Log
+			)
+			for i, taskReceipt := range task.receipts {
+				receipt := new(block.Receipt)
+				receipts[i] = receipt
+				*receipt = *taskReceipt
+
+				// add block location fields
+				receipt.BlockHash = hash
+				receipt.BlockNumber = blk.Number64()
+				receipt.TransactionIndex = uint(i)
+
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
+				//receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
+				//for i, taskLog := range taskReceipt.Logs {
+				//	log := new(block.Log)
+				//	receipt.Logs[i] = log
+				//	*log = *taskLog
+				//	log.BlockHash = hash
+				//}
+				//logs = append(logs, receipt.Logs...)
+			}
+			// Commit block and state to database.
+			err := w.chain.WriteBlockWithState(blk, receipts)
+			if err != nil {
+				log.Error("Failed writing block to chain", "err", err)
+				continue
+			}
+
 			log.Info("🔨 Successfully sealed new block",
 				"sealhash", sealhash,
 				"hash", hash,
-				"number", block.Number64().Uint64(),
-				"used gas", block.GasUsed(),
-				"diff", block.Difficulty().Uint64(),
-				"headerTime", time.Unix(int64(block.Time()), 0).Format(time.RFC3339),
-				"verifierCount", len(block.Body().Verifier()),
-				"rewardCount", len(block.Body().Reward()),
-				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
-			w.chain.SealedBlock(block)
+				"number", blk.Number64().Uint64(),
+				"used gas", blk.GasUsed(),
+				"diff", blk.Difficulty().Uint64(),
+				"headerTime", time.Unix(int64(blk.Time()), 0).Format(time.RFC3339),
+				"verifierCount", len(blk.Body().Verifier()),
+				"rewardCount", len(blk.Body().Reward()),
+				"elapsed", common.PrettyDuration(time.Since(task.createdAt)),
+				"txs", len(blk.Transactions()))
+			//w.chain.SealedBlock(blk)
+			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
 		}
 	}
 }
@@ -357,6 +400,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 	defer tx.Rollback()
 
 	stateReader := state.NewPlainStateReader(tx)
+	stateWriter := state.NewPlainStateWriter(tx, tx, current.header.Number.Uint64())
 	ibs := state.New(stateReader)
 	// generate state for mobile verify
 	ibs.BeginWriteSnapshot()
@@ -384,7 +428,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 		}
 	}
 
-	if err = w.commit(current, nil, ibs, start, rewards, headers); nil != err {
+	if err = w.commit(tx, current, stateWriter, ibs, start, rewards, headers); nil != err {
 		log.Errorf("w.commit failed, error %v\n", err)
 		return err
 	}
@@ -608,24 +652,29 @@ func (w *worker) makeEnv(parent *block.Header, header *block.Header, coinbase ty
 	return env
 }
 
-func (w *worker) commit(env *environment, interval func(), ibs *state.IntraBlockState, start time.Time, rewards []*block.Reward, needHeaders []*block.Header) error {
+func (w *worker) commit(tx kv.RwTx, env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, rewards []*block.Reward, needHeaders []*block.Header) error {
 	if w.isRunning() {
-		if interval != nil {
-			interval()
-		}
 
-		noop := state.NewNoopWriter()
-		if err := ibs.CommitBlock(w.chainConfig.Rules(env.header.Number.Uint64()), noop); err != nil {
-			return fmt.Errorf("committing block %d failed: %w", env.header.Number.Uint64(), err)
-		}
-
-		//
-		iblock, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts, rewards)
-
-		if err != nil {
-			log.Error("cannot commit task", "err", err)
+		iblock, _, _, err := internal.FinalizeBlockExecution(tx, w.engine, env.header, env.txs, writer, w.chainConfig, ibs, env.receipts, nil, true, w.chainConfig.IsBeijing(env.header.Number.Uint64()))
+		if nil != err {
 			return err
 		}
+
+		if err := tx.Commit(); nil != err {
+			return err
+		}
+		//noop := state.NewNoopWriter()
+		//if err := ibs.CommitBlock(w.chainConfig.Rules(env.header.Number.Uint64()), noop); err != nil {
+		//	return fmt.Errorf("committing block %d failed: %w", env.header.Number.Uint64(), err)
+		//}
+		//
+		////
+		//iblock, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts, rewards)
+		//
+		//if err != nil {
+		//	log.Error("cannot commit task", "err", err)
+		//	return err
+		//}
 
 		if w.chainConfig.IsBeijing(env.header.Number.Uint64()) {
 			txs := make([][]byte, len(env.txs))

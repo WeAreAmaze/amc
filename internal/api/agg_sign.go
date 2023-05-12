@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/crypto/bls"
 	"github.com/amazechain/amc/common/crypto/bls/blst"
 	"github.com/amazechain/amc/common/types"
@@ -30,7 +31,9 @@ import (
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rawdb"
+	"github.com/amazechain/amc/modules/state"
 	"github.com/ledgerwatch/erigon-lib/kv"
+	"golang.org/x/crypto/sha3"
 )
 
 var sigChannel = make(chan AggSign, 10)
@@ -278,6 +281,16 @@ func MachineVerify(ctx context.Context) error {
 					var addr types.Address
 					if !addr.DecodeString(address) {
 						errs <- fmt.Errorf("unvalid address")
+						return
+					}
+
+					// before state verify
+					var hash types.Hash
+					hasher := sha3.NewLegacyKeccak256()
+					state.EncodeBeforeState(hasher, b.Entire.Entire.Snap.Items, b.Entire.Codes)
+					hasher.(crypto.KeccakState).Read(hash[:])
+					if b.Entire.Entire.Header.MixDigest != hash {
+						log.Warn("misMatch before state hash", "want:", b.Entire.Entire.Header.MixDigest, "get:", hash, b.Entire.Entire.Header.Number.Uint64())
 						return
 					}
 

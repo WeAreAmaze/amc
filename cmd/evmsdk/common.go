@@ -27,6 +27,7 @@ import (
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/crypto/ecies"
 	"github.com/holiman/uint256"
+	"golang.org/x/crypto/sha3"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -621,6 +622,15 @@ func (e *EvmEngine) vertify(in []byte) ([]byte, error) {
 
 	if bean.Entire.Header == nil {
 		return nil, errors.New("nil pointer found")
+	}
+	// before state verify
+	var hash commTyp.Hash
+	hasher := sha3.NewLegacyKeccak256()
+	state.EncodeBeforeState(hasher, bean.Entire.Snap.Items, bean.Codes)
+	hasher.(crypto.KeccakState).Read(hash[:])
+	if bean.Entire.Header.MixDigest != hash {
+		simpleLog("misMatch state hash", "want", bean.Entire.Header.MixDigest, "get", hash, "block", bean.Entire.Header.Number.Uint64())
+		return nil, errors.New("state verify failed")
 	}
 
 	entirecode := state.EntireCode(bean)

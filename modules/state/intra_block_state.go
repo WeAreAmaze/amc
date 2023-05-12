@@ -27,6 +27,7 @@ import (
 	"github.com/amazechain/amc/internal/avm/rlp"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
+	"golang.org/x/crypto/sha3"
 	"sort"
 	"unsafe"
 
@@ -1067,4 +1068,24 @@ func (sdb *IntraBlockState) Selfdestruct(addr types.Address) bool {
 	stateObject.data.Balance.Clear()
 
 	return true
+}
+
+// BeforeStateRoot calculate used state hash
+//
+// it should be invoked after all txs exec
+func (sdb *IntraBlockState) BeforeStateRoot() (hash types.Hash) {
+	if sdb.snap == nil {
+		return types.Hash{}
+	}
+	sort.Sort(sdb.snap.Items)
+	ch := sdb.CodeHashes()
+	hs := make(HashCodes, 0, len(ch))
+	for k, v := range ch {
+		hs = append(hs, &HashCode{Hash: k, Code: v})
+	}
+	sort.Sort(hs)
+	hasher := sha3.NewLegacyKeccak256()
+	EncodeBeforeState(hasher, sdb.snap.Items, hs)
+	hasher.(crypto.KeccakState).Read(hash[:])
+	return
 }

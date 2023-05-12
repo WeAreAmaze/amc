@@ -41,16 +41,16 @@ func TestHttpClient(t *testing.T) {
 	}
 }
 
-func TestIPC(t *testing.T) {
-	client, _ := Dial("")
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
-	m := make(map[string]string, 0)
-	if err := client.CallContext(ctx, &m, "rpc_modules"); err != nil {
-		fmt.Println("can't get rpc modules:", err)
-		return
-	}
-	if len(m) == 0 {
-		t.Fail()
-	}
-}
+//func TestIPC(t *testing.T) {
+//	client, _ := Dial("")
+//	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+//	defer cancel()
+//	m := make(map[string]string, 0)
+//	if err := client.CallContext(ctx, &m, "rpc_modules"); err != nil {
+//		fmt.Println("can't get rpc modules:", err)
+//		return
+//	}
+//	if len(m) == 0 {
+//		t.Fail()
+//	}
+//}

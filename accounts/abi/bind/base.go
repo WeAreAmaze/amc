@@ -27,6 +27,7 @@ import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	event "github.com/amazechain/amc/modules/event/v2"
+	"github.com/holiman/uint256"
 	"strings"
 	"sync"
 )
@@ -41,7 +42,7 @@ type SignerFn func(types.Address, *transaction.Transaction) (*transaction.Transa
 type CallOpts struct {
 	Pending     bool            // Whether to operate on the pending state or the last known one
 	From        types.Address   // Optional the sender address, otherwise the first account is used
-	BlockNumber uint256.Int     // Optional the block number on which the call should be performed
+	BlockNumber *uint256.Int    // Optional the block number on which the call should be performed
 	Context     context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
@@ -52,11 +53,11 @@ type TransactOpts struct {
 	Nonce  *uint64       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer SignerFn      // Method to use for signing the transaction (mandatory)
 
-	Value     uint256.Int // Funds to transfer along the transaction (nil = 0 = no funds)
-	GasPrice  uint256.Int // Gas price to use for the transaction execution (nil = gas price oracle)
-	GasFeeCap uint256.Int // Gas fee cap to use for the 1559 transaction execution (nil = gas price oracle)
-	GasTipCap uint256.Int // Gas priority fee cap to use for the 1559 transaction execution (nil = gas price oracle)
-	GasLimit  uint64      // Gas limit to set for the transaction execution (0 = estimate)
+	Value     *uint256.Int // Funds to transfer along the transaction (nil = 0 = no funds)
+	GasPrice  *uint256.Int // Gas price to use for the transaction execution (nil = gas price oracle)
+	GasFeeCap *uint256.Int // Gas fee cap to use for the 1559 transaction execution (nil = gas price oracle)
+	GasTipCap *uint256.Int // Gas priority fee cap to use for the 1559 transaction execution (nil = gas price oracle)
+	GasLimit  uint64       // Gas limit to set for the transaction execution (0 = estimate)
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
@@ -238,12 +239,12 @@ func (c *BoundContract) Transfer(opts *TransactOpts) (*transaction.Transaction, 
 func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *types.Address, input []byte, head *block.Header) (*transaction.Transaction, error) {
 	// Normalize value
 	value := opts.Value
-	if value.Int == nil {
+	if value == nil {
 		value = uint256.NewInt(0)
 	}
 	// Estimate TipCap
 	gasTipCap := opts.GasTipCap
-	if gasTipCap.Int == nil {
+	if gasTipCap == nil {
 		tip, err := c.transactor.SuggestGasTipCap(ensureContext(opts.Context))
 		if err != nil {
 			return nil, err
@@ -252,10 +253,10 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *types.Addr
 	}
 	// Estimate FeeCap
 	gasFeeCap := opts.GasFeeCap
-	if gasFeeCap.Int == nil {
-		gasFeeCap = gasTipCap.Add(head.BaseFee.Mod(uint256.NewInt(basefeeWiggleMultiplier)))
+	if gasFeeCap == nil {
+		gasFeeCap = gasTipCap.Add(gasTipCap, head.BaseFee.Mod(head.BaseFee, uint256.NewInt(basefeeWiggleMultiplier)))
 	}
-	if gasFeeCap.Compare(gasTipCap) < 0 {
+	if gasFeeCap.Cmp(gasTipCap) < 0 {
 		return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", gasFeeCap, gasTipCap)
 	}
 	// Estimate GasLimit
@@ -285,17 +286,17 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *types.Addr
 }
 
 func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *types.Address, input []byte) (*transaction.Transaction, error) {
-	if opts.GasFeeCap.Int != nil || opts.GasTipCap.Int != nil {
+	if opts.GasFeeCap != nil || opts.GasTipCap != nil {
 		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 	}
 	// Normalize value
 	value := opts.Value
-	if value.Int == nil {
+	if value == nil {
 		value = uint256.NewInt(0)
 	}
 	// Estimate GasPrice
 	gasPrice := opts.GasPrice
-	if gasPrice.Int == nil {
+	if gasPrice == nil {
 		price, err := c.transactor.SuggestGasPrice(ensureContext(opts.Context))
 		if err != nil {
 			return nil, err
@@ -327,7 +328,7 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *types.Addre
 	return transaction.NewTx(baseTx), nil
 }
 
-func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *types.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value uint256.Int) (uint64, error) {
+func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *types.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value *uint256.Int) (uint64, error) {
 	if contract != nil {
 		// Gas estimation cannot succeed without code for method invocations.
 		if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
@@ -359,7 +360,7 @@ func (c *BoundContract) getNonce(opts *TransactOpts) (uint64, error) {
 // transact executes an actual transaction invocation, first deriving any missing
 // authorization fields, and then scheduling the transaction for execution.
 func (c *BoundContract) transact(opts *TransactOpts, contract *types.Address, input []byte) (*transaction.Transaction, error) {
-	if opts.GasPrice.Int != nil && (opts.GasFeeCap.Int != nil || opts.GasTipCap.Int != nil) {
+	if opts.GasPrice != nil && (opts.GasFeeCap != nil || opts.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// Create the transaction
@@ -367,16 +368,16 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *types.Address, in
 		rawTx *transaction.Transaction
 		err   error
 	)
-	if opts.GasPrice.Int != nil {
+	if opts.GasPrice != nil {
 		rawTx, err = c.createLegacyTx(opts, contract, input)
-	} else if opts.GasFeeCap.Int != nil && opts.GasTipCap.Int != nil {
+	} else if opts.GasFeeCap != nil && opts.GasTipCap != nil {
 		rawTx, err = c.createDynamicTx(opts, contract, input, nil)
 	} else {
 
 		// Only query for basefee if gasPrice not specified
 		if head, errHead := c.transactor.HeaderByNumber(ensureContext(opts.Context), uint256.NewInt(0) /* latest */); errHead != nil {
 			return nil, errHead
-		} else if head.BaseFee.Int != nil {
+		} else if head.BaseFee != nil {
 			rawTx, err = c.createDynamicTx(opts, contract, input, head)
 		} else {
 			// Chain is not London ready -> use legacy transaction

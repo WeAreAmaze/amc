@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/log"
 
 	"github.com/amazechain/amc/modules/ethdb"
 	"github.com/ledgerwatch/erigon-lib/kv"

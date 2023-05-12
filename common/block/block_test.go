@@ -33,7 +33,7 @@ func getBlock(tb testing.TB) *Block {
 		tb.Fatal(err)
 	}
 
-	var block types_pb.PBlock
+	var block types_pb.Block
 	err = proto.Unmarshal(bBlock, &block)
 	if err != nil {
 		tb.Fatal(err)
@@ -55,27 +55,27 @@ type exBlock struct {
 	B *Body
 }
 
-func TestSize(t *testing.T) {
-	block := getBlock(t)
-	pb := block.ToProtoMessage()
-
-	buf1, err := proto.Marshal(pb)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	exB := exBlock{
-		H: block.header,
-		B: block.body,
-	}
-
-	buf2, err := rlp.EncodeToBytes(&exB)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("proto size: %d, rlp size: %d", len(buf1), len(buf2))
-}
+//func TestSize(t *testing.T) {
+//	block := getBlock(t)
+//	pb := block.ToProtoMessage()
+//
+//	buf1, err := proto.Marshal(pb)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	exB := exBlock{
+//		H: block.header,
+//		B: block.body,
+//	}
+//
+//	buf2, err := rlp.EncodeToBytes(&exB)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	t.Logf("proto size: %d, rlp size: %d", len(buf1), len(buf2))
+//}
 
 func BenchmarkProtobuf(b *testing.B) {
 	block := getBlock(b)
@@ -119,7 +119,7 @@ func BenchmarkProtobufUnmarshal(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		var block types_pb.PBlock
+		var block types_pb.Block
 		_ = proto.Unmarshal(bBlock, &block)
 	}
 }

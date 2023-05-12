@@ -17,15 +17,21 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/amazechain/amc/common/account"
 	common "github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/node"
+	"github.com/amazechain/amc/log"
+	"github.com/amazechain/amc/modules"
 	"github.com/amazechain/amc/params"
+	"github.com/amazechain/amc/turbo/backup"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/urfave/cli/v2"
 	"math/big"
+	"os"
 	"time"
 )
 
@@ -63,6 +69,17 @@ var (
 				Action:    exportDBState,
 				Flags: []cli.Flag{
 					DataDirFlag,
+				},
+				Description: ``,
+			},
+			{
+				Name:      "dbCopy",
+				Usage:     "copy data from '--chaindata' to '--chaindata.to'",
+				ArgsUsage: "",
+				Action:    dbCopy,
+				Flags: []cli.Flag{
+					FromDataDirFlag,
+					ToDataDirFlag,
 				},
 				Description: ``,
 			},
@@ -174,9 +191,38 @@ func exportDBState(ctx *cli.Context) error {
 		count, _ := Cursor.Count()
 		Cursor.Close()
 		if count != 0 {
-			fmt.Printf("%30v count %10d size: %d size1: %s\r\n", Bucket, count, size>>20, common.StorageSize(size))
+			fmt.Printf("%30v count %10d size: %s \r\n", Bucket, count, common.StorageSize(size))
 		}
 	}
-	fmt.Printf("total %d size1: %s \n", tsize>>20, common.StorageSize(tsize))
+	fmt.Printf("total %s \n", common.StorageSize(tsize))
+	return nil
+}
+
+func dbCopy(ctx *cli.Context) error {
+
+	modules.AmcInit()
+	kv.ChaindataTablesCfg = modules.AmcTableCfg
+
+	fromChaindata := ctx.String(FromDataDirFlag.Name)
+	toChaindata := ctx.String(ToDataDirFlag.Name)
+
+	if f, err := os.Stat(fromChaindata); err != nil || !f.IsDir() {
+		log.Errorf("fromChaindata do not exists or is not a dir, err: %s", err)
+		return err
+	}
+	if f, err := os.Stat(toChaindata); err != nil || !f.IsDir() {
+		log.Errorf("toChaindata do not exists or is not a dir, err: %s", err)
+		return err
+	}
+
+	from, to := backup.OpenPair(fromChaindata, toChaindata, kv.ChainDB, 0)
+	err := backup.Kv2kv(ctx.Context, from, to, nil, backup.ReadAheadThreads)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		if !errors.Is(err, context.Canceled) {
+			log.Error(err.Error())
+		}
+		return nil
+	}
+
 	return nil
 }

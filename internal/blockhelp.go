@@ -384,8 +384,8 @@ func SysCallContract(contract types.Address, data []byte, chainConfig params.Cha
 //	return tx.FakeSign(from)
 //}
 
-func FinalizeBlockExecution(tx kv.RwTx, engine consensus.Engine, stateReader state.StateReader, header *block.Header,
-	txs transaction.Transactions, uncles []*block.Header, stateWriter state.WriterWithChangeSets, cc *params.ChainConfig, ibs *state.IntraBlockState,
+func FinalizeBlockExecution(tx kv.RwTx, engine consensus.Engine, header *block.Header,
+	txs transaction.Transactions, stateWriter state.WriterWithChangeSets, cc *params.ChainConfig, ibs *state.IntraBlockState,
 	receipts block.Receipts, headerReader consensus.ChainHeaderReader, isMining, isBeijing bool,
 ) (newBlock block.IBlock, newTxs transaction.Transactions, newReceipt block.Receipts, err error) {
 	//syscall := func(contract types.Address, data []byte) ([]byte, error) {

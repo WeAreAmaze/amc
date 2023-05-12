@@ -305,9 +305,9 @@ func (c *APos) verifyHeader(chain consensus.ChainHeaderReader, iHeader block.IHe
 		return errInvalidCheckpointSigners
 	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest != (types.Hash{}) {
-		return errInvalidMixDigest
-	}
+	//if header.MixDigest != (types.Hash{}) {
+	//	return errInvalidMixDigest
+	//}
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoA
 	//if header.UncleHash != uncleHash {
 	//	return errInvalidUncleHash
@@ -657,6 +657,8 @@ func (c *APos) Finalize(chain consensus.ChainHeaderReader, header block.IHeader,
 	rawHeader := header.(*block.Header)
 	rawHeader.Root = state.IntermediateRoot()
 
+	// Todo can not verify author
+	rawHeader.MixDigest = state.BeforeStateRoot()
 	//todo
 	//rawHeader.UncleHash = types.CalcUncleHash(nil)
 }

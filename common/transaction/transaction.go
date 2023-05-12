@@ -526,7 +526,13 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		return nil, err
 	}
 	cpy := tx.inner.copy()
-	chainID, _ := uint256.FromBig(signer.ChainID())
+	var chainID *uint256.Int
+	if signer.ChainID() == nil {
+		chainID = nil
+	} else {
+		chainID, _ = uint256.FromBig(signer.ChainID())
+	}
+
 	v1, _ := uint256.FromBig(v)
 	r1, _ := uint256.FromBig(r)
 	s1, _ := uint256.FromBig(s)

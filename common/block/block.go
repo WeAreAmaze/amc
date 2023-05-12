@@ -141,9 +141,9 @@ func NewBlockFromReceipt(h IHeader, txs []*transaction.Transaction, uncles []IHe
 		ReceiveAt:    time.Now(),
 		ReceivedFrom: nil,
 	}
-	if len(receipts) > 0 {
-		print(receipts)
-	}
+	//if len(receipts) > 0 {
+	//	print(receipts)
+	//}
 
 	block.header.Bloom = CreateBloom(receipts)
 	block.header.TxHash = hashing.DeriveSha(transaction.Transactions(txs))

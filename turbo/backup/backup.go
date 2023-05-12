@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/amazechain/amc/modules"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -28,7 +27,7 @@ func OpenPair(from, to string, label kv.Label, targetPageSize datasize.ByteSize)
 	src := mdbx2.NewMDBX(log.New()).Path(from).
 		Label(label).
 		RoTxsLimiter(semaphore.NewWeighted(ThreadsHardLimit)).
-		WithTableCfg(func(_ kv.TableCfg) kv.TableCfg { return modules.AmcTableCfg }).
+		WithTableCfg(func(_ kv.TableCfg) kv.TableCfg { return kv.TablesCfgByLabel(label) }).
 		Flags(func(flags uint) uint { return flags | mdbx.Readonly | mdbx.Accede }).
 		MustOpen()
 	if targetPageSize <= 0 {
@@ -43,7 +42,7 @@ func OpenPair(from, to string, label kv.Label, targetPageSize datasize.ByteSize)
 		PageSize(targetPageSize.Bytes()).
 		MapSize(datasize.ByteSize(info.Geo.Upper)).
 		Flags(func(flags uint) uint { return flags | mdbx.NoMemInit | mdbx.WriteMap }).
-		WithTableCfg(func(_ kv.TableCfg) kv.TableCfg { return modules.AmcTableCfg }).
+		WithTableCfg(func(_ kv.TableCfg) kv.TableCfg { return kv.TablesCfgByLabel(label) }).
 		MustOpen()
 	return src, dst
 }

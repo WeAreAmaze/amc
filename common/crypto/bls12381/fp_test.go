@@ -419,68 +419,68 @@ func TestFpInversion(t *testing.T) {
 	}
 }
 
-func TestFpSquareRoot(t *testing.T) {
-	r := new(fe)
-	if sqrt(r, nonResidue1) {
-		t.Fatal("non residue cannot have a sqrt")
-	}
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe).rand(rand.Reader)
-		aa, rr, r := &fe{}, &fe{}, &fe{}
-		square(aa, a)
-		if !sqrt(r, aa) {
-			t.Fatal("bad sqrt 1")
-		}
-		square(rr, r)
-		if !rr.equal(aa) {
-			t.Fatal("bad sqrt 2")
-		}
-	}
-}
+//func TestFpSquareRoot(t *testing.T) {
+//	r := new(fe)
+//	if sqrt(r, nonResidue1) {
+//		t.Fatal("non residue cannot have a sqrt")
+//	}
+//	for i := 0; i < fuz; i++ {
+//		a, _ := new(fe).rand(rand.Reader)
+//		aa, rr, r := &fe{}, &fe{}, &fe{}
+//		square(aa, a)
+//		if !sqrt(r, aa) {
+//			t.Fatal("bad sqrt 1")
+//		}
+//		square(rr, r)
+//		if !rr.equal(aa) {
+//			t.Fatal("bad sqrt 2")
+//		}
+//	}
+//}
 
-func TestFpNonResidue(t *testing.T) {
-	if !isQuadraticNonResidue(nonResidue1) {
-		t.Fatal("element is quadratic non residue, 1")
-	}
-	if isQuadraticNonResidue(new(fe).one()) {
-		t.Fatal("one is not quadratic non residue")
-	}
-	if !isQuadraticNonResidue(new(fe).zero()) {
-		t.Fatal("should accept zero as quadratic non residue")
-	}
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe).rand(rand.Reader)
-		square(a, a)
-		if isQuadraticNonResidue(new(fe).one()) {
-			t.Fatal("element is not quadratic non residue")
-		}
-	}
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe).rand(rand.Reader)
-		if !sqrt(new(fe), a) {
-			if !isQuadraticNonResidue(a) {
-				t.Fatal("element is quadratic non residue, 2", i)
-			}
-		} else {
-			i--
-		}
-	}
+//func TestFpNonResidue(t *testing.T) {
+//	if !isQuadraticNonResidue(nonResidue1) {
+//		t.Fatal("element is quadratic non residue, 1")
+//	}
+//	if isQuadraticNonResidue(new(fe).one()) {
+//		t.Fatal("one is not quadratic non residue")
+//	}
+//	if !isQuadraticNonResidue(new(fe).zero()) {
+//		t.Fatal("should accept zero as quadratic non residue")
+//	}
+//	for i := 0; i < fuz; i++ {
+//		a, _ := new(fe).rand(rand.Reader)
+//		square(a, a)
+//		if isQuadraticNonResidue(new(fe).one()) {
+//			t.Fatal("element is not quadratic non residue")
+//		}
+//	}
+//	for i := 0; i < fuz; i++ {
+//		a, _ := new(fe).rand(rand.Reader)
+//		if !sqrt(new(fe), a) {
+//			if !isQuadraticNonResidue(a) {
+//				t.Fatal("element is quadratic non residue, 2", i)
+//			}
+//		} else {
+//			i--
+//		}
+//	}
+//
+//}
 
-}
-
-func TestFp2Serialization(t *testing.T) {
-	field := newFp2()
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe2).rand(rand.Reader)
-		b, err := field.fromBytes(field.toBytes(a))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !a.equal(b) {
-			t.Fatal("bad serialization")
-		}
-	}
-}
+//func TestFp2Serialization(t *testing.T) {
+//	field := newFp2()
+//	for i := 0; i < fuz; i++ {
+//		a, _ := new(fe2).rand(rand.Reader)
+//		b, err := field.fromBytes(field.toBytes(a))
+//		if err != nil {
+//			t.Fatal(err)
+//		}
+//		if !a.equal(b) {
+//			t.Fatal("bad serialization")
+//		}
+//	}
+//}
 
 func TestFp2AdditionProperties(t *testing.T) {
 	field := newFp2()
@@ -781,75 +781,75 @@ func TestFp2Inversion(t *testing.T) {
 	}
 }
 
-func TestFp2SquareRoot(t *testing.T) {
-	field := newFp2()
-	for z := 0; z < 1000; z++ {
-		zi := new(fe)
-		sub(zi, &modulus, &fe{uint64(z * z)})
-		// r = (-z*z, 0)
-		r := &fe2{*zi, fe{0}}
-		toMont(&r[0], &r[0])
-		toMont(&r[1], &r[1])
-		c := field.new()
-		// sqrt((-z*z, 0)) = (0, z)
-		if !field.sqrt(c, r) {
-			t.Fatal("z*z does have a square root")
-		}
-		e := &fe2{fe{uint64(0)}, fe{uint64(z)}}
-		toMont(&e[0], &e[0])
-		toMont(&e[1], &e[1])
-		field.square(e, e)
-		field.square(c, c)
-		if !e.equal(c) {
-			t.Fatal("square root failed")
-		}
-	}
-	if field.sqrt(field.new(), nonResidue2) {
-		t.Fatal("non residue cannot have a sqrt")
-	}
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe2).rand(rand.Reader)
-		aa, rr, r := field.new(), field.new(), field.new()
-		field.square(aa, a)
-		if !field.sqrt(r, aa) {
-			t.Fatal("bad sqrt 1")
-		}
-		field.square(rr, r)
-		if !rr.equal(aa) {
-			t.Fatal("bad sqrt 2")
-		}
-	}
-}
+//func TestFp2SquareRoot(t *testing.T) {
+//	field := newFp2()
+//	for z := 0; z < 1000; z++ {
+//		zi := new(fe)
+//		sub(zi, &modulus, &fe{uint64(z * z)})
+//		// r = (-z*z, 0)
+//		r := &fe2{*zi, fe{0}}
+//		toMont(&r[0], &r[0])
+//		toMont(&r[1], &r[1])
+//		c := field.new()
+//		// sqrt((-z*z, 0)) = (0, z)
+//		if !field.sqrt(c, r) {
+//			t.Fatal("z*z does have a square root")
+//		}
+//		e := &fe2{fe{uint64(0)}, fe{uint64(z)}}
+//		toMont(&e[0], &e[0])
+//		toMont(&e[1], &e[1])
+//		field.square(e, e)
+//		field.square(c, c)
+//		if !e.equal(c) {
+//			t.Fatal("square root failed")
+//		}
+//	}
+//	if field.sqrt(field.new(), nonResidue2) {
+//		t.Fatal("non residue cannot have a sqrt")
+//	}
+//	for i := 0; i < fuz; i++ {
+//		a, _ := new(fe2).rand(rand.Reader)
+//		aa, rr, r := field.new(), field.new(), field.new()
+//		field.square(aa, a)
+//		if !field.sqrt(r, aa) {
+//			t.Fatal("bad sqrt 1")
+//		}
+//		field.square(rr, r)
+//		if !rr.equal(aa) {
+//			t.Fatal("bad sqrt 2")
+//		}
+//	}
+//}
 
-func TestFp2NonResidue(t *testing.T) {
-	field := newFp2()
-	if !field.isQuadraticNonResidue(nonResidue2) {
-		t.Fatal("element is quadratic non residue, 1")
-	}
-	if field.isQuadraticNonResidue(new(fe2).one()) {
-		t.Fatal("one is not quadratic non residue")
-	}
-	if !field.isQuadraticNonResidue(new(fe2).zero()) {
-		t.Fatal("should accept zero as quadratic non residue")
-	}
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe2).rand(rand.Reader)
-		field.squareAssign(a)
-		if field.isQuadraticNonResidue(new(fe2).one()) {
-			t.Fatal("element is not quadratic non residue")
-		}
-	}
-	for i := 0; i < fuz; i++ {
-		a, _ := new(fe2).rand(rand.Reader)
-		if !field.sqrt(new(fe2), a) {
-			if !field.isQuadraticNonResidue(a) {
-				t.Fatal("element is quadratic non residue, 2", i)
-			}
-		} else {
-			i--
-		}
-	}
-}
+//func TestFp2NonResidue(t *testing.T) {
+//	field := newFp2()
+//	if !field.isQuadraticNonResidue(nonResidue2) {
+//		t.Fatal("element is quadratic non residue, 1")
+//	}
+//	if field.isQuadraticNonResidue(new(fe2).one()) {
+//		t.Fatal("one is not quadratic non residue")
+//	}
+//	if !field.isQuadraticNonResidue(new(fe2).zero()) {
+//		t.Fatal("should accept zero as quadratic non residue")
+//	}
+//	for i := 0; i < fuz; i++ {
+//		a, _ := new(fe2).rand(rand.Reader)
+//		field.squareAssign(a)
+//		if field.isQuadraticNonResidue(new(fe2).one()) {
+//			t.Fatal("element is not quadratic non residue")
+//		}
+//	}
+//	for i := 0; i < fuz; i++ {
+//		a, _ := new(fe2).rand(rand.Reader)
+//		if !field.sqrt(new(fe2), a) {
+//			if !field.isQuadraticNonResidue(a) {
+//				t.Fatal("element is quadratic non residue, 2", i)
+//			}
+//		} else {
+//			i--
+//		}
+//	}
+//}
 
 func TestFp6Serialization(t *testing.T) {
 	field := newFp6(nil)

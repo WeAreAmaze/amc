@@ -30,3 +30,8 @@ Use the built-in `amc version-check` feature to check whether the software is af
 The following key may be used to communicate sensitive information to developers.
 
 Fingerprint:
+
+```
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: SKS 1.1.6
+Comment: Hostname: pgp.mit.edu

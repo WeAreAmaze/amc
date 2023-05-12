@@ -82,6 +82,7 @@ message Header {
   bytes Extra = 13;
   H768 Signature = 14;
   H2048 Bloom = 15;
+  H256 MixDigest = 16;
 }
 
 message Verifier {

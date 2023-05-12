@@ -6,6 +6,8 @@ name: Go
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
 
@@ -20,7 +22,7 @@ jobs:
         go-version: 1.19
 
     - name: Build
-      run: go build -v ./...
+      run: make amc
 
     - name: Test
       run: go test -v ./...

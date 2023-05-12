@@ -18,7 +18,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/conf"
@@ -1053,8 +1052,32 @@ func (s *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.B
 	if err != nil {
 		return mvm_common.Hash{}, err
 	}
-
 	return SubmitTransaction(context.Background(), s.api, metaTx)
+}
+
+func (s *TransactionAPI) BatchRawTransaction(ctx context.Context, inputs []hexutil.Bytes) ([]mvm_common.Hash, error) {
+
+	//log.Debugf("tx type is : %s", string(input[0]))
+	hs := make([]mvm_common.Hash, len(inputs))
+	for i, t := range inputs {
+		tx := new(mvm_types.Transaction)
+		err := tx.UnmarshalBinary(t)
+		if err != nil {
+			hs[i] = mvm_common.Hash{}
+			return hs, err
+		}
+		header := s.api.BlockChain().CurrentBlock().Header() // latest header should always be available
+		metaTx, err := tx.ToAmcTransaction(s.api.GetChainConfig(), header.Number64().ToBig())
+		if err != nil {
+			hs[i] = mvm_common.Hash{}
+			return hs, err
+		}
+
+		if hs[i], err = SubmitTransaction(context.Background(), s.api, metaTx); nil != err {
+			return hs, err
+		}
+	}
+	return hs, nil
 }
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
@@ -1136,8 +1159,8 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash mvm_com
 		fields["contractAddress"] = mvm_types.FromAmcAddress(&receipt.ContractAddress)
 	}
 
-	json, _ := json.Marshal(fields)
-	log.Infof("GetTransactionReceipt, result %s", string(json))
+	//json, _ := json.Marshal(fields)
+	//log.Infof("GetTransactionReceipt, result %s", string(json))
 	return fields, nil
 }
 
@@ -1362,4 +1385,35 @@ func (s *TxsPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction 
 		content["queued"][mvm_types.FromAmcAddress(&account).Hex()] = dump
 	}
 	return content
+}
+
+func (api *TransactionAPI) TestBatchTxs(ctx context.Context) {
+	go batchTxs(api.api, 0, 1000000)
+}
+
+func batchTxs(api *API, start, end uint64) error {
+	var (
+		key, _  = crypto.HexToECDSA("d6d8d19bd786d6676819b806694b1100a4414a94e51e9a82a351bd8f7f3f3658")
+		addr    = crypto.PubkeyToAddress(key.PublicKey)
+		signer  = new(transaction.HomesteadSigner)
+		content = context.Background()
+	)
+
+	for i := start; i < end; i++ {
+		tx, _ := transaction.SignTx(transaction.NewTx(
+			&transaction.LegacyTx{
+				Nonce:    uint64(i),
+				Value:    uint256.NewInt(params.Wei),
+				Gas:      params.TxGas,
+				To:       &addr,
+				GasPrice: uint256.NewInt(params.GWei),
+				Data:     nil},
+		), signer, key)
+		tx.SetFrom(addr)
+		_, err := SubmitTransaction(content, api, tx)
+		if nil != err {
+			return err
+		}
+	}
+	return nil
 }

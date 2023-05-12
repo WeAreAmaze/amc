@@ -1215,7 +1215,7 @@ func (pool *TxsPool) Has(hash types.Hash) bool {
 func (pool *TxsPool) GetTransaction() (txs []*transaction.Transaction, err error) {
 	//
 	pending := pool.Pending(false)
-	heads := make([]*transaction.Transaction, 0, len(txs))
+	heads := make([]*transaction.Transaction, 0, len(pending))
 	for _, accTxs := range pending {
 		//heads = append(heads, accTxs[0])
 		heads = append(heads, accTxs...)

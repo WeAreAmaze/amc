@@ -26,8 +26,8 @@ import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/log"
-	"github.com/libp2p/go-libp2p/core/host"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/host"
 )
 
 var (
@@ -74,7 +74,7 @@ func (m *AmcPubSub) Start() error {
 
 	var options []pubsub.Option
 
-	options = append(options, pubsub.WithRawTracer(newRawTracer()))
+	options = append(options, pubsub.WithRawTracer(newRawTracer()) /*, pubsub.WithMessageSignaturePolicy(pubsub.MessageSignaturePolicy(0))*/)
 	// todo for test
 	if false {
 		tracer, err := pubsub.NewJSONTracer("./trace.json")

@@ -176,6 +176,9 @@ func ConvertUint256IntToH256(i *uint256.Int) *types_pb.H256 {
 
 func ConvertH256ToHash(h256 *types_pb.H256) [32]byte {
 	var hash [32]byte
+	if nil == h256 {
+		return hash
+	}
 	binary.BigEndian.PutUint64(hash[0:], h256.Hi.Hi)
 	binary.BigEndian.PutUint64(hash[8:], h256.Hi.Lo)
 	binary.BigEndian.PutUint64(hash[16:], h256.Lo.Hi)

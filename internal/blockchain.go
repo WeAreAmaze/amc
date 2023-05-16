@@ -1389,8 +1389,6 @@ func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block
 		if err := rawdb.WriteBlock(tx, block.(*block2.Block)); err != nil {
 			return err
 		}
-		//todo
-		rawdb.WriteTxLookupEntries(tx, block.(*block2.Block))
 		return nil
 	}); nil != err {
 		return NonStatTy, err
@@ -1438,14 +1436,18 @@ func (bc *BlockChain) writeHeadBlock(tx kv.RwTx, block block2.IBlock) error {
 		notExternalTx = true
 	}
 
-	if err := rawdb.WriteBlock(tx, block.(*block2.Block)); nil != err {
-		log.Errorf("failed to save last block, err: %v", err)
-		return err
-	}
+	//if err := rawdb.WriteBlock(tx, block.(*block2.Block)); nil != err {
+	//	log.Errorf("failed to save last block, err: %v", err)
+	//	return err
+	//}
 	rawdb.WriteHeadBlockHash(tx, block.Hash())
+	rawdb.WriteHeadBlockHash(tx, block.Hash())
+	rawdb.WriteTxLookupEntries(tx, block.(*block2.Block))
+
 	if err = rawdb.WriteCanonicalHash(tx, block.Hash(), block.Number64().Uint64()); nil != err {
 		return err
 	}
+
 	bc.currentBlock.Store(block.(*block2.Block))
 	if notExternalTx {
 		if err = tx.Commit(); nil != err {

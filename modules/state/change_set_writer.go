@@ -19,6 +19,7 @@ package state
 import (
 	"fmt"
 	"github.com/amazechain/amc/common/account"
+	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/changeset"
 
 	"github.com/amazechain/amc/common/hexutil"
@@ -145,7 +146,9 @@ func (w *ChangeSetWriter) WriteChangeSets() error {
 		return err
 	}
 	if err = changeset.Mapper[modules.AccountChangeSet].Encode(w.blockNumber, accountChanges, func(k, v []byte) error {
-		if err = w.db.AppendDup(modules.AccountChangeSet, k, v); err != nil {
+		//if err = w.db.AppendDup(modules.AccountChangeSet, k, v); err != nil {
+		log.Info("accountChangeset", "number", w.blockNumber, "key", k)
+		if err = w.db.Put(modules.AccountChangeSet, k, v); err != nil {
 			return err
 		}
 		return nil
@@ -161,7 +164,9 @@ func (w *ChangeSetWriter) WriteChangeSets() error {
 		return nil
 	}
 	if err = changeset.Mapper[modules.StorageChangeSet].Encode(w.blockNumber, storageChanges, func(k, v []byte) error {
-		if err = w.db.AppendDup(modules.StorageChangeSet, k, v); err != nil {
+		//if err = w.db.AppendDup(modules.StorageChangeSet, k, v); err != nil {
+		log.Info("storageChangeset", "number", w.blockNumber, "key",k)
+		if err = w.db.Put(modules.StorageChangeSet, k, v); err != nil {
 			return err
 		}
 		return nil

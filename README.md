@@ -5,7 +5,7 @@ AmazeChain(AMC) is an implementation of public blockchain (execution client), on
 
 ## System Requirements
 
-* For an Full node :  >=200GB  storage space.
+* For an Full node : >=200GB  storage space.
 
 SSD or NVMe. Do not recommend HDD.
 

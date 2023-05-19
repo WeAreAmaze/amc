@@ -222,13 +222,14 @@ func ReadHeadersByNumber(db kv.Tx, number uint64) ([]*block.Header, error) {
 // to-number mapping.
 func WriteHeader(db kv.Putter, header *block.Header) {
 	var (
-		hash    = header.Hash()
-		number  = header.Number.Uint64()
-		encoded = modules.EncodeBlockNumber(number)
+		hash   = header.Hash()
+		number = header.Number.Uint64()
 	)
-	if err := db.Put(modules.HeaderNumber, hash[:], encoded); err != nil {
+
+	if err := WriteHeaderNumber(db, hash, number); nil != err {
 		log.Crit("Failed to store hash to number mapping", "err", err)
 	}
+
 	// Write the encoded header
 	data, err := header.Marshal()
 	if nil != err {

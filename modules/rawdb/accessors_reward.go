@@ -36,12 +36,14 @@ func PutEpochReward(db kv.Putter, key string, val map[types.Address]*uint256.Int
 }
 
 // PutAccountReward
-func PutAccountReward(db kv.Putter, key string, val *uint256.Int) error {
+func PutAccountReward(db kv.Putter, account types.Address, val *uint256.Int) error {
+	key := fmt.Sprintf("account:%s", account.String())
 	return db.Put(modules.Reward, []byte(key), val.Bytes())
 }
 
 // GetAccountReward
-func GetAccountReward(db kv.Getter, key string) (*uint256.Int, error) {
+func GetAccountReward(db kv.Getter, account types.Address) (*uint256.Int, error) {
+	key := fmt.Sprintf("account:%s", account.String())
 	val, err := db.GetOne(modules.Reward, []byte(key))
 	if err != nil {
 		return uint256.NewInt(0), err

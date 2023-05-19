@@ -263,23 +263,26 @@ func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (types.Address, 
 
 // GetRewards
 func (api *API) GetRewards(address common.Address, from jsonrpc.BlockNumberOrHash, to jsonrpc.BlockNumberOrHash) (resp *RewardResponse, err error) {
-	if err = api.apos.db.View(context.Background(), func(tx kv.Tx) error {
-		resolvedFromBlock, _, err := rpchelper.GetCanonicalBlockNumber(from, tx)
-		if err != nil {
-			return err
-		}
-		resolvedToBlock, _, err := rpchelper.GetCanonicalBlockNumber(to, tx)
-		if err != nil {
-			return err
-		}
-		rewardService := newReward(api.apos.config, api.apos.chainConfig)
-		resp, err = rewardService.GetRewards(tx, *mvm_types.ToAmcAddress(&address), resolvedFromBlock, resolvedToBlock)
+
+	var (
+		resolvedFromBlock *uint256.Int
+		resolvedToBlock   *uint256.Int
+	)
+
+	api.apos.db.View(context.Background(), func(tx kv.Tx) error {
+		resolvedFromBlock, _, err = rpchelper.GetCanonicalBlockNumber(from, tx)
+		resolvedToBlock, _, err = rpchelper.GetCanonicalBlockNumber(to, tx)
 		return nil
-	}); err != nil {
+	})
+
+	if err != nil {
 		return nil, err
 	}
 
-	return resp, nil
+	rewardService := newReward(api.apos.config, api.apos.chainConfig)
+	resp, err = rewardService.GetRewards(*mvm_types.ToAmcAddress(&address), resolvedFromBlock, resolvedToBlock, api.chain.GetBlockByNumber)
+
+	return resp, err
 }
 
 // GetRewards
@@ -298,31 +301,26 @@ func (api *API) GetDepositInfo(address common.Address) (*deposit.Info, error) {
 	return info, err
 }
 
-// GetRewards
-func (api *API) GetBlockRewards(blockNr jsonrpc.BlockNumberOrHash) (map[types.Address]*uint256.Int, error) {
-	rewardService := newReward(api.apos.config, api.apos.chainConfig)
-
-	resp := make(map[types.Address]*uint256.Int, 0)
-	var err error
+// GetRewards todo:needs check
+func (api *API) GetBlockRewards(blockNr jsonrpc.BlockNumberOrHash) (resp []*block.Reward, err error) {
+	var (
+		resolvedBlockNr *uint256.Int
+		hash            types.Hash
+	)
 	api.apos.db.View(context.Background(), func(tx kv.Tx) error {
-
-		var resolvedBlockNr *uint256.Int
-		var hash types.Hash
 		resolvedBlockNr, hash, err = rpchelper.GetCanonicalBlockNumber(blockNr, tx)
 		if err != nil {
 			return err
 		}
-
-		header := rawdb.ReadHeader(tx, hash, resolvedBlockNr.Uint64())
-		if header == nil {
-			err = errors.New("cannot find header")
+		//header := rawdb.ReadHeader(tx, hash, resolvedBlockNr.Uint64())
+		body := rawdb.ReadBlock(tx, hash, resolvedBlockNr.Uint64())
+		if body == nil {
+			err = errors.New("cannot find block body")
 			return err
 		}
-
-		resp, err = rewardService.GetBlockRewards(tx, header)
+		resp = body.Body().Reward()
 		return nil
 	})
-
 	return resp, err
 }
 

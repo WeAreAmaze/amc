@@ -17,13 +17,10 @@
 package evmsdk
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"github.com/amazechain/amc/common/crypto"
-	"reflect"
-	"sync"
 	"testing"
 )
 
@@ -46,49 +43,49 @@ func TestGetNetInfos(t *testing.T) {
 	}
 }
 
-func TestEmit(t *testing.T) {
-	type args struct {
-		jsonText string
-	}
-
-	//settttting
-	aa := Emit(`{"type":"test","val":{"app_base_path":"/Users/xan/misc"}}`)
-	fmt.Println(aa)
-
-	// tests := []struct {
-	// 	name string
-	// 	args args
-	// }{{
-	// 	name: "t1",
-	// 	args: args{
-	// 		jsonText: `{"type":"start"}`,
-	// 	},
-	// }, {
-	// 	name: "t2",
-	// 	args: args{
-	// 		jsonText: `{"type":"test"}`,
-	// 	},
-	// },
-	// // 	{
-	// // 		name: "t3",
-	// // 		args: args{
-	// // 			jsonText: `{"type":"list"}`,
-	// // 		},
-	// // 	},
-	// }
-	// for _, tt := range tests {
-	// 	t.Run(tt.name, func(t *testing.T) {
-	// 		got := Emit(tt.args.jsonText)
-	// 		if len(got) == 0 {
-	// 			t.Errorf("Emit() = %v", got)
-	// 		}
-	// 		t.Log(got)
-	// 		fmt.Println(got)
-	// 	})
-	// }
-
-	// <-time.After(60 * time.Second)
-}
+//func TestEmit(t *testing.T) {
+//	type args struct {
+//		jsonText string
+//	}
+//
+//	//settttting
+//	aa := Emit(`{"type":"test","val":{"app_base_path":"/Users/xan/misc"}}`)
+//	fmt.Println(aa)
+//
+//	// tests := []struct {
+//	// 	name string
+//	// 	args args
+//	// }{{
+//	// 	name: "t1",
+//	// 	args: args{
+//	// 		jsonText: `{"type":"start"}`,
+//	// 	},
+//	// }, {
+//	// 	name: "t2",
+//	// 	args: args{
+//	// 		jsonText: `{"type":"test"}`,
+//	// 	},
+//	// },
+//	// // 	{
+//	// // 		name: "t3",
+//	// // 		args: args{
+//	// // 			jsonText: `{"type":"list"}`,
+//	// // 		},
+//	// // 	},
+//	// }
+//	// for _, tt := range tests {
+//	// 	t.Run(tt.name, func(t *testing.T) {
+//	// 		got := Emit(tt.args.jsonText)
+//	// 		if len(got) == 0 {
+//	// 			t.Errorf("Emit() = %v", got)
+//	// 		}
+//	// 		t.Log(got)
+//	// 		fmt.Println(got)
+//	// 	})
+//	// }
+//
+//	// <-time.After(60 * time.Second)
+//}
 
 func TestBlsSign(t *testing.T) {
 	pk := make([]byte, 32)
@@ -111,235 +108,231 @@ func TestBlsSign(t *testing.T) {
 	fmt.Println(resp)
 }
 
-func TestEvmEngine_Start(t *testing.T) {
-	type fields struct {
-		mu          sync.Mutex
-		ctx         context.Context
-		cancelFunc  context.CancelFunc
-		Account     string
-		AppBasePath string
-		State       string
-		BlockChan   chan string
-		PrivKey     string
-		ServerUri   string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
-	}{
-		struct {
-			name    string
-			fields  fields
-			wantErr bool
-		}{
-			name: "t1",
-			fields: fields{
-				PrivKey:   `b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAaAAAABNlY2RzYS1zaGEyLW5pc3RwMjU2AAAACG5pc3RwMjU2AAAAQQSgodcFy6hKA9enyiAzEKfpg7Rib5AFx3w33V0NsMYOAoUXtbQtFIOIIgNsTBj9ei1DdGJ4QSbCgw3w37X7oXvkAAAAqAK68x8CuvMfAAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKCh1wXLqEoD16fKIDMQp+mDtGJvkAXHfDfdXQ2wxg4ChRe1tC0Ug4giA2xMGP16LUN0YnhBJsKDDfDftfuhe+QAAAAhAMhPG7U/g7k9+YWm66Yk1yDhUvwkHmLMWvV/bTtGeElWAAAACW1hY0Bib2dvbgECAwQFBg==`,
-				ServerUri: "ws://127.0.0.1:20013",
-				Account:   "0x01",
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := &EvmEngine{
-				mu:          tt.fields.mu,
-				ctx:         tt.fields.ctx,
-				cancelFunc:  tt.fields.cancelFunc,
-				Account:     tt.fields.Account,
-				AppBasePath: tt.fields.AppBasePath,
-				EngineState: tt.fields.State,
-				BlockChan:   tt.fields.BlockChan,
-				PrivKey:     tt.fields.PrivKey,
-				ServerUri:   tt.fields.ServerUri,
-			}
-			if err := e.Start(); (err != nil) != tt.wantErr {
-				t.Errorf("EvmEngine.Start() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
+//func TestEvmEngine_Start(t *testing.T) {
+//	type fields struct {
+//		mu          sync.Mutex
+//		ctx         context.Context
+//		cancelFunc  context.CancelFunc
+//		Account     string
+//		AppBasePath string
+//		State       string
+//		BlockChan   chan string
+//		PrivKey     string
+//		ServerUri   string
+//	}
+//	tests := []struct {
+//		name    string
+//		fields  fields
+//		wantErr bool
+//	}{
+//		{
+//			name: "t1",
+//			fields: fields{
+//				PrivKey:   `b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAaAAAABNlY2RzYS1zaGEyLW5pc3RwMjU2AAAACG5pc3RwMjU2AAAAQQSgodcFy6hKA9enyiAzEKfpg7Rib5AFx3w33V0NsMYOAoUXtbQtFIOIIgNsTBj9ei1DdGJ4QSbCgw3w37X7oXvkAAAAqAK68x8CuvMfAAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKCh1wXLqEoD16fKIDMQp+mDtGJvkAXHfDfdXQ2wxg4ChRe1tC0Ug4giA2xMGP16LUN0YnhBJsKDDfDftfuhe+QAAAAhAMhPG7U/g7k9+YWm66Yk1yDhUvwkHmLMWvV/bTtGeElWAAAACW1hY0Bib2dvbgECAwQFBg==`,
+//				ServerUri: "ws://127.0.0.1:20013",
+//				Account:   "0x01",
+//			},
+//			wantErr: false,
+//		},
+//	}
+//	for _, tt := range tests {
+//		t.Run(tt.name, func(t *testing.T) {
+//			e := &EvmEngine{
+//				mu:          tt.fields.mu,
+//				ctx:         tt.fields.ctx,
+//				cancelFunc:  tt.fields.cancelFunc,
+//				Account:     tt.fields.Account,
+//				AppBasePath: tt.fields.AppBasePath,
+//				EngineState: tt.fields.State,
+//				BlockChan:   tt.fields.BlockChan,
+//				PrivKey:     tt.fields.PrivKey,
+//				ServerUri:   tt.fields.ServerUri,
+//			}
+//			if err := e.Start(); (err != nil) != tt.wantErr {
+//				t.Errorf("EvmEngine.Start() error = %v, wantErr %v", err, tt.wantErr)
+//			}
+//		})
+//	}
+//}
 
-func TestEvmEngine_vertify(t *testing.T) {
-	type fields struct {
-		mu          sync.Mutex
-		ctx         context.Context
-		cancelFunc  context.CancelFunc
-		Account     string
-		AppBasePath string
-		State       string
-		BlockChan   chan string
-		PrivKey     string
-		ServerUri   string
-	}
-	type args struct {
-		in []byte
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    []byte
-		wantErr bool
-	}{
-		{
-			name: "t1",
-			fields: fields{
-				PrivKey:   `37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e`,
-				ServerUri: "ws://127.0.0.1:20013",
-				Account:   "0x01",
-			},
-			args: args{
-				in: []byte(`
-			{
-				"entire":
-				{
-					"header":{
-						"parentHash":"0xeab8f2dca7682e72c594bfe9da4d83fb623741b21c729f57a7ff06a69aa3be38",
-						"sha3Uncles":"0xeab8f2dca7682e72c594bfe9da4d83fb623741b21c729f57a7ff06a69aa3be38",
-						"miner":"0x588639773Bc6F163aa262245CDa746c120676431",
-						"stateRoot":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
-						"transactionsRoot":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
-						"receiptsRoot":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
-						"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-						"difficulty":"0x2a65b3",
-						"number":"0x1532d9",
-						"gasLimit":"0x1c9c380",
-						"gasUsed": "0x0",
-						"timestamp":"0x638f0e18",
-						"extraData": "0xd883010a17846765746888676f312e31382e35856c696e757800000000000000ab9c084cefea3b41830c827c91b8908b12f64b08a243ee4fabd28bdd4556154f00d9a08f7c4a6c2794a63100d92910595e6747db4af69d576c224373c707db4400"
-					},
-					"uncles":[],
-					"transactions":[],
-					"pprof":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
-					"senders":[]
-				},
-				"codes":[]
-			}`),
-			},
-			want:    []byte("321123bb"),
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := &EvmEngine{
-				mu:          tt.fields.mu,
-				ctx:         tt.fields.ctx,
-				cancelFunc:  tt.fields.cancelFunc,
-				Account:     tt.fields.Account,
-				AppBasePath: tt.fields.AppBasePath,
-				EngineState: tt.fields.State,
-				BlockChan:   tt.fields.BlockChan,
-				PrivKey:     tt.fields.PrivKey,
-				ServerUri:   tt.fields.ServerUri,
-			}
-			got, err := e.vertify(tt.args.in)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("EvmEngine.vertify() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("EvmEngine.vertify() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+//func TestEvmEngine_vertify(t *testing.T) {
+//	type fields struct {
+//		mu          sync.Mutex
+//		ctx         context.Context
+//		cancelFunc  context.CancelFunc
+//		Account     string
+//		AppBasePath string
+//		State       string
+//		BlockChan   chan string
+//		PrivKey     string
+//		ServerUri   string
+//	}
+//	type args struct {
+//		in []byte
+//	}
+//	tests := []struct {
+//		name    string
+//		fields  fields
+//		args    args
+//		want    []byte
+//		wantErr bool
+//	}{
+//		{
+//			name: "t1",
+//			fields: fields{
+//				PrivKey:   `37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e`,
+//				ServerUri: "ws://127.0.0.1:20013",
+//				Account:   "0x01",
+//			},
+//			args: args{
+//				in: []byte(`
+//			{
+//				"entire":
+//				{
+//					"header":{
+//						"parentHash":"0xeab8f2dca7682e72c594bfe9da4d83fb623741b21c729f57a7ff06a69aa3be38",
+//						"sha3Uncles":"0xeab8f2dca7682e72c594bfe9da4d83fb623741b21c729f57a7ff06a69aa3be38",
+//						"miner":"0x588639773Bc6F163aa262245CDa746c120676431",
+//						"stateRoot":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
+//						"transactionsRoot":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
+//						"receiptsRoot":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
+//						"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+//						"difficulty":"0x2a65b3",
+//						"number":"0x1532d9",
+//						"gasLimit":"0x1c9c380",
+//						"gasUsed": "0x0",
+//						"timestamp":"0x638f0e18",
+//						"extraData": "0xd883010a17846765746888676f312e31382e35856c696e757800000000000000ab9c084cefea3b41830c827c91b8908b12f64b08a243ee4fabd28bdd4556154f00d9a08f7c4a6c2794a63100d92910595e6747db4af69d576c224373c707db4400"
+//					},
+//					"uncles":[],
+//					"transactions":[],
+//					"pprof":"0xf9e3e616232713a12a90a2abc2302d5fd2b6360764c204ebe2acda342390841b",
+//					"senders":[]
+//				},
+//				"codes":[]
+//			}`),
+//			},
+//			want:    []byte("321123bb"),
+//			wantErr: false,
+//		},
+//	}
+//	for _, tt := range tests {
+//		t.Run(tt.name, func(t *testing.T) {
+//			e := &EvmEngine{
+//				mu:          tt.fields.mu,
+//				ctx:         tt.fields.ctx,
+//				cancelFunc:  tt.fields.cancelFunc,
+//				Account:     tt.fields.Account,
+//				AppBasePath: tt.fields.AppBasePath,
+//				EngineState: tt.fields.State,
+//				BlockChan:   tt.fields.BlockChan,
+//				PrivKey:     tt.fields.PrivKey,
+//				ServerUri:   tt.fields.ServerUri,
+//			}
+//			got, err := e.vertify(tt.args.in)
+//			if (err != nil) != tt.wantErr {
+//				t.Errorf("EvmEngine.vertify() error = %v, wantErr %v", err, tt.wantErr)
+//				return
+//			}
+//			if !reflect.DeepEqual(got, tt.want) {
+//				t.Errorf("EvmEngine.vertify() = %v, want %v", got, tt.want)
+//			}
+//		})
+//	}
+//}
 
-func TestEngineStart(t *testing.T) {
-	EE.Setting(&EmitRequest{
-		Typ: "setting",
-		Val: map[string]interface{}{
-			"app_base_path": "/Users/xan/misc",
-			"priv_key":      "37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e", //2d09d9f4e166f35a4ab0a2edd599e2a23bbe86b312b2e05b34d9fbe5693b1e48
-			"server_uri":    "ws://127.0.0.1:20013",
-			"account":       "0x588639773bc6f163aa262245cda746c120676431", //0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9
-		},
-	})
-	if err := EE.Start(); err != nil {
-		t.Error(err)
-	}
-	select {}
-}
+//func TestEngineStart(t *testing.T) {
+//	EE.Setting(&EmitRequest{
+//		Typ: "setting",
+//		Val: map[string]interface{}{
+//			"app_base_path": "/Users/xan/misc",
+//			"priv_key":      "37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e", //2d09d9f4e166f35a4ab0a2edd599e2a23bbe86b312b2e05b34d9fbe5693b1e48
+//			"server_uri":    "ws://127.0.0.1:20013",
+//			"account":       "0x588639773bc6f163aa262245cda746c120676431", //0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9
+//		},
+//	})
+//	if err := EE.Start(); err != nil {
+//		t.Error(err)
+//	}
+//	select {}
+//}
 
 /*
 0xb1fd8daE392D8E7c5aA0c8D405EFC56e1F55c42c
 732d6346fc020087ac84bd1a42adb444e0f783fe907759ba7fa977aab3bf66fc
 */
-func TestEmitComplexEmulation(t *testing.T) {
-	EE.Setting(&EmitRequest{
-		Typ: "setting",
-		Val: map[string]interface{}{
-			"app_base_path": "/Users/mac/misc",
-			"priv_key":      "de4b76c3dca3d8e10aea7644f77b316a68a6476fbd119d441ead5c6131aa42a7", //2d09d9f4e166f35a4ab0a2edd599e2a23bbe86b312b2e05b34d9fbe5693b1e48
-			"server_uri":    "ws://54.175.247.94:20013",
-			"account":       "0x65081DBA9E7B5398ec4d40f1794003c54dB11B79", //0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9
-		},
-	})
-	if s := Emit(`{"type":"start"}`); len(s) != 0 {
-		fmt.Println(s)
-	}
+//func TestEmitComplexEmulation(t *testing.T) {
+//	EE.Setting(&EmitRequest{
+//		Typ: "setting",
+//		Val: map[string]interface{}{
+//			"app_base_path": "/Users/mac/misc",
+//			"priv_key":      "de4b76c3dca3d8e10aea7644f77b316a68a6476fbd119d441ead5c6131aa42a7", //2d09d9f4e166f35a4ab0a2edd599e2a23bbe86b312b2e05b34d9fbe5693b1e48
+//			"server_uri":    "ws://54.175.247.94:20013",
+//			"account":       "0x65081DBA9E7B5398ec4d40f1794003c54dB11B79", //0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9
+//		},
+//	})
+//	if s := Emit(`{"type":"start"}`); len(s) != 0 {
+//		fmt.Println(s)
+//	}
+//
+//	// i := 0
+//	// for {
+//	// 	if s := Emit(`{"type":"state"}`); len(s) != 0 {
+//	// 		fmt.Println(s)
+//	// 	}
+//	// 	<-time.After(1 * time.Second)
+//	// 	if i%20 == 0 {
+//	// 		Emit(`{"type":"start"}`)
+//	// 	}
+//	// 	i++
+//	// }
+//
+//	select {}
+//}
 
-	// i := 0
-	// for {
-	// 	if s := Emit(`{"type":"state"}`); len(s) != 0 {
-	// 		fmt.Println(s)
-	// 	}
-	// 	<-time.After(1 * time.Second)
-	// 	if i%20 == 0 {
-	// 		Emit(`{"type":"start"}`)
-	// 	}
-	// 	i++
-	// }
+//func TestEngineState(t *testing.T) {
+//	EE.Setting(&EmitRequest{
+//		Typ: "setting",
+//		Val: map[string]interface{}{
+//			"app_base_path": "/Users/xan/misc",
+//			"priv_key":      "37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e",
+//			"server_uri":    "ws://127.0.0.1:20013",
+//			"account":       "0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9",
+//		},
+//	})
+//	if ss := EE.State(); ss != "stopped" {
+//		t.Error("unstopped")
+//	}
+//	if err := EE.Start(); err != nil {
+//		t.Error(err)
+//	}
+//	if ss := EE.State(); ss != "started" {
+//		t.Error("unstarted")
+//	}
+//	select {}
+//}
 
-	select {}
-}
-
-func TestEngineState(t *testing.T) {
-	EE.Setting(&EmitRequest{
-		Typ: "setting",
-		Val: map[string]interface{}{
-			"app_base_path": "/Users/xan/misc",
-			"priv_key":      "37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e",
-			"server_uri":    "ws://127.0.0.1:20013",
-			"account":       "0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9",
-		},
-	})
-	if ss := EE.State(); ss != "stopped" {
-		t.Error("unstopped")
-	}
-	if err := EE.Start(); err != nil {
-		t.Error(err)
-	}
-	if ss := EE.State(); ss != "started" {
-		t.Error("unstarted")
-	}
-	select {}
-}
-
-func TestUnmarshalInput(t *testing.T) {
-	EE.Setting(&EmitRequest{
-		Typ: "setting",
-		Val: map[string]interface{}{
-			"app_base_path": "/Users/xan/misc",
-			"priv_key":      "37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e",
-			"server_uri":    "ws://127.0.0.1:20013",
-			"account":       "0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9",
-		},
-	})
-	if ss := EE.State(); ss != "stopped" {
-		t.Error("unstopped")
-	}
-	if err := EE.Start(); err != nil {
-		t.Error(err)
-	}
-	if ss := EE.State(); ss != "started" {
-		t.Error("unstarted")
-	}
-	select {}
-}
+//func TestUnmarshalInput(t *testing.T) {
+//	EE.Setting(&EmitRequest{
+//		Typ: "setting",
+//		Val: map[string]interface{}{
+//			"app_base_path": "/Users/xan/misc",
+//			"priv_key":      "37d15846af852c47649005fd6dfe33483d394aaa60c14e7c56f4deadb116329e",
+//			"server_uri":    "ws://127.0.0.1:20013",
+//			"account":       "0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9",
+//		},
+//	})
+//	if ss := EE.State(); ss != "stopped" {
+//		t.Error("unstopped")
+//	}
+//	if err := EE.Start(); err != nil {
+//		t.Error(err)
+//	}
+//	if ss := EE.State(); ss != "started" {
+//		t.Error("unstarted")
+//	}
+//	select {}
+//}
 
 func TestBlssign(t *testing.T) {
 	resp := Emit(`

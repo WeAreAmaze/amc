@@ -699,17 +699,23 @@ func (bc *BlockChain) GetBlockByHash(h types.Hash) (block2.IBlock, error) {
 }
 
 func (bc *BlockChain) GetBlockByNumber(number *uint256.Int) (block2.IBlock, error) {
-	tx, err := bc.ChainDB.BeginRo(bc.ctx)
-	if nil != err {
-		return nil, err
-	}
-	defer tx.Rollback()
+	//tx, err := bc.ChainDB.BeginRo(bc.ctx)
+	//if nil != err {
+	//	return nil, err
+	//}
+	//defer tx.Rollback()
 
-	hash, err := rawdb.ReadCanonicalHash(tx, number.Uint64())
+	var hash types.Hash
+	bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
+		hash, _ = rawdb.ReadCanonicalHash(tx, number.Uint64())
+		return nil
+	})
+
 	if hash == (types.Hash{}) {
-		return nil, err
+		return nil, nil
 	}
-	return rawdb.ReadBlock(tx, hash, number.Uint64()), nil
+	return bc.GetBlock(hash, number.Uint64()), nil
+	//return bc..ReadBlock(tx, hash, number.Uint64()), nil
 }
 
 func (bc *BlockChain) NewBlockHandler(payload []byte, peer peer.ID) error {
@@ -899,7 +905,7 @@ func (bc *BlockChain) InsertChain(chain []block2.IBlock) (int, error) {
 				"prev number", prev.Number64(),
 				"prev hash", prev.Hash(),
 			)
-			return 0, fmt.Errorf("non contiguous insert: item %s is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, prev.Number64().String(),
+			return 0, fmt.Errorf("non contiguous insert: item %d is #%s [%x..], item %d is #%s [%x..] (parent [%x..])", i-1, prev.Number64().String(),
 				prev.Hash().Bytes()[:4], i, block.Number64().String(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
@@ -1383,8 +1389,6 @@ func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block
 		if err := rawdb.WriteBlock(tx, block.(*block2.Block)); err != nil {
 			return err
 		}
-		//todo
-		rawdb.WriteTxLookupEntries(tx, block.(*block2.Block))
 		return nil
 	}); nil != err {
 		return NonStatTy, err
@@ -1432,14 +1436,18 @@ func (bc *BlockChain) writeHeadBlock(tx kv.RwTx, block block2.IBlock) error {
 		notExternalTx = true
 	}
 
-	if err := rawdb.WriteBlock(tx, block.(*block2.Block)); nil != err {
-		log.Errorf("failed to save last block, err: %v", err)
-		return err
-	}
+	//if err := rawdb.WriteBlock(tx, block.(*block2.Block)); nil != err {
+	//	log.Errorf("failed to save last block, err: %v", err)
+	//	return err
+	//}
 	rawdb.WriteHeadBlockHash(tx, block.Hash())
+	rawdb.WriteHeadBlockHash(tx, block.Hash())
+	rawdb.WriteTxLookupEntries(tx, block.(*block2.Block))
+
 	if err = rawdb.WriteCanonicalHash(tx, block.Hash(), block.Number64().Uint64()); nil != err {
 		return err
 	}
+
 	bc.currentBlock.Store(block.(*block2.Block))
 	if notExternalTx {
 		if err = tx.Commit(); nil != err {

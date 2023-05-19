@@ -30,7 +30,6 @@ import (
 	"github.com/amazechain/amc/internal/vm/evmtypes"
 	"github.com/amazechain/amc/modules/state"
 	"github.com/amazechain/amc/params"
-	"github.com/ledgerwatch/erigon-lib/kv"
 )
 
 //var (
@@ -384,27 +383,17 @@ func SysCallContract(contract types.Address, data []byte, chainConfig params.Cha
 //	return tx.FakeSign(from)
 //}
 
-func FinalizeBlockExecution(tx kv.RwTx, engine consensus.Engine, header *block.Header,
+func FinalizeBlockExecution(engine consensus.Engine, header *block.Header,
 	txs transaction.Transactions, stateWriter state.WriterWithChangeSets, cc *params.ChainConfig, ibs *state.IntraBlockState,
-	receipts block.Receipts, headerReader consensus.ChainHeaderReader, isMining, isBeijing bool,
-) (newBlock block.IBlock, newTxs transaction.Transactions, newReceipt block.Receipts, err error) {
+	receipts block.Receipts, headerReader consensus.ChainHeaderReader, isMining bool) (newBlock block.IBlock, newTxs transaction.Transactions, newReceipt block.Receipts, err error) {
 	//syscall := func(contract types.Address, data []byte) ([]byte, error) {
 	//	return SysCallContract(contract, data, *cc, ibs, header, engine)
 	//}
 
-	var rewards []*block.Reward
-	if isBeijing {
-		rewards, err = engine.Rewards(tx, header, ibs, true)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		ibs.SoftFinalise()
-	}
-
 	if isMining {
-		newBlock, err = engine.FinalizeAndAssemble(headerReader, header, ibs, txs, nil, receipts, rewards)
+		newBlock, _, _, err = engine.FinalizeAndAssemble(headerReader, header, ibs, txs, nil, receipts)
 	} else {
-		engine.Finalize(headerReader, header, ibs, txs, nil)
+		_, _, err = engine.Finalize(headerReader, header, ibs, txs, nil)
 	}
 	if err != nil {
 		return nil, nil, nil, err

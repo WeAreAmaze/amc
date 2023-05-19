@@ -184,6 +184,7 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 	depositeMap := map[types.Address]*deposit.Info{}
 
 	for currentNr.Cmp(endNumber) >= 0 {
+		// Todo use cache instead ?
 		hash, err := rawdb.ReadCanonicalHash(tx, currentNr.Uint64())
 		if nil != err {
 			log.Error("cannot open chain db", "err", err)
@@ -204,11 +205,6 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 
 		verifiers := block.Body().Verifier()
 		for _, verifier := range verifiers {
-			addrReward, ok := rewardMap[verifier.Address]
-			if !ok {
-				addrReward = uint256.NewInt(0)
-			}
-
 			depositInfo, ok := depositeMap[verifier.Address]
 			if !ok {
 				depositInfo = deposit.GetDepositInfo(tx, verifier.Address)
@@ -217,6 +213,11 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 				}
 				depositeMap[verifier.Address] = depositInfo
 				log.Debug("account deposite infos", "addr", verifier.Address, "perblock", depositInfo.RewardPerBlock, "perepoch", depositInfo.MaxRewardPerEpoch)
+			}
+
+			addrReward, ok := rewardMap[verifier.Address]
+			if !ok {
+				addrReward = uint256.NewInt(0)
 			}
 
 			rewardMap[verifier.Address] = math.Min256(addrReward.Add(addrReward, depositInfo.RewardPerBlock), depositInfo.MaxRewardPerEpoch.Clone())
@@ -248,7 +249,7 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 		rewardMap[addr] = payAmount
 
 		if setRewards {
-			log.Info("🔨 set account reward unpaid", "addr", addr, "non-pay amount", unpayAmount.Uint64(), "pay amount", payAmount.Uint64(), "number", currentNr.String())
+			log.Debug("🔨 set account reward unpaid", "addr", addr, "non-pay amount", unpayAmount.Uint64(), "pay amount", payAmount.Uint64(), "number", currentNr.String())
 			if err := r.setAccountRewardUnpaid(tx, addr, unpayAmount); err != nil {
 				return nil, err
 			}
@@ -283,8 +284,7 @@ func (r *Reward) setRewardByEpochPaid(tx kv.RwTx, epoch *uint256.Int, rewardMap 
 }
 
 func (r *Reward) getAccountRewardUnpaid(tx kv.Getter, account types.Address) (*uint256.Int, error) {
-	key := fmt.Sprintf("account:%s", account.String())
-	value, err := rawdb.GetAccountReward(tx, key)
+	value, err := rawdb.GetAccountReward(tx, account)
 	if err != nil {
 		return uint256.NewInt(0), err
 	}
@@ -292,12 +292,7 @@ func (r *Reward) getAccountRewardUnpaid(tx kv.Getter, account types.Address) (*u
 }
 
 func (r *Reward) setAccountRewardUnpaid(tx kv.Putter, account types.Address, val *uint256.Int) error {
-	key := fmt.Sprintf("account:%s", account.String())
-	err := rawdb.PutAccountReward(tx, key, val)
-	if err != nil {
-		return err
-	}
-	return nil
+	return rawdb.PutAccountReward(tx, account, val)
 }
 
 func (r *Reward) number2epoch(number *uint256.Int) *uint256.Int {

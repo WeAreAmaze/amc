@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
 	"sort"
@@ -674,23 +675,6 @@ func (bc *BlockChain) GetBlockNumber(hash types.Hash) *uint64 {
 }
 
 func (bc *BlockChain) GetBlockByHash(h types.Hash) (block2.IBlock, error) {
-	//
-	//tx, err := bc.ChainDB.BeginRo(bc.ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//block, err := rawdb.ReadBlockByHash(tx, h)
-	//
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//if block != nil {
-	//	return block, nil
-	//}
-	//
-	//return nil, errBlockDoesNotExist
-
 	number := bc.GetBlockNumber(h)
 	if nil == number {
 		return nil, errBlockDoesNotExist
@@ -699,12 +683,6 @@ func (bc *BlockChain) GetBlockByHash(h types.Hash) (block2.IBlock, error) {
 }
 
 func (bc *BlockChain) GetBlockByNumber(number *uint256.Int) (block2.IBlock, error) {
-	//tx, err := bc.ChainDB.BeginRo(bc.ctx)
-	//if nil != err {
-	//	return nil, err
-	//}
-	//defer tx.Rollback()
-
 	var hash types.Hash
 	bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
 		hash, _ = rawdb.ReadCanonicalHash(tx, number.Uint64())
@@ -715,7 +693,6 @@ func (bc *BlockChain) GetBlockByNumber(number *uint256.Int) (block2.IBlock, erro
 		return nil, nil
 	}
 	return bc.GetBlock(hash, number.Uint64()), nil
-	//return bc..ReadBlock(tx, hash, number.Uint64()), nil
 }
 
 func (bc *BlockChain) NewBlockHandler(payload []byte, peer peer.ID) error {
@@ -1034,10 +1011,10 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	//	batch.Rollback()
 	//}()
 
-	evmRecord := func(ctx context.Context, db kv.RwDB, blockNr uint64, f func(tx kv.RwTx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) error) error {
-		tx, err := db.BeginRw(ctx)
+	evmRecord := func(ctx context.Context, db kv.RwDB, blockNr uint64, f func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error)) (*state.IntraBlockState, map[types.Address]*uint256.Int, error) {
+		tx, err := db.BeginRo(ctx)
 		if nil != err {
-			return err
+			return nil, nil, err
 		}
 		defer tx.Rollback()
 		//batch := olddb.NewHashBatch(tx, bc.Quit(), paths.DefaultDataDir())
@@ -1049,17 +1026,20 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 		stateReader := state.NewPlainStateReader(tx)
 		ibs := state.New(stateReader)
-		stateWriter := state.NewPlainStateWriter(tx, tx, block.Number64().Uint64())
+		//stateWriter := state.NewPlainStateWriter(tx, tx, block.Number64().Uint64())
+		stateWriter := state.NewNoopWriter()
 
-		if err = f(tx, ibs, stateReader, stateWriter); nil != err {
-			return err
+		var nopay map[types.Address]*uint256.Int
+		nopay, err = f(tx, ibs, stateReader, stateWriter)
+		if nil != err {
+			return nil, nil, err
 		}
 
 		//if err := batch.Commit(); nil != err {
 		//	return err
 		//}
-
-		return tx.Commit()
+		return ibs, nopay, nil
+		// return tx.Commit()
 	}
 
 	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
@@ -1084,27 +1064,29 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		var receipts block2.Receipts
 		var logs []*block2.Log
 		var usedGas uint64
-		if err := evmRecord(bc.ctx, bc.ChainDB, block.Number64().Uint64(), func(tx kv.RwTx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) error {
+		ibs, nopay, err := evmRecord(bc.ctx, bc.ChainDB, block.Number64().Uint64(), func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error) {
 			getHeader := func(hash types.Hash, number uint64) *block2.Header {
 				return rawdb.ReadHeader(tx, hash, number)
 			}
 			blockHashFunc := GetHashFn(block.Header().(*block2.Header), getHeader)
 
 			var err error
-			receipts, logs, usedGas, err = bc.process.Process(tx, block.(*block2.Block), ibs, reader, writer, blockHashFunc)
+			var nopay map[types.Address]*uint256.Int
+			receipts, nopay, logs, usedGas, err = bc.process.Process(block.(*block2.Block), ibs, reader, writer, blockHashFunc)
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
 				//atomic.StoreUint32(&followupInterrupt, 1)
-				return err
+				return nil, err
 			}
 			if err := bc.validator.ValidateState(block, ibs, receipts, usedGas); err != nil {
 				bc.reportBlock(block, receipts, err)
 				//atomic.StoreUint32(&followupInterrupt, 1)
-				return err
+				return nil, err
 			}
 
-			return nil
-		}); nil != err {
+			return nopay, nil
+		})
+		if nil != err {
 			return it.index, err
 		}
 		//var followupInterrupt uint32
@@ -1133,7 +1115,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		//}
 
 		var status WriteStatus
-		status, err = bc.writeBlockWithState(block, receipts)
+		status, err = bc.writeBlockWithState(block, receipts, ibs, nopay)
 		//atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
@@ -1354,15 +1336,15 @@ func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock) (err error) {
 	})
 }
 
-func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block2.Receipt) error {
+func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
-	_, err := bc.writeBlockWithState(block, receipts)
+	_, err := bc.writeBlockWithState(block, receipts, ibs, nopay)
 	return err
 }
 
-// WriteBlockWithState
-func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block2.Receipt) (status WriteStatus, err error) {
+// writeBlockWithState
+func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) (status WriteStatus, err error) {
 	if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
 		//ptd := bc.GetTd(block.ParentHash(), block.Number64().Sub(uint256.NewInt(1)))
 		ptd, err := rawdb.ReadTd(tx, block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)).Uint64())
@@ -1389,6 +1371,26 @@ func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block
 		if err := rawdb.WriteBlock(tx, block.(*block2.Block)); err != nil {
 			return err
 		}
+
+		stateWriter := state.NewPlainStateWriter(tx, tx, block.Number64().Uint64())
+		if err := ibs.CommitBlock(bc.chainConfig.Rules(block.Number64().Uint64()), stateWriter); nil != err {
+			return err
+		}
+
+		if err := stateWriter.WriteChangeSets(); err != nil {
+			return fmt.Errorf("writing changesets for block %d failed: %w", block.Number64().Uint64(), err)
+		}
+
+		if err := stateWriter.WriteHistory(); err != nil {
+			return fmt.Errorf("writing history for block %d failed: %w", block.Number64().Uint64(), err)
+		}
+
+		if nil != nopay {
+			for addr, v := range nopay {
+				rawdb.PutAccountReward(tx, addr, v)
+			}
+		}
+
 		return nil
 	}); nil != err {
 		return NonStatTy, err
@@ -1610,8 +1612,8 @@ func (bc *BlockChain) reorg(tx kv.RwTx, oldBlock, newBlock block2.IBlock) error 
 		}
 		// Remove an old block as well as stash away a new block
 		oldChain = append(oldChain, oldBlock)
-		for _, tx := range oldBlock.Transactions() {
-			h := tx.Hash()
+		for _, t := range oldBlock.Transactions() {
+			h := t.Hash()
 			deletedTxs = append(deletedTxs, h)
 		}
 		newChain = append(newChain, newBlock)
@@ -1655,8 +1657,8 @@ func (bc *BlockChain) reorg(tx kv.RwTx, oldBlock, newBlock block2.IBlock) error 
 		bc.writeHeadBlock(tx, newChain[i])
 
 		// Collect the new added transactions.
-		for _, tx := range newChain[i].Transactions() {
-			h := tx.Hash()
+		for _, t := range newChain[i].Transactions() {
+			h := t.Hash()
 			addedTxs = append(addedTxs, h)
 		}
 	}
@@ -1702,4 +1704,26 @@ func (bc *BlockChain) DB() kv.RwDB {
 func (bc *BlockChain) StateAt(tx kv.Tx, blockNr uint64) *state.IntraBlockState {
 	reader := state.NewPlainState(tx, blockNr+1)
 	return state.New(reader)
+}
+
+func (bc *BlockChain) GetDepositInfo(address types.Address) (*uint256.Int, *uint256.Int) {
+	var info *deposit.Info
+	bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
+		info = deposit.GetDepositInfo(tx, address)
+		return nil
+	})
+	if nil == info {
+		return nil, nil
+	}
+	return info.RewardPerBlock, info.MaxRewardPerEpoch
+}
+
+func (bc *BlockChain) GetAccountRewardUnpaid(account types.Address) (*uint256.Int, error) {
+	var value *uint256.Int
+	var err error
+	bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
+		value, err = rawdb.GetAccountReward(tx, account)
+		return nil
+	})
+	return value, err
 }

@@ -59,6 +59,7 @@ type ChainReader interface {
 
 	// GetBlock retrieves a block from the database by hash and number.
 	GetBlock(hash types.Hash, number uint64) block.IBlock
+	GetBlockByNumber(number *uint256.Int) (block.IBlock, error)
 }
 
 // Engine is an algorithm agnostic consensus engine.

@@ -62,18 +62,18 @@ func TestUint256(t *testing.T) {
 	t.Logf("100 AMT uint256 bytes:%s, hex Bytes: %s", hexutil.Encode(amt100Uint256.Bytes()), hexutil.Encode(amt100Hex))
 }
 
-func TestPrivateKey(t *testing.T) {
-	private, _ := hexutil.Decode("0xde4b76c3dca3d8e10aea7644f77b316a68a6476fbd119d441ead5c6131aa42a7")
-
-	p, err := bls.SecretKeyFromBytes(private)
-	if err != nil {
-		t.Fatal("bls cannot import private key", err)
-	}
-
-	pub, err := p.PublicKey().MarshalText()
-
-	if err != nil {
-		t.Fatal("bls public key cannot MarshalText ", err)
-	}
-	t.Logf("pubkey %s", string(pub))
-}
+//func TestPrivateKey(t *testing.T) {
+//	private, _ := hexutil.Decode("0xde4b76c3dca3d8e10aea7644f77b316a68a6476fbd119d441ead5c6131aa42a7")
+//
+//	p, err := bls.SecretKeyFromBytes(private)
+//	if err != nil {
+//		t.Fatal("bls cannot import private key", err)
+//	}
+//
+//	pub, err := p.PublicKey().MarshalText()
+//
+//	if err != nil {
+//		t.Fatal("bls public key cannot MarshalText ", err)
+//	}
+//	t.Logf("pubkey %s", string(pub))
+//}

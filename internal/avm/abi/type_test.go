@@ -17,11 +17,11 @@
 package abi
 
 import (
+	"github.com/amazechain/amc/common/types"
 	"math/big"
 	"reflect"
 	"testing"
 
-	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/davecgh/go-spew/spew"
 )
 
@@ -211,10 +211,10 @@ func TestTypeCheck(t *testing.T) {
 		{"uint16[3]", nil, [4]uint16{1, 2, 3}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
 		{"uint16[3]", nil, []uint16{1, 2, 3}, ""},
 		{"uint16[3]", nil, []uint16{1, 2, 3, 4}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
-		{"address[]", nil, []common.Address{{1}}, ""},
-		{"address[1]", nil, []common.Address{{1}}, ""},
-		{"address[1]", nil, [1]common.Address{{1}}, ""},
-		{"address[2]", nil, [1]common.Address{{1}}, "abi: cannot use [1]array as type [2]array as argument"},
+		{"address[]", nil, []types.Address{{1}}, ""},
+		{"address[1]", nil, []types.Address{{1}}, ""},
+		{"address[1]", nil, [1]types.Address{{1}}, ""},
+		{"address[2]", nil, [1]types.Address{{1}}, "abi: cannot use [1]array as type [2]array as argument"},
 		{"bytes32", nil, [32]byte{}, ""},
 		{"bytes31", nil, [31]byte{}, ""},
 		{"bytes30", nil, [30]byte{}, ""},
@@ -259,9 +259,9 @@ func TestTypeCheck(t *testing.T) {
 		{"string", nil, []byte{}, "abi: cannot use slice as type string as argument"},
 		{"bytes32[]", nil, [][32]byte{{}}, ""},
 		{"function", nil, [24]byte{}, ""},
-		{"bytes20", nil, common.Address{}, ""},
+		{"bytes20", nil, types.Address{}, ""},
 		{"address", nil, [20]byte{}, ""},
-		{"address", nil, common.Address{}, ""},
+		{"address", nil, types.Address{}, ""},
 		{"bytes32[]]", nil, "", "invalid arg type in abi"},
 		{"invalidType", nil, "", "unsupported arg type: invalidType"},
 		{"invalidSlice[]", nil, "", "unsupported arg type: invalidSlice"},

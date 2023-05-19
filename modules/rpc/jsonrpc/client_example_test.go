@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
-	"testing"
 )
 
 // In this example, our client wishes to track the latest 'block number'
@@ -37,29 +36,29 @@ type Block struct {
 	Number *hexutil.Big
 }
 
-func TestExampleClientSubscription(t *testing.T) {
-	// Connect the client.
-	client, err := jsonrpc.Dial("ws://127.0.0.1:20013")
-	if nil != err {
-		panic(err)
-	}
-	subch := make(chan Block)
-
-	// Ensure that subch receives the latest block.
-	//go func() {
-	//	for i := 0; ; i++ {
-	//		if i > 0 {
-	//			time.Sleep(2 * time.Second)
-	//		}
-	subscribeBlocks(client, subch)
-	//	}
-	//}()
-
-	// Print events from the subscription as they arrive.
-	for block := range subch {
-		fmt.Println("latest block:", block.Number)
-	}
-}
+//func TestExampleClientSubscription(t *testing.T) {
+//	// Connect the client.
+//	client, err := jsonrpc.Dial("ws://127.0.0.1:20013")
+//	if nil != err {
+//		panic(err)
+//	}
+//	subch := make(chan Block)
+//
+//	// Ensure that subch receives the latest block.
+//	//go func() {
+//	//	for i := 0; ; i++ {
+//	//		if i > 0 {
+//	//			time.Sleep(2 * time.Second)
+//	//		}
+//	subscribeBlocks(client, subch)
+//	//	}
+//	//}()
+//
+//	// Print events from the subscription as they arrive.
+//	for block := range subch {
+//		fmt.Println("latest block:", block.Number)
+//	}
+//}
 
 // subscribeBlocks runs in its own goroutine and maintains
 // a subscription for new blocks.

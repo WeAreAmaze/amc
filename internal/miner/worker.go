@@ -236,7 +236,8 @@ func (w *worker) runLoop() error {
 		case req := <-w.newWorkCh:
 			err := w.commitWork(req.interrupt, req.noempty, req.timestamp)
 			if err != nil {
-				//w.startCh <- struct{}{}
+				log.Error("runLoop err:", err.Error())
+				w.startCh <- struct{}{}
 			}
 		}
 	}
@@ -274,37 +275,37 @@ func (w *worker) resultLoop() error {
 			}
 
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
-			var (
-				receipts = make([]*block.Receipt, len(task.receipts))
-				// logs     []*block.Log
-			)
-			for i, taskReceipt := range task.receipts {
-				receipt := new(block.Receipt)
-				receipts[i] = receipt
-				*receipt = *taskReceipt
-
-				// add block location fields
-				receipt.BlockHash = hash
-				receipt.BlockNumber = blk.Number64()
-				receipt.TransactionIndex = uint(i)
-
-				// Update the block hash in all logs since it is now available and not when the
-				// receipt/log of individual transactions were created.
-				//receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
-				//for i, taskLog := range taskReceipt.Logs {
-				//	log := new(block.Log)
-				//	receipt.Logs[i] = log
-				//	*log = *taskLog
-				//	log.BlockHash = hash
-				//}
-				//logs = append(logs, receipt.Logs...)
-			}
-			// Commit block and state to database.
-			err := w.chain.WriteBlockWithState(blk, receipts)
-			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
-				continue
-			}
+			//var (
+			//	receipts = make([]*block.Receipt, len(task.receipts))
+			//	// logs     []*block.Log
+			//)
+			//for i, taskReceipt := range task.receipts {
+			//	receipt := new(block.Receipt)
+			//	receipts[i] = receipt
+			//	*receipt = *taskReceipt
+			//
+			//	// add block location fields
+			//	receipt.BlockHash = hash
+			//	receipt.BlockNumber = blk.Number64()
+			//	receipt.TransactionIndex = uint(i)
+			//
+			//	// Update the block hash in all logs since it is now available and not when the
+			//	// receipt/log of individual transactions were created.
+			//	//receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
+			//	//for i, taskLog := range taskReceipt.Logs {
+			//	//	log := new(block.Log)
+			//	//	receipt.Logs[i] = log
+			//	//	*log = *taskLog
+			//	//	log.BlockHash = hash
+			//	//}
+			//	//logs = append(logs, receipt.Logs...)
+			//}
+			//// Commit block and state to database.
+			//err := w.chain.WriteBlockWithState(blk, receipts)
+			//if err != nil {
+			//	log.Error("Failed writing block to chain", "err", err)
+			//	continue
+			//}
 
 			log.Info("🔨 Successfully sealed new block",
 				"sealhash", sealhash,
@@ -317,8 +318,8 @@ func (w *worker) resultLoop() error {
 				"rewardCount", len(blk.Body().Reward()),
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)),
 				"txs", len(blk.Transactions()))
-			//w.chain.SealedBlock(blk)
-			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
+			w.chain.SealedBlock(blk)
+			//event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
 		}
 	}
 }
@@ -655,26 +656,26 @@ func (w *worker) makeEnv(parent *block.Header, header *block.Header, coinbase ty
 func (w *worker) commit(tx kv.RwTx, env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, rewards []*block.Reward, needHeaders []*block.Header) error {
 	if w.isRunning() {
 
-		iblock, _, _, err := internal.FinalizeBlockExecution(tx, w.engine, env.header, env.txs, writer, w.chainConfig, ibs, env.receipts, nil, true, w.chainConfig.IsBeijing(env.header.Number.Uint64()))
-		if nil != err {
-			return err
-		}
-
-		if err := tx.Commit(); nil != err {
-			return err
-		}
-		//noop := state.NewNoopWriter()
-		//if err := ibs.CommitBlock(w.chainConfig.Rules(env.header.Number.Uint64()), noop); err != nil {
-		//	return fmt.Errorf("committing block %d failed: %w", env.header.Number.Uint64(), err)
-		//}
-		//
-		////
-		//iblock, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts, rewards)
-		//
-		//if err != nil {
-		//	log.Error("cannot commit task", "err", err)
+		//iblock, _, _, err := internal.FinalizeBlockExecution(tx, w.engine, env.header, env.txs, writer, w.chainConfig, ibs, env.receipts, nil, true, w.chainConfig.IsBeijing(env.header.Number.Uint64()))
+		//if nil != err {
 		//	return err
 		//}
+
+		//if err := tx.Commit(); nil != err {
+		//	return err
+		//}
+		noop := state.NewNoopWriter()
+		if err := ibs.CommitBlock(w.chainConfig.Rules(env.header.Number.Uint64()), noop); err != nil {
+			return fmt.Errorf("committing block %d failed: %w", env.header.Number.Uint64(), err)
+		}
+
+		//
+		iblock, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts, rewards)
+
+		if err != nil {
+			log.Error("cannot commit task", "err", err)
+			return err
+		}
 
 		if w.chainConfig.IsBeijing(env.header.Number.Uint64()) {
 			txs := make([][]byte, len(env.txs))

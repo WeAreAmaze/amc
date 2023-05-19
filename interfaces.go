@@ -136,10 +136,10 @@ type CallMsg struct {
 	From      types.Address  // the sender of the 'transaction'
 	To        *types.Address // the destination contract (nil for contract creation)
 	Gas       uint64         // if 0, the call executes with near-infinite gas
-	GasPrice  uint256.Int    // wei <-> gas exchange ratio
-	GasFeeCap uint256.Int    // EIP-1559 fee cap per gas.
-	GasTipCap uint256.Int    // EIP-1559 tip per gas.
-	Value     uint256.Int    // amount of wei sent along with the call
+	GasPrice  *uint256.Int   // wei <-> gas exchange ratio
+	GasFeeCap *uint256.Int   // EIP-1559 fee cap per gas.
+	GasTipCap *uint256.Int   // EIP-1559 tip per gas.
+	Value     *uint256.Int   // amount of wei sent along with the call
 	Data      []byte         // input data, usually an ABI-encoded contract method invocation
 
 	//AccessList block.AccessList // EIP-2930 access list.
@@ -156,8 +156,8 @@ type ContractCaller interface {
 // FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
 	BlockHash *types.Hash     // used by eth_getLogs, return logs only from block with this hash
-	FromBlock uint256.Int     // beginning of the queried range, nil means genesis block
-	ToBlock   uint256.Int     // end of the range, nil means latest block
+	FromBlock *uint256.Int    // beginning of the queried range, nil means genesis block
+	ToBlock   *uint256.Int    // end of the range, nil means latest block
 	Addresses []types.Address // restricts matches to events created by specific contracts
 
 	// The Topic list restricts matches to particular event topics. Each event has a list

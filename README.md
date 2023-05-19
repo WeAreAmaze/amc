@@ -13,7 +13,7 @@ RAM: >=16GB, 64-bit architecture, [Golang version >= 1.19](https://golang.org/do
 
 
 ## Build from source code
-For building the latest alpha release (this will be suitable for most users just wanting to run a node):
+For building the latest alpha release (this will be suitable for the most users just wanting to run a node):
 
 ### Most Linux systems and macOS
 

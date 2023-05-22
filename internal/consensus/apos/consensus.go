@@ -35,7 +35,7 @@ func AccumulateRewards(r *Reward, number *uint256.Int, chain consensus.ChainHead
 
 		verifiers := block.Body().Verifier()
 		for _, verifier := range verifiers {
-			depositInfo, ok := depositeMap[verifier.Address]
+			_, ok := depositeMap[verifier.Address]
 			if !ok {
 				low, max := chain.GetDepositInfo(verifier.Address)
 				if low == nil || max == nil {
@@ -54,7 +54,7 @@ func AccumulateRewards(r *Reward, number *uint256.Int, chain consensus.ChainHead
 				addrReward = uint256.NewInt(0)
 			}
 
-			rewardMap[verifier.Address] = math.Min256(addrReward.Add(addrReward, depositInfo.reward), depositInfo.maxReward.Clone())
+			rewardMap[verifier.Address] = math.Min256(addrReward.Add(addrReward, depositeMap[verifier.Address].reward), depositeMap[verifier.Address].maxReward.Clone())
 		}
 
 		currentNr.SubUint64(currentNr, 1)

@@ -21,12 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/amazechain/amc/turbo/rpchelper"
 	"github.com/holiman/uint256"
-	"strconv"
-
-	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/ledgerwatch/erigon-lib/kv"
 
 	"github.com/amazechain/amc/common/block"
@@ -408,15 +406,12 @@ Finish:
 	}, nil
 }
 
-func (api *API) DebugDBString(dbname string, key string) (string, error) {
-	tx, err := api.apos.db.BeginRo(context.TODO())
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-	val, err := tx.GetOne(dbname, []byte(key))
-	if err != nil {
-		return "", err
-	}
-	return strconv.Quote(string(val)), nil
+func (api *API) GetAccountRewardUnpaid(address types.Address) (val *uint256.Int, err error) {
+	rewardService := newReward(api.apos.config, api.apos.chainConfig)
+
+	api.apos.db.View(context.Background(), func(tx kv.Tx) error {
+		val, err = rewardService.getAccountRewardUnpaid(tx, address)
+		return err
+	})
+	return
 }

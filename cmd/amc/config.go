@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/params"
 	"math/big"
+	"time"
 
 	"github.com/amazechain/amc/conf"
 )
@@ -78,6 +79,7 @@ var DefaultConfig = conf.Config{
 	Miner: conf.MinerConfig{
 		GasCeil:  30000000,
 		GasPrice: big.NewInt(params.GWei),
+		Recommit: 4 * time.Second,
 	},
 }
 

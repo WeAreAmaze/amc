@@ -606,8 +606,8 @@ func (c *APos) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 		return errors.New("unknown ancestor")
 	}
 	rawHeader.Time = parent.(*block.Header).Time + c.config.Period
-	if rawHeader.Time < uint64(time.Now().Unix())+4 {
-		rawHeader.Time = uint64(time.Now().Unix()) + 4
+	if rawHeader.Time < uint64(time.Now().Unix()) {
+		rawHeader.Time = uint64(time.Now().Unix()) + 1
 	}
 	return nil
 }
@@ -731,7 +731,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		delay += time.Duration(rand.Int63n(int64(wiggle)))
 
 		log.Infof("wiggle %s , time %s, number %d", common.PrettyDuration(wiggle), common.PrettyDuration(delay), header.Number.Uint64())
-		log.Debug("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
+		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
 
 	if c.chainConfig.IsBeijing(header.Number.Uint64()) {
@@ -762,11 +762,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		header.Signature = aggSign
 		body := b.Body().(*block.Body)
 		body.Verifiers = verifiers
-
-		//for index, adder := range adders {
-		//	log.Trace("mobile verify info", "block", b.Hash(), "block num", b.Number64().Uint64(), "verify addr", adder, "verify pub", hexutil.Encode(pubs[index].Bytes()))
-		//}
-
+		delay = time.Unix(int64(header.Time), 0).Sub(time.Now())
 	}
 
 	// Sign all the things!
@@ -779,15 +775,10 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 	// Wait until sealing is terminated or delay timeout.
 	log.Debug("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
-	reTimer:
 		select {
 		case <-stop:
 			return
 		case <-time.After(delay):
-			if header.Time > uint64(time.Now().Unix()) {
-				delay = 50 * time.Millisecond
-				goto reTimer
-			}
 		}
 
 		select {

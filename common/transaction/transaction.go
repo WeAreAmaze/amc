@@ -489,7 +489,7 @@ func (tx *Transaction) EffectiveGasTip(baseFee *uint256.Int) (*uint256.Int, erro
 	if gasFeeCap.Cmp(baseFee) == -1 {
 		err = ErrGasFeeCapTooLow
 	}
-	return uint256Min(tx.GasTipCap(), gasFeeCap.Sub(gasFeeCap, baseFee)), err
+	return uint256Min(tx.GasTipCap(), new(uint256.Int).Sub(gasFeeCap, baseFee)), err
 }
 
 func uint256Min(x, y *uint256.Int) *uint256.Int {

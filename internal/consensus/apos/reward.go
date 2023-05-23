@@ -17,9 +17,10 @@
 package apos
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"fmt"
+	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/math"
 	"github.com/holiman/uint256"
 	"sort"
@@ -29,7 +30,6 @@ import (
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/params"
 
-	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/log"
@@ -98,7 +98,7 @@ func newReward(config *conf.ConsensusConfig, chainConfig *params.ChainConfig) *R
 	}
 }
 
-func (r *Reward) GetRewards(tx kv.Getter, addr types.Address, from *uint256.Int, to *uint256.Int) (*RewardResponse, error) {
+func (r *Reward) GetRewards(addr types.Address, from *uint256.Int, to *uint256.Int, getBlockByNumber func(*uint256.Int) (block.IBlock, error)) (*RewardResponse, error) {
 	resp := new(RewardResponse)
 	resp.Address = addr
 	resp.Data = make([]*RewardResponseValue, 0)
@@ -113,47 +113,26 @@ func (r *Reward) GetRewards(tx kv.Getter, addr types.Address, from *uint256.Int,
 
 	for i := endEpoch; i.Cmp(startEpoch) > 0; i = i.SubUint64(i, 1) {
 
-		reward, err := rawdb.GetEpochReward(tx, i)
+		blockNr := r.epoch2number(i)
+		blk, err := getBlockByNumber(blockNr)
 		if err != nil {
 			return nil, err
 		}
 
-		if entry, ok := reward[addr]; ok && entry != nil && entry.Cmp(uint256.NewInt(0)) == 1 {
-			blockNumber := r.epoch2number(i)
-			hash, err := rawdb.ReadCanonicalHash(tx, blockNumber.Uint64())
-			if nil != err {
-				log.Error("cannot open chain db", "err", err)
-				return nil, err
+		for _, reward := range blk.Body().Reward() {
+			if bytes.Compare(reward.Address[:], addr[:]) == 0 {
+				resp.Data = append(resp.Data, &RewardResponseValue{
+					Value:       *reward.Amount,
+					Timestamp:   hexutil.Uint64(blk.Header().(*block.Header).Time),
+					BlockNumber: blockNr.String(),
+				})
+				resp.Total = resp.Total.Add(resp.Total, reward.Amount)
 			}
-			if hash == (types.Hash{}) {
-				log.Debug("readcanonicalhash got empty", "number", blockNumber)
-				continue
-			}
-			header := rawdb.ReadHeader(tx, hash, blockNumber.Uint64())
-			if header == nil {
-				return nil, errors.New("buildreward header type assert error")
-			}
-			resp.Data = append(resp.Data, &RewardResponseValue{
-				Value:       *entry,
-				Timestamp:   hexutil.Uint64(header.Time),
-				BlockNumber: blockNumber.String(),
-			})
-			resp.Total = resp.Total.Add(resp.Total, entry)
 		}
 	}
 	sort.Sort(resp.Data)
 
 	return resp, nil
-}
-
-func (r *Reward) GetBlockRewards(tx kv.Getter, header block.IHeader) (map[types.Address]*uint256.Int, error) {
-
-	reward, err := rawdb.GetEpochReward(tx, r.number2epoch(header.Number64()))
-
-	if err != nil {
-		return nil, err
-	}
-	return reward, nil
 }
 
 func (r *Reward) SetRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) (AccountRewards, error) {
@@ -174,7 +153,6 @@ func (r *Reward) SetRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) (A
 
 func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) (map[types.Address]*uint256.Int, error) {
 
-	epoch := r.number2epoch(number)
 	endNumber := new(uint256.Int).Sub(number, r.rewardEpoch)
 
 	//calculate last batch but this one
@@ -258,30 +236,24 @@ func (r *Reward) buildRewards(tx kv.RwTx, number *uint256.Int, setRewards bool) 
 
 	log.Debug("buildrewards maps", "rewardMap", rewardMap, "rewardmap len", len(rewardMap), "issetreward", setRewards)
 
-	if setRewards {
-		if err := r.setRewardByEpochPaid(tx, epoch, rewardMap); err != nil {
-			return nil, err
-		}
-	}
-
 	return rewardMap, nil
 }
 
-func (r *Reward) setRewardByEpochPaid(tx kv.RwTx, epoch *uint256.Int, rewardMap map[types.Address]*uint256.Int) error {
-	if tx == nil {
-		return errors.New("setrewardepoch tx nil")
-	}
-	if len(rewardMap) == 0 {
-		return nil
-	}
-	key := fmt.Sprintf("epoch:%s", epoch.String())
-	err := rawdb.PutEpochReward(tx, key, rewardMap)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
+//func (r *Reward) setRewardByEpochPaid(tx kv.RwTx, epoch *uint256.Int, rewardMap map[types.Address]*uint256.Int) error {
+//	if tx == nil {
+//		return errors.New("setrewardepoch tx nil")
+//	}
+//	if len(rewardMap) == 0 {
+//		return nil
+//	}
+//	key := fmt.Sprintf("epoch:%s", epoch.String())
+//	err := rawdb.PutEpochReward(tx, key, rewardMap)
+//	if err != nil {
+//		return err
+//	}
+//
+//	return nil
+//}
 
 func (r *Reward) getAccountRewardUnpaid(tx kv.Getter, account types.Address) (*uint256.Int, error) {
 	value, err := rawdb.GetAccountReward(tx, account)

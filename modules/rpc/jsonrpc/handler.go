@@ -42,6 +42,8 @@ type handler struct {
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
 	clientSubs map[string]*ClientSubscription // active client subscriptions
+
+	log log.Logger
 }
 
 type callProc struct {
@@ -61,8 +63,10 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		allowSubscribe: true,
 		serverSubs:     make(map[ID]*Subscription),
 		clientSubs:     make(map[string]*ClientSubscription),
+		log:            log.Root(),
 	}
 	if conn.remoteAddr() != "" {
+		h.log = h.log.New("conn", conn.remoteAddr())
 	}
 	h.unsubscribeCb = newCallback(reflect.Value{}, reflect.ValueOf(h.unsubscribe))
 	return h
@@ -203,7 +207,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 		return false
 	case msg.isResponse():
 		h.handleResponse(msg)
-		log.Debug("Handled RPC response", "reqid", idForLog{msg.ID}, "t", time.Since(start))
+		h.log.Debug("Handled RPC response", "reqid", idForLog{msg.ID}, "t", time.Since(start))
 		return true
 	default:
 		return false
@@ -213,7 +217,7 @@ func (h *handler) handleImmediate(msg *jsonrpcMessage) bool {
 func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 	var result subscriptionResult
 	if err := json.Unmarshal(msg.Params, &result); err != nil {
-		log.Debug("Dropping invalid subscription message")
+		h.log.Debug("Dropping invalid subscription message")
 		return
 	}
 }
@@ -221,7 +225,7 @@ func (h *handler) handleSubscriptionResult(msg *jsonrpcMessage) {
 func (h *handler) handleResponse(msg *jsonrpcMessage) {
 	op := h.respWait[string(msg.ID)]
 	if op == nil {
-		log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
+		h.log.Debug("Unsolicited RPC response", "reqid", idForLog{msg.ID})
 		return
 	}
 	delete(h.respWait, string(msg.ID))
@@ -233,7 +237,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 	switch {
 	//case msg.isNotification():
 	case msg.isCall():
-		log.Trace("begin "+msg.Method, "p", string(msg.Params))
+		h.log.Trace("begin "+msg.Method, "p", string(msg.Params))
 		resp := h.handleCall(ctx, msg)
 		var ctx []interface{}
 		ctx = append(ctx, "reqid", idForLog{msg.ID}, "t", time.Since(start), "p", string(msg.Params), "r", string(resp.Result))
@@ -242,9 +246,9 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			if resp.Error.Data != nil {
 				ctx = append(ctx, "errdata", resp.Error.Data)
 			}
-			log.Warn("Served "+msg.Method, ctx...)
+			h.log.Warn("Served "+msg.Method, ctx...)
 		} else {
-			log.Trace("Served "+msg.Method, ctx...)
+			h.log.Trace("Served "+msg.Method, ctx...)
 		}
 		return resp
 	case msg.hasValidID():

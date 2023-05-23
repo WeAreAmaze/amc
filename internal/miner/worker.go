@@ -625,7 +625,6 @@ func (w *worker) makeEnv(parent *block.Header, header *block.Header, coinbase ty
 
 func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, needHeaders []*block.Header) error {
 	if w.isRunning() {
-
 		env := env.copy()
 		iblock, rewards, unpay, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts)
 		if nil != err {

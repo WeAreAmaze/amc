@@ -14,29 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
-package rawdb
+//go:build (darwin && !cgo) || ios || (linux && arm64) || windows || (!darwin && !freebsd && !linux && !netbsd && !solaris)
+// +build darwin,!cgo ios linux,arm64 windows !darwin,!freebsd,!linux,!netbsd,!solaris
 
-import (
-	"fmt"
-	"github.com/amazechain/amc/common/types"
-	"github.com/holiman/uint256"
+// This is the fallback implementation of directory watching.
+// It is used on unsupported platforms.
 
-	"github.com/amazechain/amc/modules"
-	"github.com/ledgerwatch/erigon-lib/kv"
-)
+package keystore
 
-// PutAccountReward
-func PutAccountReward(db kv.Putter, account types.Address, val *uint256.Int) error {
-	key := fmt.Sprintf("account:%s", account.String())
-	return db.Put(modules.Reward, []byte(key), val.Bytes())
+type watcher struct {
+	running  bool
+	runEnded bool
 }
 
-// GetAccountReward
-func GetAccountReward(db kv.Getter, account types.Address) (*uint256.Int, error) {
-	key := fmt.Sprintf("account:%s", account.String())
-	val, err := db.GetOne(modules.Reward, []byte(key))
-	if err != nil {
-		return uint256.NewInt(0), err
-	}
-	return uint256.NewInt(0).SetBytes(val), nil
-}
+func newWatcher(*accountCache) *watcher { return new(watcher) }
+func (*watcher) start()                 {}
+func (*watcher) close()                 {}
+
+// enabled returns false on systems not supported.
+func (*watcher) enabled() bool { return false }

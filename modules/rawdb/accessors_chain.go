@@ -1107,7 +1107,7 @@ func TruncateBlocks(ctx context.Context, tx kv.RwTx, blockFrom uint64) error {
 	return nil
 }
 
-func ReadBlockByNumber(db kv.Tx, number uint64) (*block.Block, error) {
+func ReadBlockByNumber(db kv.Getter, number uint64) (*block.Block, error) {
 	hash, err := ReadCanonicalHash(db, number)
 	if err != nil {
 		return nil, fmt.Errorf("failed ReadCanonicalHash: %w", err)

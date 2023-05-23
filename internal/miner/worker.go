@@ -61,7 +61,7 @@ type task struct {
 }
 
 type newWorkReq struct {
-	interrupt *int32
+	interrupt *atomic.Int32
 	noempty   bool
 	timestamp int64
 }
@@ -109,12 +109,37 @@ func (env *environment) copy() *environment {
 }
 
 const (
-	minPeriodInterval         = 1 // 1s
-	staleThreshold            = 7
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
 	commitInterruptResubmit
+	commitInterruptTimeout
 )
+
+const (
+	minPeriodInterval      = 1 * time.Second // 1s
+	staleThreshold         = 7
+	resubmitAdjustChanSize = 10
+
+	// maxRecommitInterval is the maximum time interval to recreate the sealing block with
+	// any newly arrived transactions.
+	maxRecommitInterval = 12 * time.Second
+
+	intervalAdjustRatio = 0.1
+
+	intervalAdjustBias = 200 * 1000.0 * 1000.0
+)
+
+var (
+	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
+	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
+	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
+)
+
+// intervalAdjust represents a resubmitting interval adjustment.
+type intervalAdjust struct {
+	ratio float64
+	inc   bool
+}
 
 type worker struct {
 	minerConf conf.MinerConfig
@@ -137,6 +162,8 @@ type worker struct {
 	resultCh  chan block.IBlock
 	taskCh    chan *task
 
+	resubmitAdjustCh chan *intervalAdjust
+
 	running int32
 	newTxs  int32
 
@@ -154,30 +181,31 @@ type worker struct {
 func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusConfig, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
 	c, cancel := context.WithCancel(ctx)
 	worker := &worker{
-		engine:       engine,
-		chain:        bc,
-		txsPool:      txsPool,
-		conf:         conf,
-		chainConfig:  chainConfig,
-		mu:           sync.RWMutex{},
-		startCh:      make(chan struct{}, 1),
-		group:        group,
-		isLocalBlock: isLocalBlock,
-		ctx:          c,
-		cancel:       cancel,
-		taskCh:       make(chan *task),
-		newWorkCh:    make(chan *newWorkReq),
-		resultCh:     make(chan block.IBlock),
-		pendingTasks: make(map[types.Hash]*task),
-		minerConf:    minerConf,
+		engine:           engine,
+		chain:            bc,
+		txsPool:          txsPool,
+		conf:             conf,
+		chainConfig:      chainConfig,
+		mu:               sync.RWMutex{},
+		startCh:          make(chan struct{}, 1),
+		group:            group,
+		isLocalBlock:     isLocalBlock,
+		ctx:              c,
+		cancel:           cancel,
+		taskCh:           make(chan *task),
+		newWorkCh:        make(chan *newWorkReq),
+		resultCh:         make(chan block.IBlock),
+		pendingTasks:     make(map[types.Hash]*task),
+		minerConf:        minerConf,
+		resubmitAdjustCh: make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
-	period := worker.conf.Period
-	if period < minPeriodInterval {
-		period = minPeriodInterval
+	recommit := worker.minerConf.Recommit
+	if recommit < minPeriodInterval {
+		recommit = minPeriodInterval
 	}
 
 	group.Go(func() error {
-		return worker.workLoop(time.Duration(int64(period)))
+		return worker.workLoop(recommit)
 	})
 
 	group.Go(func() error {
@@ -237,7 +265,7 @@ func (w *worker) runLoop() error {
 			err := w.commitWork(req.interrupt, req.noempty, req.timestamp)
 			if err != nil {
 				log.Error("runLoop err:", err.Error())
-				w.startCh <- struct{}{}
+				//w.startCh <- struct{}{}
 			}
 		}
 	}
@@ -270,7 +298,7 @@ func (w *worker) resultLoop() error {
 			w.mu.RUnlock()
 			if !exist {
 				log.Error("Block found but no relative pending task", "number", blk.Number64().Uint64(), "sealhash", sealhash, "hash", hash)
-				w.startCh <- struct{}{}
+				//w.startCh <- struct{}{}
 				continue
 			}
 
@@ -354,8 +382,7 @@ func (w *worker) taskLoop() error {
 			hash := task.block.Hash()
 			stateRoot := task.block.StateRoot()
 			if sealHash == prev {
-				//log.Trace("why continue")
-				//continue
+				continue
 			}
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
@@ -368,10 +395,10 @@ func (w *worker) taskLoop() error {
 				delete(w.pendingTasks, sealHash)
 				w.mu.Unlock()
 				log.Warn("delete task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot, "err", err)
-				if errors.Is(err, consensus.ErrNotEnoughSign) {
-					time.Sleep(1 * time.Second)
-					w.startCh <- struct{}{}
-				}
+				//if errors.Is(err, consensus.ErrNotEnoughSign) {
+				//	time.Sleep(1 * time.Second)
+				//	w.startCh <- struct{}{}
+				//}
 			} else {
 				log.Debug("send task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot)
 			}
@@ -379,7 +406,7 @@ func (w *worker) taskLoop() error {
 	}
 }
 
-func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) error {
+func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int64) error {
 	start := time.Now()
 	if w.isRunning() {
 		if w.coinbase == (types.Address{}) {
@@ -416,9 +443,20 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 		return h
 	}
 
-	if err := w.fillTransactions(interrupt, current, ibs, getHeader); err != nil {
-		log.Errorf("w.fillTransactions failed, error %v\n", err)
-		return err
+	err = w.fillTransactions(interrupt, current, ibs, getHeader)
+	switch {
+	case err == nil:
+		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+	case errors.Is(err, errBlockInterruptedByRecommit):
+		gaslimit := current.header.GasLimit
+		ratio := float64(gaslimit-current.gasPool.Gas()) / float64(gaslimit)
+		if ratio < 0.1 {
+			ratio = 0.1
+		}
+		w.resubmitAdjustCh <- &intervalAdjust{
+			ratio: ratio,
+			inc:   true,
+		}
 	}
 
 	var rewards []*block.Reward
@@ -437,13 +475,35 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 	return nil
 }
 
-func (w *worker) workLoop(period time.Duration) error {
+// recalcRecommit recalculates the resubmitting interval upon feedback.
+func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) time.Duration {
+	var (
+		prevF = float64(prev.Nanoseconds())
+		next  float64
+	)
+	if inc {
+		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target+intervalAdjustBias)
+		max := float64(maxRecommitInterval.Nanoseconds())
+		if next > max {
+			next = max
+		}
+	} else {
+		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
+		min := float64(minRecommit.Nanoseconds())
+		if next < min {
+			next = min
+		}
+	}
+	return time.Duration(int64(next))
+}
+
+func (w *worker) workLoop(recommit time.Duration) error {
 	defer w.cancel()
 	defer w.stop()
 	var (
-		interrupt *int32
-		//minRecommit = period // minimal resubmit interval specified by user.
-		timestamp int64 // timestamp for each round of sealing.
+		interrupt   *atomic.Int32
+		minRecommit = recommit // minimal resubmit interval specified by user.
+		timestamp   int64      // timestamp for each round of sealing.
 	)
 
 	newBlockCh := make(chan common.ChainHighestBlock)
@@ -452,17 +512,21 @@ func (w *worker) workLoop(period time.Duration) error {
 	newBlockSub := event.GlobalEvent.Subscribe(newBlockCh)
 	defer newBlockSub.Unsubscribe()
 
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C // discard the initial tick
+
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
-			atomic.StoreInt32(interrupt, s)
+			interrupt.Store(s)
 		}
-		interrupt = new(int32)
+		interrupt = new(atomic.Int32)
 		select {
 		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
 		case <-w.ctx.Done():
 			return
 		}
-		//timer.Reset(recommit)
+		timer.Reset(recommit)
 		//atomic.StoreInt32(&w.newTxs, 0)
 	}
 
@@ -491,11 +555,31 @@ func (w *worker) workLoop(period time.Duration) error {
 			commit(false, commitInterruptNewHead)
 		case err := <-newBlockSub.Err():
 			return err
+
+		case <-timer.C:
+			// If sealing is running resubmit a new work cycle periodically to pull in
+			// higher priced transactions. Disable this overhead for pending blocks.
+			if w.isRunning() && (w.conf == nil || w.conf.Period > 0) {
+				continue
+				commit(false, commitInterruptResubmit)
+			}
+		case adjust := <-w.resubmitAdjustCh:
+			// Adjust resubmit interval by feedback.
+			if adjust.inc {
+				before := recommit
+				target := float64(recommit.Nanoseconds()) / adjust.ratio
+				recommit = recalcRecommit(minRecommit, recommit, target, true)
+				log.Trace("Increase miner recommit interval", "from", before, "to", recommit)
+			} else {
+				before := recommit
+				recommit = recalcRecommit(minRecommit, recommit, float64(minRecommit.Nanoseconds()), false)
+				log.Trace("Decrease miner recommit interval", "from", before, "to", recommit)
+			}
 		}
 	}
 }
 
-func (w *worker) fillTransactions(interrupt *int32, env *environment, ibs *state.IntraBlockState, getHeader func(hash types.Hash, number uint64) *block.Header) error {
+func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs *state.IntraBlockState, getHeader func(hash types.Hash, number uint64) *block.Header) error {
 	// todo fillTx
 	env.txs = []*transaction.Transaction{}
 	txs, err := w.txsPool.GetTransaction()
@@ -525,6 +609,13 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, ibs *state
 
 	log.Tracef("fillTransactions txs len:%d", len(txs))
 	for _, tx := range txs {
+		// Check interruption signal and abort building if it's fired.
+		if interrupt != nil {
+			if signal := interrupt.Load(); signal != commitInterruptNone {
+				return signalToErr(signal)
+			}
+		}
+
 		// Start executing the transaction
 		_, err := miningCommitTx(tx, env.coinbase, &vm2.Config{}, w.chainConfig, ibs, env)
 
@@ -751,4 +842,17 @@ func (w *worker) updateSnapshot(env *environment, rewards []*block.Reward) {
 		rewards,
 	)
 	w.snapshotReceipts = copyReceipts(env.receipts)
+}
+
+func signalToErr(signal int32) error {
+	switch signal {
+	case commitInterruptNewHead:
+		return errBlockInterruptedByNewHead
+	case commitInterruptResubmit:
+		return errBlockInterruptedByRecommit
+	case commitInterruptTimeout:
+		return errBlockInterruptedByTimeout
+	default:
+		panic(fmt.Errorf("undefined signal %d", signal))
+	}
 }

@@ -16,9 +16,13 @@
 
 package conf
 
-import "math/big"
+import (
+	"math/big"
+	"time"
+)
 
 type MinerConfig struct {
-	GasCeil  uint64   // Target gas ceiling for mined blocks.
-	GasPrice *big.Int // Minimum gas price for mining a transaction
+	GasCeil  uint64        // Target gas ceiling for mined blocks.
+	GasPrice *big.Int      // Minimum gas price for mining a transaction
+	Recommit time.Duration // The time interval for miner to re-create mining work
 }

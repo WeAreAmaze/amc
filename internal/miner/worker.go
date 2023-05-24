@@ -305,7 +305,7 @@ func (w *worker) resultLoop() error {
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
 			var (
 				receipts = make([]*block.Receipt, len(task.receipts))
-				// logs     []*block.Log
+				logs     []*block.Log
 			)
 			for i, taskReceipt := range task.receipts {
 				receipt := new(block.Receipt)
@@ -326,8 +326,13 @@ func (w *worker) resultLoop() error {
 					*log = *taskLog
 					log.BlockHash = hash
 				}
-				//logs = append(logs, receipt.Logs...)
+				logs = append(logs, receipt.Logs...)
 			}
+
+			if len(logs) > 0 {
+				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
+			}
+
 			// Commit block and state to database.
 			err := w.chain.WriteBlockWithState(blk, receipts, task.state, task.nopay)
 			if err != nil {

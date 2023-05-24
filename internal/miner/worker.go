@@ -319,13 +319,13 @@ func (w *worker) resultLoop() error {
 
 				// Update the block hash in all logs since it is now available and not when the
 				// receipt/log of individual transactions were created.
-				//receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
-				//for i, taskLog := range taskReceipt.Logs {
-				//	log := new(block.Log)
-				//	receipt.Logs[i] = log
-				//	*log = *taskLog
-				//	log.BlockHash = hash
-				//}
+				receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
+				for i, taskLog := range taskReceipt.Logs {
+					log := new(block.Log)
+					receipt.Logs[i] = log
+					*log = *taskLog
+					log.BlockHash = hash
+				}
 				//logs = append(logs, receipt.Logs...)
 			}
 			// Commit block and state to database.

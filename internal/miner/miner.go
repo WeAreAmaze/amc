@@ -27,7 +27,6 @@ import (
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"golang.org/x/sync/errgroup"
-	"time"
 )
 
 type Miner struct {
@@ -89,8 +88,6 @@ func (m *Miner) runLoop() error {
 
 	canStart := false
 	shouldStart := false
-
-	time.Sleep(5 * time.Second)
 
 	for {
 		select {

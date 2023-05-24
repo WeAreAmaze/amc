@@ -600,24 +600,25 @@ func (c *Apoa) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlock
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Apoa) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader) {
+func (c *Apoa) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	//chain.Config().IsEIP158(header.Number)
 	rawHeader := header.(*block.Header)
 	rawHeader.Root = state.IntermediateRoot()
 
+	return nil, nil, nil
 	//todo
 	//rawHeader.UncleHash = types.CalcUncleHash(nil)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (c *Apoa) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt, reward []*block.Reward) (block.IBlock, error) {
+func (c *Apoa) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt) (block.IBlock, []*block.Reward, map[types.Address]*uint256.Int, error) {
 	// Finalize block
-	c.Finalize(chain, header, state, txs, uncles)
+	reward, _, _ := c.Finalize(chain, header, state, txs, uncles)
 
 	// Assemble and return the final block for sealing
-	return block.NewBlockFromReceipt(header, txs, uncles, receipts, reward), nil
+	return block.NewBlockFromReceipt(header, txs, uncles, receipts, reward), nil, nil, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks

@@ -24,7 +24,6 @@ import (
 	"github.com/amazechain/amc/modules/state"
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
-	"github.com/ledgerwatch/erigon-lib/kv"
 )
 
 type SystemCall func(contract types.Address, data []byte) ([]byte, error)
@@ -50,6 +49,11 @@ type ChainHeaderReader interface {
 
 	// GetTd retrieves the total difficulty from the database by hash and number.
 	GetTd(types.Hash, *uint256.Int) *uint256.Int
+
+	GetBlockByNumber(number *uint256.Int) (block.IBlock, error)
+
+	GetDepositInfo(address types.Address) (*uint256.Int, *uint256.Int)
+	GetAccountRewardUnpaid(account types.Address) (*uint256.Int, error)
 }
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -96,7 +100,7 @@ type Engine interface {
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
 	Finalize(chain ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction,
-		uncles []block.IHeader)
+		uncles []block.IHeader) ([]*block.Reward, map[types.Address]*uint256.Int, error)
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
 	// rewards) and assembles the final block.
@@ -104,9 +108,10 @@ type Engine interface {
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
 	FinalizeAndAssemble(chain ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction,
-		uncles []block.IHeader, receipts []*block.Receipt, rewards []*block.Reward) (block.IBlock, error)
+		uncles []block.IHeader, receipts []*block.Receipt) (block.IBlock, []*block.Reward, map[types.Address]*uint256.Int, error)
 
-	Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlockState, setRewards bool) ([]*block.Reward, error)
+	//Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlockState, setRewards bool) ([]*block.Reward, error)
+
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.
 	//

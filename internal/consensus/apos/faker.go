@@ -55,12 +55,12 @@ func (f Faker) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 	panic("implement me")
 }
 
-func (f Faker) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader) {
+func (f Faker) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (f Faker) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt, reward []*block.Reward) (block.IBlock, error) {
+func (f Faker) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt) (block.IBlock, []*block.Reward, map[types.Address]*uint256.Int, error) {
 	//TODO implement me
 	panic("implement me")
 }

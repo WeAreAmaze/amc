@@ -24,7 +24,6 @@ import (
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/holiman/uint256"
-	"github.com/ledgerwatch/erigon-lib/kv"
 	"sort"
 	"sync"
 
@@ -58,6 +57,7 @@ type task struct {
 	state     *state.IntraBlockState
 	block     block.IBlock
 	createdAt time.Time
+	nopay     map[types.Address]*uint256.Int
 }
 
 type newWorkReq struct {
@@ -204,6 +204,11 @@ func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusC
 		recommit = minPeriodInterval
 	}
 
+	// machine verify
+	group.Go(func() error {
+		return api.MachineVerify(ctx)
+	})
+
 	group.Go(func() error {
 		return worker.workLoop(recommit)
 	})
@@ -214,11 +219,6 @@ func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusC
 
 	group.Go(func() error {
 		return worker.taskLoop()
-	})
-
-	// machine verify
-	group.Go(func() error {
-		return api.MachineVerify(ctx)
 	})
 
 	group.Go(func() error {
@@ -303,37 +303,37 @@ func (w *worker) resultLoop() error {
 			}
 
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
-			//var (
-			//	receipts = make([]*block.Receipt, len(task.receipts))
-			//	// logs     []*block.Log
-			//)
-			//for i, taskReceipt := range task.receipts {
-			//	receipt := new(block.Receipt)
-			//	receipts[i] = receipt
-			//	*receipt = *taskReceipt
-			//
-			//	// add block location fields
-			//	receipt.BlockHash = hash
-			//	receipt.BlockNumber = blk.Number64()
-			//	receipt.TransactionIndex = uint(i)
-			//
-			//	// Update the block hash in all logs since it is now available and not when the
-			//	// receipt/log of individual transactions were created.
-			//	//receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
-			//	//for i, taskLog := range taskReceipt.Logs {
-			//	//	log := new(block.Log)
-			//	//	receipt.Logs[i] = log
-			//	//	*log = *taskLog
-			//	//	log.BlockHash = hash
-			//	//}
-			//	//logs = append(logs, receipt.Logs...)
-			//}
-			//// Commit block and state to database.
-			//err := w.chain.WriteBlockWithState(blk, receipts)
-			//if err != nil {
-			//	log.Error("Failed writing block to chain", "err", err)
-			//	continue
-			//}
+			var (
+				receipts = make([]*block.Receipt, len(task.receipts))
+				// logs     []*block.Log
+			)
+			for i, taskReceipt := range task.receipts {
+				receipt := new(block.Receipt)
+				receipts[i] = receipt
+				*receipt = *taskReceipt
+
+				// add block location fields
+				receipt.BlockHash = hash
+				receipt.BlockNumber = blk.Number64()
+				receipt.TransactionIndex = uint(i)
+
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
+				//receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
+				//for i, taskLog := range taskReceipt.Logs {
+				//	log := new(block.Log)
+				//	receipt.Logs[i] = log
+				//	*log = *taskLog
+				//	log.BlockHash = hash
+				//}
+				//logs = append(logs, receipt.Logs...)
+			}
+			// Commit block and state to database.
+			err := w.chain.WriteBlockWithState(blk, receipts, task.state, task.nopay)
+			if err != nil {
+				log.Error("Failed writing block to chain", "err", err)
+				continue
+			}
 
 			log.Info("🔨 Successfully sealed new block",
 				"sealhash", sealhash,
@@ -346,8 +346,8 @@ func (w *worker) resultLoop() error {
 				"rewardCount", len(blk.Body().Reward()),
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)),
 				"txs", len(blk.Transactions()))
-			w.chain.SealedBlock(blk)
-			//event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
+			//w.chain.SealedBlock(blk)
+			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
 		}
 	}
 }
@@ -395,10 +395,6 @@ func (w *worker) taskLoop() error {
 				delete(w.pendingTasks, sealHash)
 				w.mu.Unlock()
 				log.Warn("delete task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot, "err", err)
-				//if errors.Is(err, consensus.ErrNotEnoughSign) {
-				//	time.Sleep(1 * time.Second)
-				//	w.startCh <- struct{}{}
-				//}
 			} else {
 				log.Debug("send task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot)
 			}
@@ -420,7 +416,7 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 		return err
 	}
 
-	tx, err := w.chain.DB().BeginRw(w.ctx)
+	tx, err := w.chain.DB().BeginRo(w.ctx)
 	if nil != err {
 		log.Error("work.commitWork failed", err)
 		return err
@@ -428,13 +424,12 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 	defer tx.Rollback()
 
 	stateReader := state.NewPlainStateReader(tx)
-	stateWriter := state.NewPlainStateWriter(tx, tx, current.header.Number.Uint64())
+	stateWriter := state.NewNoopWriter()
 	ibs := state.New(stateReader)
 	// generate state for mobile verify
 	ibs.BeginWriteSnapshot()
 	ibs.BeginWriteCodes()
 	headers := make([]*block.Header, 0)
-	//stateWriter := state.NewPlainStateWriter(tx, tx, current.header.Number.Uint64())
 	getHeader := func(hash types.Hash, number uint64) *block.Header {
 		h := rawdb.ReadHeader(tx, hash, number)
 		if nil != h {
@@ -459,15 +454,15 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 		}
 	}
 
-	var rewards []*block.Reward
-	if w.chainConfig.IsBeijing(current.header.Number.Uint64()) {
-		rewards, err = w.engine.Rewards(tx, block.CopyHeader(current.header), ibs, false)
-		if err != nil {
-			return err
-		}
-	}
+	//var rewards []*block.Reward
+	//if w.chainConfig.IsBeijing(current.header.Number.Uint64()) {
+	//	rewards, err = w.engine.Rewards(tx, block.CopyHeader(current.header), ibs, false)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
 
-	if err = w.commit(tx, current, stateWriter, ibs, start, rewards, headers); nil != err {
+	if err = w.commit(current, stateWriter, ibs, start, headers); nil != err {
 		log.Errorf("w.commit failed, error %v\n", err)
 		return err
 	}
@@ -615,7 +610,10 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs
 				return signalToErr(signal)
 			}
 		}
-
+		if env.gasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+			break
+		}
 		// Start executing the transaction
 		_, err := miningCommitTx(tx, env.coinbase, &vm2.Config{}, w.chainConfig, ibs, env)
 
@@ -627,6 +625,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs
 		case errors.Is(err, core.ErrNonceTooLow):
 			continue
 		case errors.Is(err, nil):
+			env.tcount++
 			continue
 		default:
 			log.Error("miningCommitTx failed ", "error", err)
@@ -635,40 +634,6 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs
 
 	return nil
 }
-
-//func (w *worker) commitTransactions(env *environment, tx *transaction.Transaction, ibs *state.IntraBlockState, getHeader func(hash types.Hash, number uint64) *block.Header) ([]*block.Log, error) {
-//	// todo run ApplyTransaction  Debug: true, Tracer: vm.NewMarkdownLogger(os.Stdout)
-//
-//	//rw, err := w.chain.DB().BeginRw(context.Background())
-//	//if nil != err {
-//	//	return nil, err
-//	//}
-//	//defer rw.Rollback()
-//	blockHashFunc := internal.GetHashFn(env.header, getHeader)
-//	//dpath := paths.DefaultDataDir()
-//
-//	//batch := olddb.NewHashBatch(rw, w.chain.Quit(), dpath)
-//	//defer batch.Rollback()
-//	//
-//	//stateReader, stateWriter, err := internal.NewStateReaderWriter(batch, rw, env.header.Number64().Uint64(), false)
-//	//if nil != err {
-//	//	return nil, err
-//	//}
-//	//env.state.SetStateReader(stateReader)
-//	h := tx.Hash()
-//	ibs.Prepare(h, types.Hash{}, env.tcount)
-//	snap := ibs.Snapshot()
-//	receipt, _, err := internal.ApplyTransaction(params.AmazeChainConfig, blockHashFunc, w.engine, &env.coinbase, env.gasPool, ibs, state.NewNoopWriter(), env.header, tx, &env.header.GasUsed, vm2.Config{})
-//	if err != nil {
-//		log.Errorf("commit transaction error, err:%v", err)
-//		ibs.RevertToSnapshot(snap)
-//		return nil, err
-//	}
-//
-//	env.txs = append(env.txs, tx)
-//	env.receipts = append(env.receipts, receipt)
-//	return receipt.Logs, nil
-//}
 
 func (w *worker) prepareWork(param *generateParams) (*environment, error) {
 	w.mu.RLock()
@@ -744,27 +709,11 @@ func (w *worker) makeEnv(parent *block.Header, header *block.Header, coinbase ty
 	return env
 }
 
-func (w *worker) commit(tx kv.RwTx, env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, rewards []*block.Reward, needHeaders []*block.Header) error {
+func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, needHeaders []*block.Header) error {
 	if w.isRunning() {
-
-		//iblock, _, _, err := internal.FinalizeBlockExecution(tx, w.engine, env.header, env.txs, writer, w.chainConfig, ibs, env.receipts, nil, true, w.chainConfig.IsBeijing(env.header.Number.Uint64()))
-		//if nil != err {
-		//	return err
-		//}
-
-		//if err := tx.Commit(); nil != err {
-		//	return err
-		//}
-		noop := state.NewNoopWriter()
-		if err := ibs.CommitBlock(w.chainConfig.Rules(env.header.Number.Uint64()), noop); err != nil {
-			return fmt.Errorf("committing block %d failed: %w", env.header.Number.Uint64(), err)
-		}
-
-		//
-		iblock, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts, rewards)
-
-		if err != nil {
-			log.Error("cannot commit task", "err", err)
+		env := env.copy()
+		iblock, rewards, unpay, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts)
+		if nil != err {
 			return err
 		}
 
@@ -794,7 +743,7 @@ func (w *worker) commit(tx kv.RwTx, env *environment, writer state.WriterWithCha
 		w.updateSnapshot(env, rewards)
 
 		select {
-		case w.taskCh <- &task{receipts: env.receipts, block: iblock, createdAt: time.Now()}:
+		case w.taskCh <- &task{receipts: env.receipts, block: iblock, createdAt: time.Now(), state: ibs, nopay: unpay}:
 			log.Debug("Commit new sealing work",
 				"number", iblock.Header().Number64().Uint64(),
 				"sealhash", w.engine.SealHash(iblock.Header()),

@@ -25,6 +25,7 @@ import (
 	"github.com/amazechain/amc/utils"
 	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -68,6 +69,20 @@ func (v *Verify) FromProtoMessage(pbVerifier *types_pb.Verifier) *Verify {
 type Reward struct {
 	Address types.Address
 	Amount  *uint256.Int
+}
+
+type Rewards []*Reward
+
+func (r Rewards) Len() int {
+	return len(r)
+}
+
+func (r Rewards) Less(i, j int) bool {
+	return strings.Compare(r[i].Address.String(), r[j].Address.String()) > 0
+}
+
+func (r Rewards) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
 }
 
 func (r *Reward) ToProtoMessage() proto.Message {

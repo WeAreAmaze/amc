@@ -101,6 +101,12 @@ var rpcFlags = []cli.Flag{
 		Value:       "20012",
 		Destination: &DefaultConfig.NodeCfg.HTTPPort,
 	},
+	&cli.StringFlag{
+		Name:        "http.api",
+		Usage:       "API's offered over the HTTP-RPC interface",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.HTTPApi,
+	},
 
 	&cli.BoolFlag{
 		Name:        "ws",
@@ -119,6 +125,13 @@ var rpcFlags = []cli.Flag{
 		Usage:       "WS-RPC server listening port",
 		Value:       "20013",
 		Destination: &DefaultConfig.NodeCfg.WSPort,
+	},
+
+	&cli.StringFlag{
+		Name:        "ws.api",
+		Usage:       "API's offered over the WS-RPC interface",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.WSApi,
 	},
 }
 

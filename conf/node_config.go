@@ -30,9 +30,11 @@ type NodeConfig struct {
 	HTTP        bool   `json:"http" yaml:"http" `
 	HTTPHost    string `json:"http_host" yaml:"http_host" `
 	HTTPPort    string `json:"http_port" yaml:"http_port"`
+	HTTPApi     string `json:"http_api" yaml:"http_api"`
 	WS          bool   `json:"ws" yaml:"ws" `
 	WSHost      string `json:"ws_host" yaml:"ws_host" `
 	WSPort      string `json:"ws_port" yaml:"ws_port"`
+	WSApi       string `json:"ws_api" yaml:"ws_api"`
 	IPCPath     string `json:"ipc_path" yaml:"ipc_path"`
 	DataDir     string `json:"data_dir" yaml:"data_dir"`
 	Miner       bool   `json:"miner" yaml:"miner"`

@@ -329,15 +329,15 @@ func (w *worker) resultLoop() error {
 				logs = append(logs, receipt.Logs...)
 			}
 
-			if len(logs) > 0 {
-				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
-			}
-
 			// Commit block and state to database.
 			err := w.chain.WriteBlockWithState(blk, receipts, task.state, task.nopay)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
+			}
+
+			if len(logs) > 0 {
+				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
 			}
 
 			log.Info("🔨 Successfully sealed new block",

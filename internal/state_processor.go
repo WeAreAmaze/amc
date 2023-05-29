@@ -30,6 +30,7 @@ import (
 	"github.com/amazechain/amc/modules/ethdb"
 	"github.com/amazechain/amc/modules/state"
 	"github.com/amazechain/amc/params"
+	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
 )
 
@@ -59,7 +60,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(tx kv.RwTx, b *block.Block, ibs *state.IntraBlockState, stateReader state.StateReader, stateWriter state.WriterWithChangeSets, blockHashFunc func(n uint64) types.Hash) (block.Receipts, []*block.Log, uint64, error) {
+func (p *StateProcessor) Process(b *block.Block, ibs *state.IntraBlockState, stateReader state.StateReader, stateWriter state.WriterWithChangeSets, blockHashFunc func(n uint64) types.Hash) (block.Receipts, map[types.Address]*uint256.Int, []*block.Log, uint64, error) {
 	header := b.Header()
 	usedGas := new(uint64)
 	gp := new(common.GasPool)
@@ -74,28 +75,6 @@ func (p *StateProcessor) Process(tx kv.RwTx, b *block.Block, ibs *state.IntraBlo
 	chainReader := p.bc
 	cfg := vm2.Config{}
 
-	//if !cfg.ReadOnly {
-	//	if err := InitializeBlockExecution(p.engine, chainReader, b.Header().(*block.Header), b.Transactions(), b.Uncles(), params.AmazeChainConfig, ibs); err != nil {
-	//		return nil, nil, 0, err
-	//	}
-	//}
-	//dpath := paths.DefaultDataDir()
-	//
-	//rw, err := p.bc.ChainDB.BeginRw(context.Background())
-	//if nil != err {
-	//	return nil, nil, 0, err
-	//}
-	//defer rw.Rollback()
-	//
-	//batch := olddb.NewHashBatch(rw, p.bc.Quit(), dpath)
-	//defer batch.Rollback()
-	//
-	//stateReader, stateWriter, err := NewStateReaderWriter(batch, rw, b.Number64().Uint64(), true)
-	//if nil != err {
-	//	return nil, nil, 0, err
-	//}
-	//ibs := state.New(stateReader)
-
 	chainConfig := p.config
 	if chainConfig.DAOForkSupport && chainConfig.DAOForkBlock != nil && chainConfig.DAOForkBlock.Cmp(b.Number64().ToBig()) == 0 {
 		misc.ApplyDAOHardFork(ibs)
@@ -104,18 +83,11 @@ func (p *StateProcessor) Process(tx kv.RwTx, b *block.Block, ibs *state.IntraBlo
 
 	//posa, isPoSA := p.engine.(*apoa.Apoa)
 	for i, tx := range b.Transactions() {
-		//if isPoSA {
-		//	if isSystemTx, err := posa.IsSystemTransaction(tx, b.Header()); err != nil {
-		//		return nil, nil, 0, err
-		//	} else if isSystemTx {
-		//		continue
-		//	}
-		//}
 		ibs.Prepare(tx.Hash(), b.Hash(), i)
 		receipt, _, err := ApplyTransaction(chainConfig, blockHashFunc, p.engine, nil, gp, ibs, noop, header.(*block.Header), tx, usedGas, cfg)
 		if err != nil {
 			if !cfg.StatelessExec {
-				return nil, nil, 0, fmt.Errorf("could not apply tx %d from block %d [%v]: %w", i, b.Number64(), tx.Hash().String(), err)
+				return nil, nil, nil, 0, fmt.Errorf("could not apply tx %d from block %d [%v]: %w", i, b.Number64(), tx.Hash().String(), err)
 			}
 			rejectedTxs = append(rejectedTxs, &RejectedTx{i, err.Error()})
 		} else {
@@ -127,13 +99,19 @@ func (p *StateProcessor) Process(tx kv.RwTx, b *block.Block, ibs *state.IntraBlo
 	}
 
 	if !cfg.StatelessExec && *usedGas != header.(*block.Header).GasUsed {
-		return nil, nil, 0, fmt.Errorf("gas used by execution: %d, in header: %d", *usedGas, header.(*block.Header).GasUsed)
+		return nil, nil, nil, 0, fmt.Errorf("gas used by execution: %d, in header: %d", *usedGas, header.(*block.Header).GasUsed)
 	}
 
+	var nopay map[types.Address]*uint256.Int
 	if !cfg.ReadOnly {
 		txs := b.Transactions()
-		if _, _, _, err := FinalizeBlockExecution(tx, p.engine, b.Header().(*block.Header), txs, stateWriter, chainConfig, ibs, receipts, chainReader, false, p.config.IsBeijing(b.Number64().Uint64())); err != nil {
-			return nil, nil, 0, err
+		//if _, _, _, err := FinalizeBlockExecution(tx, p.engine, b.Header().(*block.Header), txs, stateWriter, chainConfig, ibs, receipts, chainReader, false); err != nil {
+		//	return nil, nil, 0, err
+		//}
+		var err error
+		_, nopay, err = p.engine.Finalize(chainReader, b.Header().(*block.Header), ibs, txs, nil)
+		if nil != err {
+			return nil, nil, nil, 0, err
 		}
 	}
 	allLogs := ibs.Logs()
@@ -149,7 +127,7 @@ func (p *StateProcessor) Process(tx kv.RwTx, b *block.Block, ibs *state.IntraBlo
 	//	return nil, nil, 0, err
 	//}
 
-	return receipts, allLogs, *usedGas, nil
+	return receipts, nopay, allLogs, *usedGas, nil
 }
 
 // applyTransaction attempts to apply a transaction to the given state database

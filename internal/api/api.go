@@ -1155,7 +1155,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash mvm_com
 		fields["logs"] = mvm_types.FromAmcLogs(receipt.Logs)
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if !receipt.ContractAddress.IsNull() {
+	if receipt.ContractAddress.IsNull() {
 		fields["contractAddress"] = mvm_types.FromAmcAddress(&receipt.ContractAddress)
 	}
 

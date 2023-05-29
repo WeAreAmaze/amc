@@ -90,8 +90,6 @@ func (m *Miner) runLoop() error {
 	canStart := false
 	shouldStart := false
 
-	time.Sleep(5 * time.Second)
-
 	for {
 		select {
 		case <-m.ctx.Done():
@@ -100,6 +98,7 @@ func (m *Miner) runLoop() error {
 			if ok {
 				canStart = true
 				if !m.Mining() && shouldStart {
+					time.Sleep(5 * time.Second)
 					m.SetCoinbase(m.coinbase)
 					m.worker.start()
 				}

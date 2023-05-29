@@ -64,7 +64,10 @@ type IBlockChain interface {
 	DB() kv.RwDB
 	Quit() <-chan struct{}
 
-	WriteBlockWithState(block block.IBlock, receipts []*block.Receipt) error
+	WriteBlockWithState(block block.IBlock, receipts []*block.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error
+
+	GetDepositInfo(address types.Address) (*uint256.Int, *uint256.Int)
+	GetAccountRewardUnpaid(account types.Address) (*uint256.Int, error)
 }
 
 type IMiner interface {

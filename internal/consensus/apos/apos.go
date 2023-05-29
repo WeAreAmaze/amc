@@ -606,8 +606,8 @@ func (c *APos) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 		return errors.New("unknown ancestor")
 	}
 	rawHeader.Time = parent.(*block.Header).Time + c.config.Period
-	if rawHeader.Time < uint64(time.Now().Unix())+4 {
-		rawHeader.Time = uint64(time.Now().Unix()) + 4
+	if rawHeader.Time < uint64(time.Now().Unix()) {
+		rawHeader.Time = uint64(time.Now().Unix()) + 1
 	}
 	return nil
 }
@@ -619,7 +619,7 @@ func (c *APos) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlock
 	beijing, _ := uint256.FromBig(c.chainConfig.BeijingBlock)
 	if new(uint256.Int).Mod(new(uint256.Int).Sub(header.Number64(), beijing), uint256.NewInt(c.config.APos.RewardEpoch)).
 		Cmp(uint256.NewInt(0)) == 0 {
-		log.Debug("begin setreward", "headnumber", header.Number64().ToBig().String())
+		log.Info("begin setreward", "headnumber", header.Number64().ToBig().String())
 
 		rewardService := newReward(c.config, c.chainConfig)
 		accRewards, err := rewardService.SetRewards(tx, header.Number64(), setRewards)
@@ -641,7 +641,7 @@ func (c *APos) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlock
 					Amount:  detail.Value,
 				})
 
-				log.Info("set rewards balance:", "addr", addr, "value", detail.Value)
+				log.Debug("set rewards balance:", "addr", addr, "value", detail.Value)
 			}
 		}
 	}
@@ -651,27 +651,35 @@ func (c *APos) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlock
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *APos) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader) {
+func (c *APos) Finalize(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	//chain.Config().IsEIP158(header.Number)
+
+	rewards, unpayMap, err := doReward(c.chainConfig, c.config, state, header.(*block.Header), chain)
+	if err != nil {
+		return nil, nil, err
+	}
 	rawHeader := header.(*block.Header)
 	rawHeader.Root = state.IntermediateRoot()
-
 	// Todo can not verify author
 	rawHeader.MixDigest = state.BeforeStateRoot()
 	//todo
 	//rawHeader.UncleHash = types.CalcUncleHash(nil)
+	return rewards, unpayMap, nil
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (c *APos) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt, reward []*block.Reward) (block.IBlock, error) {
+func (c *APos) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header block.IHeader, state *state.IntraBlockState, txs []*transaction.Transaction, uncles []block.IHeader, receipts []*block.Receipt) (block.IBlock, []*block.Reward, map[types.Address]*uint256.Int, error) {
 	// Finalize block
-	c.Finalize(chain, header, state, txs, uncles)
+	rewards, unpay, err := c.Finalize(chain, header, state, txs, uncles)
+	if nil != err {
+		return nil, nil, nil, err
+	}
 
 	// Assemble and return the final block for sealing
-	block := block.NewBlockFromReceipt(header, txs, uncles, receipts, reward)
-	return block, nil
+	block := block.NewBlockFromReceipt(header, txs, uncles, receipts, rewards)
+	return block, rewards, unpay, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
@@ -731,7 +739,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		delay += time.Duration(rand.Int63n(int64(wiggle)))
 
 		log.Infof("wiggle %s , time %s, number %d", common.PrettyDuration(wiggle), common.PrettyDuration(delay), header.Number.Uint64())
-		log.Debug("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
+		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
 
 	if c.chainConfig.IsBeijing(header.Number.Uint64()) {
@@ -762,11 +770,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		header.Signature = aggSign
 		body := b.Body().(*block.Body)
 		body.Verifiers = verifiers
-
-		//for index, adder := range adders {
-		//	log.Trace("mobile verify info", "block", b.Hash(), "block num", b.Number64().Uint64(), "verify addr", adder, "verify pub", hexutil.Encode(pubs[index].Bytes()))
-		//}
-
+		delay = time.Unix(int64(header.Time), 0).Sub(time.Now())
 	}
 
 	// Sign all the things!
@@ -779,15 +783,10 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 	// Wait until sealing is terminated or delay timeout.
 	log.Debug("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
-	reTimer:
 		select {
 		case <-stop:
 			return
 		case <-time.After(delay):
-			if header.Time > uint64(time.Now().Unix()) {
-				delay = 50 * time.Millisecond
-				goto reTimer
-			}
 		}
 
 		select {

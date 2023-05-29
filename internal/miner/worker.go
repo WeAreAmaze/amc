@@ -24,7 +24,6 @@ import (
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/holiman/uint256"
-	"github.com/ledgerwatch/erigon-lib/kv"
 	"sort"
 	"sync"
 
@@ -58,10 +57,11 @@ type task struct {
 	state     *state.IntraBlockState
 	block     block.IBlock
 	createdAt time.Time
+	nopay     map[types.Address]*uint256.Int
 }
 
 type newWorkReq struct {
-	interrupt *int32
+	interrupt *atomic.Int32
 	noempty   bool
 	timestamp int64
 }
@@ -109,12 +109,37 @@ func (env *environment) copy() *environment {
 }
 
 const (
-	minPeriodInterval         = 1 // 1s
-	staleThreshold            = 7
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
 	commitInterruptResubmit
+	commitInterruptTimeout
 )
+
+const (
+	minPeriodInterval      = 1 * time.Second // 1s
+	staleThreshold         = 7
+	resubmitAdjustChanSize = 10
+
+	// maxRecommitInterval is the maximum time interval to recreate the sealing block with
+	// any newly arrived transactions.
+	maxRecommitInterval = 12 * time.Second
+
+	intervalAdjustRatio = 0.1
+
+	intervalAdjustBias = 200 * 1000.0 * 1000.0
+)
+
+var (
+	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
+	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
+	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
+)
+
+// intervalAdjust represents a resubmitting interval adjustment.
+type intervalAdjust struct {
+	ratio float64
+	inc   bool
+}
 
 type worker struct {
 	minerConf conf.MinerConfig
@@ -137,6 +162,8 @@ type worker struct {
 	resultCh  chan block.IBlock
 	taskCh    chan *task
 
+	resubmitAdjustCh chan *intervalAdjust
+
 	running int32
 	newTxs  int32
 
@@ -154,30 +181,36 @@ type worker struct {
 func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusConfig, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
 	c, cancel := context.WithCancel(ctx)
 	worker := &worker{
-		engine:       engine,
-		chain:        bc,
-		txsPool:      txsPool,
-		conf:         conf,
-		chainConfig:  chainConfig,
-		mu:           sync.RWMutex{},
-		startCh:      make(chan struct{}, 1),
-		group:        group,
-		isLocalBlock: isLocalBlock,
-		ctx:          c,
-		cancel:       cancel,
-		taskCh:       make(chan *task),
-		newWorkCh:    make(chan *newWorkReq),
-		resultCh:     make(chan block.IBlock),
-		pendingTasks: make(map[types.Hash]*task),
-		minerConf:    minerConf,
+		engine:           engine,
+		chain:            bc,
+		txsPool:          txsPool,
+		conf:             conf,
+		chainConfig:      chainConfig,
+		mu:               sync.RWMutex{},
+		startCh:          make(chan struct{}, 1),
+		group:            group,
+		isLocalBlock:     isLocalBlock,
+		ctx:              c,
+		cancel:           cancel,
+		taskCh:           make(chan *task),
+		newWorkCh:        make(chan *newWorkReq),
+		resultCh:         make(chan block.IBlock),
+		pendingTasks:     make(map[types.Hash]*task),
+		minerConf:        minerConf,
+		resubmitAdjustCh: make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
-	period := worker.conf.Period
-	if period < minPeriodInterval {
-		period = minPeriodInterval
+	recommit := worker.minerConf.Recommit
+	if recommit < minPeriodInterval {
+		recommit = minPeriodInterval
 	}
 
+	// machine verify
 	group.Go(func() error {
-		return worker.workLoop(time.Duration(int64(period)))
+		return api.MachineVerify(ctx)
+	})
+
+	group.Go(func() error {
+		return worker.workLoop(recommit)
 	})
 
 	group.Go(func() error {
@@ -186,11 +219,6 @@ func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusC
 
 	group.Go(func() error {
 		return worker.taskLoop()
-	})
-
-	// machine verify
-	group.Go(func() error {
-		return api.MachineVerify(ctx)
 	})
 
 	group.Go(func() error {
@@ -237,7 +265,7 @@ func (w *worker) runLoop() error {
 			err := w.commitWork(req.interrupt, req.noempty, req.timestamp)
 			if err != nil {
 				log.Error("runLoop err:", err.Error())
-				w.startCh <- struct{}{}
+				//w.startCh <- struct{}{}
 			}
 		}
 	}
@@ -270,42 +298,47 @@ func (w *worker) resultLoop() error {
 			w.mu.RUnlock()
 			if !exist {
 				log.Error("Block found but no relative pending task", "number", blk.Number64().Uint64(), "sealhash", sealhash, "hash", hash)
-				w.startCh <- struct{}{}
+				//w.startCh <- struct{}{}
 				continue
 			}
 
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
-			//var (
-			//	receipts = make([]*block.Receipt, len(task.receipts))
-			//	// logs     []*block.Log
-			//)
-			//for i, taskReceipt := range task.receipts {
-			//	receipt := new(block.Receipt)
-			//	receipts[i] = receipt
-			//	*receipt = *taskReceipt
-			//
-			//	// add block location fields
-			//	receipt.BlockHash = hash
-			//	receipt.BlockNumber = blk.Number64()
-			//	receipt.TransactionIndex = uint(i)
-			//
-			//	// Update the block hash in all logs since it is now available and not when the
-			//	// receipt/log of individual transactions were created.
-			//	//receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
-			//	//for i, taskLog := range taskReceipt.Logs {
-			//	//	log := new(block.Log)
-			//	//	receipt.Logs[i] = log
-			//	//	*log = *taskLog
-			//	//	log.BlockHash = hash
-			//	//}
-			//	//logs = append(logs, receipt.Logs...)
-			//}
-			//// Commit block and state to database.
-			//err := w.chain.WriteBlockWithState(blk, receipts)
-			//if err != nil {
-			//	log.Error("Failed writing block to chain", "err", err)
-			//	continue
-			//}
+			var (
+				receipts = make([]*block.Receipt, len(task.receipts))
+				logs     []*block.Log
+			)
+			for i, taskReceipt := range task.receipts {
+				receipt := new(block.Receipt)
+				receipts[i] = receipt
+				*receipt = *taskReceipt
+
+				// add block location fields
+				receipt.BlockHash = hash
+				receipt.BlockNumber = blk.Number64()
+				receipt.TransactionIndex = uint(i)
+
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
+				receipt.Logs = make([]*block.Log, len(taskReceipt.Logs))
+				for i, taskLog := range taskReceipt.Logs {
+					log := new(block.Log)
+					receipt.Logs[i] = log
+					*log = *taskLog
+					log.BlockHash = hash
+				}
+				logs = append(logs, receipt.Logs...)
+			}
+
+			// Commit block and state to database.
+			err := w.chain.WriteBlockWithState(blk, receipts, task.state, task.nopay)
+			if err != nil {
+				log.Error("Failed writing block to chain", "err", err)
+				continue
+			}
+
+			if len(logs) > 0 {
+				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
+			}
 
 			log.Info("🔨 Successfully sealed new block",
 				"sealhash", sealhash,
@@ -318,8 +351,8 @@ func (w *worker) resultLoop() error {
 				"rewardCount", len(blk.Body().Reward()),
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)),
 				"txs", len(blk.Transactions()))
-			w.chain.SealedBlock(blk)
-			//event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
+			//w.chain.SealedBlock(blk)
+			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
 		}
 	}
 }
@@ -354,8 +387,7 @@ func (w *worker) taskLoop() error {
 			hash := task.block.Hash()
 			stateRoot := task.block.StateRoot()
 			if sealHash == prev {
-				//log.Trace("why continue")
-				//continue
+				continue
 			}
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
@@ -368,10 +400,6 @@ func (w *worker) taskLoop() error {
 				delete(w.pendingTasks, sealHash)
 				w.mu.Unlock()
 				log.Warn("delete task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot, "err", err)
-				if errors.Is(err, consensus.ErrNotEnoughSign) {
-					time.Sleep(1 * time.Second)
-					w.startCh <- struct{}{}
-				}
 			} else {
 				log.Debug("send task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot)
 			}
@@ -379,7 +407,7 @@ func (w *worker) taskLoop() error {
 	}
 }
 
-func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) error {
+func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int64) error {
 	start := time.Now()
 	if w.isRunning() {
 		if w.coinbase == (types.Address{}) {
@@ -393,7 +421,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 		return err
 	}
 
-	tx, err := w.chain.DB().BeginRw(w.ctx)
+	tx, err := w.chain.DB().BeginRo(w.ctx)
 	if nil != err {
 		log.Error("work.commitWork failed", err)
 		return err
@@ -401,13 +429,12 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 	defer tx.Rollback()
 
 	stateReader := state.NewPlainStateReader(tx)
-	stateWriter := state.NewPlainStateWriter(tx, tx, current.header.Number.Uint64())
+	stateWriter := state.NewNoopWriter()
 	ibs := state.New(stateReader)
 	// generate state for mobile verify
 	ibs.BeginWriteSnapshot()
 	ibs.BeginWriteCodes()
 	headers := make([]*block.Header, 0)
-	//stateWriter := state.NewPlainStateWriter(tx, tx, current.header.Number.Uint64())
 	getHeader := func(hash types.Hash, number uint64) *block.Header {
 		h := rawdb.ReadHeader(tx, hash, number)
 		if nil != h {
@@ -416,20 +443,31 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 		return h
 	}
 
-	if err := w.fillTransactions(interrupt, current, ibs, getHeader); err != nil {
-		log.Errorf("w.fillTransactions failed, error %v\n", err)
-		return err
-	}
-
-	var rewards []*block.Reward
-	if w.chainConfig.IsBeijing(current.header.Number.Uint64()) {
-		rewards, err = w.engine.Rewards(tx, block.CopyHeader(current.header), ibs, false)
-		if err != nil {
-			return err
+	err = w.fillTransactions(interrupt, current, ibs, getHeader)
+	switch {
+	case err == nil:
+		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+	case errors.Is(err, errBlockInterruptedByRecommit):
+		gaslimit := current.header.GasLimit
+		ratio := float64(gaslimit-current.gasPool.Gas()) / float64(gaslimit)
+		if ratio < 0.1 {
+			ratio = 0.1
+		}
+		w.resubmitAdjustCh <- &intervalAdjust{
+			ratio: ratio,
+			inc:   true,
 		}
 	}
 
-	if err = w.commit(tx, current, stateWriter, ibs, start, rewards, headers); nil != err {
+	//var rewards []*block.Reward
+	//if w.chainConfig.IsBeijing(current.header.Number.Uint64()) {
+	//	rewards, err = w.engine.Rewards(tx, block.CopyHeader(current.header), ibs, false)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
+
+	if err = w.commit(current, stateWriter, ibs, start, headers); nil != err {
 		log.Errorf("w.commit failed, error %v\n", err)
 		return err
 	}
@@ -437,13 +475,35 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) err
 	return nil
 }
 
-func (w *worker) workLoop(period time.Duration) error {
+// recalcRecommit recalculates the resubmitting interval upon feedback.
+func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) time.Duration {
+	var (
+		prevF = float64(prev.Nanoseconds())
+		next  float64
+	)
+	if inc {
+		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target+intervalAdjustBias)
+		max := float64(maxRecommitInterval.Nanoseconds())
+		if next > max {
+			next = max
+		}
+	} else {
+		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
+		min := float64(minRecommit.Nanoseconds())
+		if next < min {
+			next = min
+		}
+	}
+	return time.Duration(int64(next))
+}
+
+func (w *worker) workLoop(recommit time.Duration) error {
 	defer w.cancel()
 	defer w.stop()
 	var (
-		interrupt *int32
-		//minRecommit = period // minimal resubmit interval specified by user.
-		timestamp int64 // timestamp for each round of sealing.
+		interrupt   *atomic.Int32
+		minRecommit = recommit // minimal resubmit interval specified by user.
+		timestamp   int64      // timestamp for each round of sealing.
 	)
 
 	newBlockCh := make(chan common.ChainHighestBlock)
@@ -452,17 +512,21 @@ func (w *worker) workLoop(period time.Duration) error {
 	newBlockSub := event.GlobalEvent.Subscribe(newBlockCh)
 	defer newBlockSub.Unsubscribe()
 
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C // discard the initial tick
+
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
-			atomic.StoreInt32(interrupt, s)
+			interrupt.Store(s)
 		}
-		interrupt = new(int32)
+		interrupt = new(atomic.Int32)
 		select {
 		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
 		case <-w.ctx.Done():
 			return
 		}
-		//timer.Reset(recommit)
+		timer.Reset(recommit)
 		//atomic.StoreInt32(&w.newTxs, 0)
 	}
 
@@ -491,11 +555,31 @@ func (w *worker) workLoop(period time.Duration) error {
 			commit(false, commitInterruptNewHead)
 		case err := <-newBlockSub.Err():
 			return err
+
+		case <-timer.C:
+			// If sealing is running resubmit a new work cycle periodically to pull in
+			// higher priced transactions. Disable this overhead for pending blocks.
+			if w.isRunning() && (w.conf == nil || w.conf.Period > 0) {
+				continue
+				commit(false, commitInterruptResubmit)
+			}
+		case adjust := <-w.resubmitAdjustCh:
+			// Adjust resubmit interval by feedback.
+			if adjust.inc {
+				before := recommit
+				target := float64(recommit.Nanoseconds()) / adjust.ratio
+				recommit = recalcRecommit(minRecommit, recommit, target, true)
+				log.Trace("Increase miner recommit interval", "from", before, "to", recommit)
+			} else {
+				before := recommit
+				recommit = recalcRecommit(minRecommit, recommit, float64(minRecommit.Nanoseconds()), false)
+				log.Trace("Decrease miner recommit interval", "from", before, "to", recommit)
+			}
 		}
 	}
 }
 
-func (w *worker) fillTransactions(interrupt *int32, env *environment, ibs *state.IntraBlockState, getHeader func(hash types.Hash, number uint64) *block.Header) error {
+func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs *state.IntraBlockState, getHeader func(hash types.Hash, number uint64) *block.Header) error {
 	// todo fillTx
 	env.txs = []*transaction.Transaction{}
 	txs, err := w.txsPool.GetTransaction()
@@ -525,6 +609,16 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, ibs *state
 
 	log.Tracef("fillTransactions txs len:%d", len(txs))
 	for _, tx := range txs {
+		// Check interruption signal and abort building if it's fired.
+		if interrupt != nil {
+			if signal := interrupt.Load(); signal != commitInterruptNone {
+				return signalToErr(signal)
+			}
+		}
+		if env.gasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+			break
+		}
 		// Start executing the transaction
 		_, err := miningCommitTx(tx, env.coinbase, &vm2.Config{}, w.chainConfig, ibs, env)
 
@@ -536,6 +630,7 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, ibs *state
 		case errors.Is(err, core.ErrNonceTooLow):
 			continue
 		case errors.Is(err, nil):
+			env.tcount++
 			continue
 		default:
 			log.Error("miningCommitTx failed ", "error", err)
@@ -544,40 +639,6 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment, ibs *state
 
 	return nil
 }
-
-//func (w *worker) commitTransactions(env *environment, tx *transaction.Transaction, ibs *state.IntraBlockState, getHeader func(hash types.Hash, number uint64) *block.Header) ([]*block.Log, error) {
-//	// todo run ApplyTransaction  Debug: true, Tracer: vm.NewMarkdownLogger(os.Stdout)
-//
-//	//rw, err := w.chain.DB().BeginRw(context.Background())
-//	//if nil != err {
-//	//	return nil, err
-//	//}
-//	//defer rw.Rollback()
-//	blockHashFunc := internal.GetHashFn(env.header, getHeader)
-//	//dpath := paths.DefaultDataDir()
-//
-//	//batch := olddb.NewHashBatch(rw, w.chain.Quit(), dpath)
-//	//defer batch.Rollback()
-//	//
-//	//stateReader, stateWriter, err := internal.NewStateReaderWriter(batch, rw, env.header.Number64().Uint64(), false)
-//	//if nil != err {
-//	//	return nil, err
-//	//}
-//	//env.state.SetStateReader(stateReader)
-//	h := tx.Hash()
-//	ibs.Prepare(h, types.Hash{}, env.tcount)
-//	snap := ibs.Snapshot()
-//	receipt, _, err := internal.ApplyTransaction(params.AmazeChainConfig, blockHashFunc, w.engine, &env.coinbase, env.gasPool, ibs, state.NewNoopWriter(), env.header, tx, &env.header.GasUsed, vm2.Config{})
-//	if err != nil {
-//		log.Errorf("commit transaction error, err:%v", err)
-//		ibs.RevertToSnapshot(snap)
-//		return nil, err
-//	}
-//
-//	env.txs = append(env.txs, tx)
-//	env.receipts = append(env.receipts, receipt)
-//	return receipt.Logs, nil
-//}
 
 func (w *worker) prepareWork(param *generateParams) (*environment, error) {
 	w.mu.RLock()
@@ -653,27 +714,11 @@ func (w *worker) makeEnv(parent *block.Header, header *block.Header, coinbase ty
 	return env
 }
 
-func (w *worker) commit(tx kv.RwTx, env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, rewards []*block.Reward, needHeaders []*block.Header) error {
+func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, needHeaders []*block.Header) error {
 	if w.isRunning() {
-
-		//iblock, _, _, err := internal.FinalizeBlockExecution(tx, w.engine, env.header, env.txs, writer, w.chainConfig, ibs, env.receipts, nil, true, w.chainConfig.IsBeijing(env.header.Number.Uint64()))
-		//if nil != err {
-		//	return err
-		//}
-
-		//if err := tx.Commit(); nil != err {
-		//	return err
-		//}
-		noop := state.NewNoopWriter()
-		if err := ibs.CommitBlock(w.chainConfig.Rules(env.header.Number.Uint64()), noop); err != nil {
-			return fmt.Errorf("committing block %d failed: %w", env.header.Number.Uint64(), err)
-		}
-
-		//
-		iblock, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts, rewards)
-
-		if err != nil {
-			log.Error("cannot commit task", "err", err)
+		env := env.copy()
+		iblock, rewards, unpay, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts)
+		if nil != err {
 			return err
 		}
 
@@ -703,7 +748,7 @@ func (w *worker) commit(tx kv.RwTx, env *environment, writer state.WriterWithCha
 		w.updateSnapshot(env, rewards)
 
 		select {
-		case w.taskCh <- &task{receipts: env.receipts, block: iblock, createdAt: time.Now()}:
+		case w.taskCh <- &task{receipts: env.receipts, block: iblock, createdAt: time.Now(), state: ibs, nopay: unpay}:
 			log.Debug("Commit new sealing work",
 				"number", iblock.Header().Number64().Uint64(),
 				"sealhash", w.engine.SealHash(iblock.Header()),
@@ -751,4 +796,17 @@ func (w *worker) updateSnapshot(env *environment, rewards []*block.Reward) {
 		rewards,
 	)
 	w.snapshotReceipts = copyReceipts(env.receipts)
+}
+
+func signalToErr(signal int32) error {
+	switch signal {
+	case commitInterruptNewHead:
+		return errBlockInterruptedByNewHead
+	case commitInterruptResubmit:
+		return errBlockInterruptedByRecommit
+	case commitInterruptTimeout:
+		return errBlockInterruptedByTimeout
+	default:
+		panic(fmt.Errorf("undefined signal %d", signal))
+	}
 }

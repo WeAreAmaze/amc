@@ -248,7 +248,7 @@ LOOP:
 	// 1
 	// uint64(len(aggrSigns)) < depositNum/2
 	// uint64(len(aggrSigns)) < 7
-	if uint64(len(aggrSigns)) < 1 {
+	if uint64(len(aggrSigns)) < 3 {
 		return types.Signature{}, nil, consensus.ErrNotEnoughSign
 	}
 

@@ -216,7 +216,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Engine.EngineName)
 	}
 
-	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, pubsubServer, cfg.GenesisBlockCfg.Config)
+	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, pubsubServer, cfg)
 	pool, _ := txspool.NewTxsPool(ctx, bc)
 
 	//todo

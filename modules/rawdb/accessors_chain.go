@@ -28,7 +28,6 @@ import (
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules"
 	"github.com/golang/protobuf/proto"
-
 	"github.com/holiman/uint256"
 	"math"
 	"time"

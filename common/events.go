@@ -57,3 +57,7 @@ type ChainHighestBlock struct {
 type MinedEntireEvent struct {
 	Entire state.EntireCode
 }
+
+type ChainSideEvent struct {
+	Block *block.Block
+}

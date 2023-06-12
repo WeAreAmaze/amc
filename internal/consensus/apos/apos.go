@@ -63,7 +63,8 @@ const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime       = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	mergeSignMinTime = 4                      // min time for merge sign
 )
 
 // APos proof-of-authority protocol constants.
@@ -606,8 +607,8 @@ func (c *APos) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 		return errors.New("unknown ancestor")
 	}
 	rawHeader.Time = parent.(*block.Header).Time + c.config.Period
-	if rawHeader.Time < uint64(time.Now().Unix()) {
-		rawHeader.Time = uint64(time.Now().Unix()) + 1
+	if rawHeader.Time < uint64(time.Now().Unix())+mergeSignMinTime {
+		rawHeader.Time = uint64(time.Now().Unix()) + mergeSignMinTime
 	}
 	return nil
 }

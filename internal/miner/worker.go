@@ -400,6 +400,10 @@ func (w *worker) taskLoop() error {
 				delete(w.pendingTasks, sealHash)
 				w.mu.Unlock()
 				log.Warn("delete task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot, "err", err)
+				if errors.Is(err, consensus.ErrNotEnoughSign) {
+					time.Sleep(1 * time.Second)
+					w.startCh <- struct{}{}
+				}
 			} else {
 				log.Debug("send task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot)
 			}

@@ -68,6 +68,7 @@ type IBlockChain interface {
 
 	GetDepositInfo(address types.Address) (*uint256.Int, *uint256.Int)
 	GetAccountRewardUnpaid(account types.Address) (*uint256.Int, error)
+	RewardsOfEpoch(number *uint256.Int, lastEpoch *uint256.Int) (map[types.Address]*uint256.Int, error)
 }
 
 type IMiner interface {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/math"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/golang/protobuf/proto"
@@ -81,6 +82,7 @@ const (
 
 type BlockChain struct {
 	chainConfig  *params.ChainConfig
+	engineConf   *conf.ConsensusConfig
 	ctx          context.Context
 	cancel       context.CancelFunc
 	genesisBlock block2.IBlock
@@ -156,6 +158,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	headerCache, _ := lru.New[types.Hash, *block2.Header](headerCacheLimit)
 	bc := &BlockChain{
 		chainConfig:  config.GenesisBlockCfg.Config, // Chain & network configuration
+		engineConf:   config.GenesisBlockCfg.Engine,
 		genesisBlock: genesisBlock,
 		blocks:       []block2.IBlock{},
 		//currentBlock:  current,
@@ -1634,15 +1637,38 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	// collect oldblock event
 	// Deleted logs + blocks:
 	var deletedLogs []*block2.Log
+	recoverMap := make(map[types.Address]*uint256.Int)
 	for i := len(oldChain) - 1; i >= 0; i-- {
 		// Collect deleted logs for notification
 		if logs := bc.collectLogs(oldChain[i].(*block2.Block), true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
 		}
-		//if len(deletedLogs) > 512 {
-		//	event.GlobalEvent.Send(&common.RemovedLogsEvent{Logs:deletedLogs})
-		//	deletedLogs = nil
-		//}
+
+		if bc.chainConfig.IsBeijing(oldChain[i].Number64().Uint64()) {
+			beijing, _ := uint256.FromBig(bc.chainConfig.BeijingBlock)
+			if new(uint256.Int).Mod(new(uint256.Int).Sub(oldChain[i].Number64(), beijing), uint256.NewInt(bc.engineConf.APos.RewardEpoch)).
+				Cmp(uint256.NewInt(0)) == 0 {
+				last := new(uint256.Int).Sub(oldChain[i].Number64(), uint256.NewInt(bc.engineConf.APos.RewardEpoch))
+				rewardMap, err := bc.RewardsOfEpoch(oldChain[i].Number64(), last)
+				if nil != err {
+					return err
+				}
+
+				for _, r := range oldChain[i].Body().Reward() {
+					if _, ok := recoverMap[r.Address]; !ok {
+						recoverMap[r.Address], err = bc.GetAccountRewardUnpaid(r.Address)
+						if nil != err {
+							return err
+						}
+					}
+
+					high := new(uint256.Int).Add(recoverMap[r.Address], r.Amount)
+					if _, ok := rewardMap[r.Address]; ok {
+						recoverMap[r.Address] = high.Sub(high, rewardMap[r.Address])
+					}
+				}
+			}
+		}
 	}
 	reInsert := make([]block2.IBlock, 0, len(newChain))
 	err = bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
@@ -1682,6 +1708,11 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 				break
 			}
 			rawdb.TruncateCanonicalHash(tx, i, false)
+		}
+
+		// unwind reward
+		for k, v := range recoverMap {
+			rawdb.PutAccountReward(tx, k, v)
 		}
 		return nil
 	})
@@ -1734,6 +1765,52 @@ func (bc *BlockChain) GetAccountRewardUnpaid(account types.Address) (*uint256.In
 		return nil
 	})
 	return value, err
+}
+
+func (bc *BlockChain) RewardsOfEpoch(number *uint256.Int, lastEpoch *uint256.Int) (map[types.Address]*uint256.Int, error) {
+	// total reword for address this epoch
+	rewardMap := make(map[types.Address]*uint256.Int, 0)
+	depositeMap := map[types.Address]struct {
+		reward    *uint256.Int
+		maxReward *uint256.Int
+	}{}
+
+	currentNr := number.Clone()
+	currentNr = currentNr.Sub(currentNr, uint256.NewInt(1))
+	endNumber := lastEpoch.Clone()
+	for currentNr.Cmp(endNumber) >= 0 {
+		block, err := bc.GetBlockByNumber(currentNr)
+		if nil != err {
+			return nil, err
+		}
+
+		verifiers := block.Body().Verifier()
+		for _, verifier := range verifiers {
+			_, ok := depositeMap[verifier.Address]
+			if !ok {
+				low, max := bc.GetDepositInfo(verifier.Address)
+				if low == nil || max == nil {
+					continue
+				}
+				depositeMap[verifier.Address] = struct {
+					reward    *uint256.Int
+					maxReward *uint256.Int
+				}{reward: low, maxReward: max}
+
+				log.Debug("account deposite infos", "addr", verifier.Address, "perblock", low, "perepoch", max)
+			}
+
+			addrReward, ok := rewardMap[verifier.Address]
+			if !ok {
+				addrReward = uint256.NewInt(0)
+			}
+
+			rewardMap[verifier.Address] = math.Min256(addrReward.Add(addrReward, depositeMap[verifier.Address].reward), depositeMap[verifier.Address].maxReward.Clone())
+		}
+
+		currentNr.SubUint64(currentNr, 1)
+	}
+	return rewardMap, nil
 }
 
 // collectLogs collects the logs that were generated or removed during

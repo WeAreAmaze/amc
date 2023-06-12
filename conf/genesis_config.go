@@ -25,6 +25,7 @@ import (
 
 type GenesisBlockConfig struct {
 	Config *params.ChainConfig `json:"config" yaml:"config"`
+
 	//	ChainID    uint64             `json:"chainID" yaml:"chainID"`
 	Nonce      uint64        `json:"nonce"`
 	Timestamp  uint64        `json:"timestamp"`

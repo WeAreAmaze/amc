@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"errors"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/crypto/bls"
@@ -186,7 +187,14 @@ func (d Deposit) eventLoop() {
 			}
 		case logRemovedEvent := <-d.rmLogsCh:
 			for _, l := range logRemovedEvent.Logs {
-				log.Info("logEvent", "address", l.Address, "data", l.Data, "")
+				if nil != d.consensusConfig.APos && bytes.Compare(l.Address[:], depositContractByes[:]) == 0 {
+					log.Trace("log event topic[0]= ", "hash", l.Topics[0], "depositEventSignature", depositEventSignature, "withdrawnSignature", withdrawnSignature)
+					if l.Topics[0] == depositEventSignature {
+						d.handleUndoDepositEvent(l.TxHash, l.Data)
+					} else if l.Topics[0] == withdrawnSignature {
+						d.handleWithdrawnEvent(l.TxHash, l.Data)
+					}
+				}
 			}
 		case <-d.logsSub.Err():
 			return
@@ -198,57 +206,40 @@ func (d Deposit) eventLoop() {
 	}
 }
 
-func (d Deposit) handleDepositEvent(txHash types.Hash, data []byte) {
+func (d Deposit) verifySignature(sig []byte, pub []byte, depositAmount *uint256.Int) error {
 	// 1
+	signature, err := bls.SignatureFromBytes(sig)
+	if err != nil {
+		log.Warn("cannot unpack BLS signature", "signature", hexutil.Encode(sig), "err", err)
+		return err
+	}
+	// 2
+	publicKey, err := bls.PublicKeyFromBytes(pub)
+	if err != nil {
+		log.Warn("cannot unpack BLS publicKey", "publicKey", hexutil.Encode(pub), "err", err)
+		return err
+	}
+	// 3
+	log.Trace("DepositEvent verify:", "signature", hexutil.Encode(signature.Marshal()), "publicKey", hexutil.Encode(publicKey.Marshal()), "msg", hexutil.Encode(depositAmount.Bytes()))
+	if !signature.Verify(publicKey, depositAmount.Bytes()) {
+		return errors.New("cannot Verify signature")
+	}
+
+	return nil
+}
+
+func (d Deposit) handleDepositEvent(txHash types.Hash, data []byte) {
+
 	pb, amount, sig, err := UnpackDepositLogData(data)
 	if err != nil {
 		log.Warn("cannot unpack deposit log data")
 		return
 	}
-	// 2
-	signature, err := bls.SignatureFromBytes(sig)
-	if err != nil {
-		log.Warn("cannot unpack BLS signature", "signature", hexutil.Encode(sig), "err", err)
+
+	if err := d.verifySignature(sig, pb, amount); err != nil {
+		log.Error("cannot Verify signature", "signature", hexutil.Encode(sig), "publicKey", hexutil.Encode(pb), "message", hexutil.Encode(amount.Bytes()), "err", err)
 		return
 	}
-	// 3
-	publicKey, err := bls.PublicKeyFromBytes(pb)
-	if err != nil {
-		log.Warn("cannot unpack BLS publicKey", "publicKey", hexutil.Encode(pb), "err", err)
-		return
-	}
-	// 4
-	log.Trace("DepositEvent verify:", "signature", hexutil.Encode(signature.Marshal()), "publicKey", hexutil.Encode(publicKey.Marshal()), "msg", hexutil.Encode(amount.Bytes()))
-	if signature.Verify(publicKey, amount.Bytes()) {
-		var tx *transaction.Transaction
-		rwTx, err := d.db.BeginRw(d.ctx)
-		defer rwTx.Rollback()
-		if err != nil {
-			log.Error("cannot open db", "err", err)
-			return
-		}
-
-		tx, _, _, _, err = rawdb.ReadTransactionByHash(rwTx, txHash)
-		if err != nil {
-			log.Error("rawdb.ReadTransactionByHash", "err", err, "hash", txHash)
-		}
-
-		if tx != nil {
-			log.Trace("add Deposit info", "address", tx.From(), "amount", amount.String())
-
-			var pub types.PublicKey
-			pub.SetBytes(publicKey.Marshal())
-			//
-			rawdb.PutDeposit(rwTx, *tx.From(), pub, *amount)
-			rwTx.Commit()
-		}
-	} else {
-		log.Error("DepositEvent cannot Verify signature", "signature", hexutil.Encode(sig), "publicKey", hexutil.Encode(pb), "message", hexutil.Encode(amount.Bytes()), "err", err)
-	}
-}
-
-func (d Deposit) handleWithdrawnEvent(txHash types.Hash, data []byte) {
-	var tx *transaction.Transaction
 
 	rwTx, err := d.db.BeginRw(d.ctx)
 	defer rwTx.Rollback()
@@ -256,6 +247,80 @@ func (d Deposit) handleWithdrawnEvent(txHash types.Hash, data []byte) {
 		log.Error("cannot open db", "err", err)
 		return
 	}
+
+	var tx *transaction.Transaction
+	tx, _, _, _, err = rawdb.ReadTransactionByHash(rwTx, txHash)
+	if err != nil {
+		log.Error("cannot read transaction by hash", "err", err, "hash", txHash)
+	}
+	if tx == nil {
+		log.Error("cannot read transaction by hash", "err", err, "hash", txHash)
+	}
+
+	var pub types.PublicKey
+	_ = pub.SetBytes(pb)
+	//
+	if err = rawdb.DoDeposit(rwTx, *tx.From(), pub, amount); err != nil {
+		log.Error("cannot modify database", "err", err)
+	}
+	if err = rwTx.Commit(); err != nil {
+		log.Error("cannot commit tx", "err", err)
+	}
+}
+
+func (d Deposit) handleUndoDepositEvent(txHash types.Hash, data []byte) {
+	pb, amount, sig, err := UnpackDepositLogData(data)
+	if err != nil {
+		log.Warn("cannot unpack deposit log data")
+		return
+	}
+
+	if err := d.verifySignature(sig, pb, amount); err != nil {
+		log.Error("cannot Verify signature", "signature", hexutil.Encode(sig), "publicKey", hexutil.Encode(pb), "message", hexutil.Encode(amount.Bytes()), "err", err)
+		return
+	}
+
+	rwTx, err := d.db.BeginRw(d.ctx)
+	defer rwTx.Rollback()
+	if err != nil {
+		log.Error("cannot open db", "err", err)
+		return
+	}
+
+	var tx *transaction.Transaction
+	tx, _, _, _, err = rawdb.ReadTransactionByHash(rwTx, txHash)
+	if err != nil {
+		log.Error("cannot read transaction by hash", "err", err, "hash", txHash)
+	}
+	if tx == nil {
+		log.Error("cannot read transaction by hash", "err", err, "hash", txHash)
+	}
+
+	//
+	if err = rawdb.UndoDeposit(rwTx, *tx.From(), amount); err != nil {
+		log.Error("cannot modify database", "err", err)
+	}
+	if err = rwTx.Commit(); err != nil {
+		log.Error("cannot commit tx", "err", err)
+	}
+
+}
+
+func (d Deposit) handleWithdrawnEvent(txHash types.Hash, data []byte) {
+	// 1
+	amount, err := UnpackWithdrawnLogData(data)
+	if err != nil {
+		log.Warn("cannot unpack deposit log data")
+		return
+	}
+
+	rwTx, err := d.db.BeginRw(d.ctx)
+	defer rwTx.Rollback()
+	if err != nil {
+		log.Error("cannot open db", "err", err)
+		return
+	}
+	var tx *transaction.Transaction
 	tx, _, _, _, err = rawdb.ReadTransactionByHash(rwTx, txHash)
 	if err != nil {
 		log.Error("rawdb.ReadTransactionByHash", "err", err, "hash", txHash)
@@ -266,10 +331,42 @@ func (d Deposit) handleWithdrawnEvent(txHash types.Hash, data []byte) {
 		return
 	}
 
-	err = rawdb.DeleteDeposit(rwTx, *tx.From())
+	err = rawdb.DoWithdrawn(rwTx, *tx.From(), amount)
 	if err != nil {
-		log.Error("cannot delete deposit", "err", err)
+		log.Error("cannot Withdrawn deposit when handle Withdrawn Event", "err", err)
 		return
 	}
-	rwTx.Commit()
+	if err = rwTx.Commit(); nil != err {
+		log.Error("cannot commit when handle Withdrawn Event", "err", err)
+	}
+}
+
+func (d Deposit) handleUndoWithdrawnEvent(txHash types.Hash, data []byte) {
+	amount, err := UnpackWithdrawnLogData(data)
+	if err != nil {
+		log.Warn("cannot unpack deposit log data")
+		return
+	}
+	rwTx, err := d.db.BeginRw(d.ctx)
+	defer rwTx.Rollback()
+
+	var tx *transaction.Transaction
+	tx, _, _, _, err = rawdb.ReadTransactionByHash(rwTx, txHash)
+	if err != nil {
+		log.Error("rawdb.ReadTransactionByHash", "err", err, "hash", txHash)
+		return
+	}
+	if tx == nil {
+		log.Error("cannot find Transaction", "err", err, "hash", txHash)
+		return
+	}
+
+	if err = rawdb.UndoWithdrawn(rwTx, *tx.From(), amount); err != nil {
+		log.Error("cannot Undo Withdrawn deposit when handle remove Withdrawn log Event", "err", err)
+		return
+	}
+
+	if err = rwTx.Commit(); nil != err {
+		log.Error("cannot commit when handle Withdrawn Event", "err", err)
+	}
 }

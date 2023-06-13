@@ -47,3 +47,25 @@ func UnpackDepositLogData(data []byte) (pubkey []byte, amount *uint256.Int, sign
 
 	return unpackedLogs[0].([]byte), amount, unpackedLogs[2].([]byte), nil
 }
+
+// UnpackWithdrawnLogData unpacks the data from a deposit log using the ABI decoder.
+func UnpackWithdrawnLogData(data []byte) (amount *uint256.Int, err error) {
+	reader := bytes.NewReader(depositAbiCode)
+	contractAbi, err := abi.JSON(reader)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to generate contract abi")
+	}
+
+	unpackedLogs, err := contractAbi.Unpack("WithdrawnEvent", data)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to unpack logs")
+	}
+	amount, overflow := uint256.FromBig(unpackedLogs[0].(*big.Int))
+	if overflow {
+		return nil, errors.New("unable to unpack amount")
+	}
+
+	log.Debug("unpacked WithdrawnEvent Logs", "message", hexutil.Encode(amount.Bytes()))
+
+	return amount, nil
+}

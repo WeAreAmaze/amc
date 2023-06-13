@@ -93,7 +93,7 @@ func GetDepositInfo(tx kv.Tx, addr types.Address) *Info {
 		rewardPerBlock = new(uint256.Int).Add(rewardPerBlock, uint256.NewInt(params.Wei))
 		//
 		maxRewardPerEpoch = new(uint256.Int).Mul(rewardPerBlock, uint256.NewInt(FiveHundredDepositMaxTaskPerEpoch))
-	case 10: //todo
+	case 10, 0: //todo
 		return nil
 	default:
 		panic("wrong deposit amount")

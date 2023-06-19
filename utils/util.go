@@ -26,6 +26,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/sha3"
 	"os"
+	"strings"
 )
 
 func Hash256toS(data []byte) string {
@@ -154,6 +155,18 @@ func Copy(b []byte) []byte {
 	c := make([]byte, len(b))
 	copy(c, b)
 	return c
+}
+
+// SplitAndTrim splits input separated by a comma
+// and trims excessive white space from the substrings.
+func SplitAndTrim(input string) (ret []string) {
+	l := strings.Split(input, ",")
+	for _, r := range l {
+		if r = strings.TrimSpace(r); r != "" {
+			ret = append(ret, r)
+		}
+	}
+	return ret
 }
 
 func ConvertH256ToUint256Int(h256 *types_pb.H256) *uint256.Int {

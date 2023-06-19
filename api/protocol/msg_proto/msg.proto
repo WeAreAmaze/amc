@@ -42,3 +42,29 @@ message ProtocolHandshakeMessage {
   types_pb.H256 genesisHash = 2;
   types_pb.H256 currentHeight = 3;
 }
+
+
+//v2
+message Status {
+  string version = 1;
+  types_pb.H256 genesisHash = 2;
+  types_pb.H256 currentHeight = 3;
+}
+
+// todo
+message Metadata {
+  string version = 1;
+}
+
+message TopicScoreSnapshot {
+  // Time a peer has spent in the gossip mesh.
+  uint64 time_in_mesh = 1;
+  // This is the number of first message deliveries in the topic.
+  float first_message_deliveries = 2;
+  // This is the number of message deliveries in the mesh, within the MeshMessageDeliveriesWindow of
+  // message validation.It effectively tracks first and near-first
+  // deliveries, ie a message seen from a mesh peer before we have forwarded it to them.
+  float mesh_message_deliveries = 3;
+  // This is the number of invalid messages in the topic from the peer.
+  float invalid_message_deliveries = 4;
+}

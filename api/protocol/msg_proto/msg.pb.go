@@ -266,6 +266,194 @@ func (x *ProtocolHandshakeMessage) GetCurrentHeight() *types_pb.H256 {
 	return nil
 }
 
+//v2
+type Status struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Version       string         `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	GenesisHash   *types_pb.H256 `protobuf:"bytes,2,opt,name=genesisHash,proto3" json:"genesisHash,omitempty"`
+	CurrentHeight *types_pb.H256 `protobuf:"bytes,3,opt,name=currentHeight,proto3" json:"currentHeight,omitempty"`
+}
+
+func (x *Status) Reset() {
+	*x = Status{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_msg_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Status) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Status) ProtoMessage() {}
+
+func (x *Status) ProtoReflect() protoreflect.Message {
+	mi := &file_msg_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Status.ProtoReflect.Descriptor instead.
+func (*Status) Descriptor() ([]byte, []int) {
+	return file_msg_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Status) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *Status) GetGenesisHash() *types_pb.H256 {
+	if x != nil {
+		return x.GenesisHash
+	}
+	return nil
+}
+
+func (x *Status) GetCurrentHeight() *types_pb.H256 {
+	if x != nil {
+		return x.CurrentHeight
+	}
+	return nil
+}
+
+type Metadata struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Version string `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+}
+
+func (x *Metadata) Reset() {
+	*x = Metadata{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_msg_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Metadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Metadata) ProtoMessage() {}
+
+func (x *Metadata) ProtoReflect() protoreflect.Message {
+	mi := &file_msg_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Metadata.ProtoReflect.Descriptor instead.
+func (*Metadata) Descriptor() ([]byte, []int) {
+	return file_msg_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Metadata) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+type TopicScoreSnapshot struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Time a peer has spent in the gossip mesh.
+	TimeInMesh uint64 `protobuf:"varint,1,opt,name=time_in_mesh,json=timeInMesh,proto3" json:"time_in_mesh,omitempty"`
+	// This is the number of first message deliveries in the topic.
+	FirstMessageDeliveries float32 `protobuf:"fixed32,2,opt,name=first_message_deliveries,json=firstMessageDeliveries,proto3" json:"first_message_deliveries,omitempty"`
+	// This is the number of message deliveries in the mesh, within the MeshMessageDeliveriesWindow of
+	// message validation.It effectively tracks first and near-first
+	// deliveries, ie a message seen from a mesh peer before we have forwarded it to them.
+	MeshMessageDeliveries float32 `protobuf:"fixed32,3,opt,name=mesh_message_deliveries,json=meshMessageDeliveries,proto3" json:"mesh_message_deliveries,omitempty"`
+	// This is the number of invalid messages in the topic from the peer.
+	InvalidMessageDeliveries float32 `protobuf:"fixed32,4,opt,name=invalid_message_deliveries,json=invalidMessageDeliveries,proto3" json:"invalid_message_deliveries,omitempty"`
+}
+
+func (x *TopicScoreSnapshot) Reset() {
+	*x = TopicScoreSnapshot{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_msg_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopicScoreSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopicScoreSnapshot) ProtoMessage() {}
+
+func (x *TopicScoreSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_msg_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopicScoreSnapshot.ProtoReflect.Descriptor instead.
+func (*TopicScoreSnapshot) Descriptor() ([]byte, []int) {
+	return file_msg_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TopicScoreSnapshot) GetTimeInMesh() uint64 {
+	if x != nil {
+		return x.TimeInMesh
+	}
+	return 0
+}
+
+func (x *TopicScoreSnapshot) GetFirstMessageDeliveries() float32 {
+	if x != nil {
+		return x.FirstMessageDeliveries
+	}
+	return 0
+}
+
+func (x *TopicScoreSnapshot) GetMeshMessageDeliveries() float32 {
+	if x != nil {
+		return x.MeshMessageDeliveries
+	}
+	return 0
+}
+
+func (x *TopicScoreSnapshot) GetInvalidMessageDeliveries() float32 {
+	if x != nil {
+		return x.InvalidMessageDeliveries
+	}
+	return 0
+}
+
 var File_msg_proto protoreflect.FileDescriptor
 
 var file_msg_proto_rawDesc = []byte{
@@ -304,11 +492,36 @@ var file_msg_proto_rawDesc = []byte{
 	0x73, 0x68, 0x12, 0x34, 0x0a, 0x0d, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x48, 0x65, 0x69,
 	0x67, 0x68, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x74, 0x79, 0x70, 0x65,
 	0x73, 0x5f, 0x70, 0x62, 0x2e, 0x48, 0x32, 0x35, 0x36, 0x52, 0x0d, 0x63, 0x75, 0x72, 0x72, 0x65,
-	0x6e, 0x74, 0x48, 0x65, 0x69, 0x67, 0x68, 0x74, 0x42, 0x32, 0x5a, 0x30, 0x67, 0x69, 0x74, 0x68,
-	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x61, 0x6d, 0x61, 0x7a, 0x65, 0x63, 0x68, 0x61, 0x69,
-	0x6e, 0x2f, 0x61, 0x6d, 0x63, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63,
-	0x6f, 0x6c, 0x2f, 0x6d, 0x73, 0x67, 0x5f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x6e, 0x74, 0x48, 0x65, 0x69, 0x67, 0x68, 0x74, 0x22, 0x8a, 0x01, 0x0a, 0x06, 0x53, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x30, 0x0a,
+	0x0b, 0x67, 0x65, 0x6e, 0x65, 0x73, 0x69, 0x73, 0x48, 0x61, 0x73, 0x68, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x74, 0x79, 0x70, 0x65, 0x73, 0x5f, 0x70, 0x62, 0x2e, 0x48, 0x32,
+	0x35, 0x36, 0x52, 0x0b, 0x67, 0x65, 0x6e, 0x65, 0x73, 0x69, 0x73, 0x48, 0x61, 0x73, 0x68, 0x12,
+	0x34, 0x0a, 0x0d, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x48, 0x65, 0x69, 0x67, 0x68, 0x74,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x74, 0x79, 0x70, 0x65, 0x73, 0x5f, 0x70,
+	0x62, 0x2e, 0x48, 0x32, 0x35, 0x36, 0x52, 0x0d, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x48,
+	0x65, 0x69, 0x67, 0x68, 0x74, 0x22, 0x24, 0x0a, 0x08, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74,
+	0x61, 0x12, 0x18, 0x0a, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0xe6, 0x01, 0x0a, 0x12,
+	0x54, 0x6f, 0x70, 0x69, 0x63, 0x53, 0x63, 0x6f, 0x72, 0x65, 0x53, 0x6e, 0x61, 0x70, 0x73, 0x68,
+	0x6f, 0x74, 0x12, 0x20, 0x0a, 0x0c, 0x74, 0x69, 0x6d, 0x65, 0x5f, 0x69, 0x6e, 0x5f, 0x6d, 0x65,
+	0x73, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x74, 0x69, 0x6d, 0x65, 0x49, 0x6e,
+	0x4d, 0x65, 0x73, 0x68, 0x12, 0x38, 0x0a, 0x18, 0x66, 0x69, 0x72, 0x73, 0x74, 0x5f, 0x6d, 0x65,
+	0x73, 0x73, 0x61, 0x67, 0x65, 0x5f, 0x64, 0x65, 0x6c, 0x69, 0x76, 0x65, 0x72, 0x69, 0x65, 0x73,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x02, 0x52, 0x16, 0x66, 0x69, 0x72, 0x73, 0x74, 0x4d, 0x65, 0x73,
+	0x73, 0x61, 0x67, 0x65, 0x44, 0x65, 0x6c, 0x69, 0x76, 0x65, 0x72, 0x69, 0x65, 0x73, 0x12, 0x36,
+	0x0a, 0x17, 0x6d, 0x65, 0x73, 0x68, 0x5f, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x5f, 0x64,
+	0x65, 0x6c, 0x69, 0x76, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x02, 0x52,
+	0x15, 0x6d, 0x65, 0x73, 0x68, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x44, 0x65, 0x6c, 0x69,
+	0x76, 0x65, 0x72, 0x69, 0x65, 0x73, 0x12, 0x3c, 0x0a, 0x1a, 0x69, 0x6e, 0x76, 0x61, 0x6c, 0x69,
+	0x64, 0x5f, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x5f, 0x64, 0x65, 0x6c, 0x69, 0x76, 0x65,
+	0x72, 0x69, 0x65, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x02, 0x52, 0x18, 0x69, 0x6e, 0x76, 0x61,
+	0x6c, 0x69, 0x64, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x44, 0x65, 0x6c, 0x69, 0x76, 0x65,
+	0x72, 0x69, 0x65, 0x73, 0x42, 0x32, 0x5a, 0x30, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
+	0x6f, 0x6d, 0x2f, 0x61, 0x6d, 0x61, 0x7a, 0x65, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x2f, 0x61, 0x6d,
+	0x63, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6c, 0x2f, 0x6d,
+	0x73, 0x67, 0x5f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -323,25 +536,30 @@ func file_msg_proto_rawDescGZIP() []byte {
 	return file_msg_proto_rawDescData
 }
 
-var file_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_msg_proto_goTypes = []interface{}{
 	(*MessageData)(nil),              // 0: msg_proto.MessageData
 	(*NewBlockMessageData)(nil),      // 1: msg_proto.NewBlockMessageData
 	(*ProtocolHandshakeMessage)(nil), // 2: msg_proto.ProtocolHandshakeMessage
-	(*types_pb.H256)(nil),            // 3: types_pb.H256
-	(*types_pb.Block)(nil),           // 4: types_pb.Block
+	(*Status)(nil),                   // 3: msg_proto.Status
+	(*Metadata)(nil),                 // 4: msg_proto.Metadata
+	(*TopicScoreSnapshot)(nil),       // 5: msg_proto.TopicScoreSnapshot
+	(*types_pb.H256)(nil),            // 6: types_pb.H256
+	(*types_pb.Block)(nil),           // 7: types_pb.Block
 }
 var file_msg_proto_depIdxs = []int32{
-	3, // 0: msg_proto.NewBlockMessageData.hash:type_name -> types_pb.H256
-	3, // 1: msg_proto.NewBlockMessageData.Number:type_name -> types_pb.H256
-	4, // 2: msg_proto.NewBlockMessageData.block:type_name -> types_pb.Block
-	3, // 3: msg_proto.ProtocolHandshakeMessage.genesisHash:type_name -> types_pb.H256
-	3, // 4: msg_proto.ProtocolHandshakeMessage.currentHeight:type_name -> types_pb.H256
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	6, // 0: msg_proto.NewBlockMessageData.hash:type_name -> types_pb.H256
+	6, // 1: msg_proto.NewBlockMessageData.Number:type_name -> types_pb.H256
+	7, // 2: msg_proto.NewBlockMessageData.block:type_name -> types_pb.Block
+	6, // 3: msg_proto.ProtocolHandshakeMessage.genesisHash:type_name -> types_pb.H256
+	6, // 4: msg_proto.ProtocolHandshakeMessage.currentHeight:type_name -> types_pb.H256
+	6, // 5: msg_proto.Status.genesisHash:type_name -> types_pb.H256
+	6, // 6: msg_proto.Status.currentHeight:type_name -> types_pb.H256
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_msg_proto_init() }
@@ -386,6 +604,42 @@ func file_msg_proto_init() {
 				return nil
 			}
 		}
+		file_msg_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Status); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_msg_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Metadata); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_msg_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopicScoreSnapshot); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -393,7 +647,7 @@ func file_msg_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_msg_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

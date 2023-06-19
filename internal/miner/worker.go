@@ -329,15 +329,15 @@ func (w *worker) resultLoop() error {
 				logs = append(logs, receipt.Logs...)
 			}
 
-			if len(logs) > 0 {
-				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
-			}
-
 			// Commit block and state to database.
 			err := w.chain.WriteBlockWithState(blk, receipts, task.state, task.nopay)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
+			}
+
+			if len(logs) > 0 {
+				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
 			}
 
 			log.Info("🔨 Successfully sealed new block",
@@ -400,6 +400,10 @@ func (w *worker) taskLoop() error {
 				delete(w.pendingTasks, sealHash)
 				w.mu.Unlock()
 				log.Warn("delete task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot, "err", err)
+				if errors.Is(err, consensus.ErrNotEnoughSign) {
+					time.Sleep(1 * time.Second)
+					w.startCh <- struct{}{}
+				}
 			} else {
 				log.Debug("send task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot)
 			}

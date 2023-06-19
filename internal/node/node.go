@@ -519,11 +519,11 @@ func (n *Node) startRPC() error {
 	}
 	if n.config.NodeCfg.HTTPHost != "" {
 
-		//todo
+		//todo []string{"eth", "web3", "debug", "net", "apoa", "txpool", "apos"}
 		config := httpConfig{
 			CorsAllowedOrigins: []string{},
 			Vhosts:             []string{"*"},
-			Modules:            []string{"eth", "web3", "debug", "net", "apoa", "txpool", "apos"},
+			Modules:            utils.SplitAndTrim(n.config.NodeCfg.HTTPApi),
 			prefix:             "",
 		}
 		port, _ := strconv.Atoi(n.config.NodeCfg.HTTPPort)
@@ -546,7 +546,7 @@ func (n *Node) startRPC() error {
 		}
 		//todo
 		config := wsConfig{
-			Modules:   []string{"eth", "web3", "debug", "net", "apoa", "txpool", "apos"},
+			Modules:   utils.SplitAndTrim(n.config.NodeCfg.WSApi),
 			Origins:   []string{"*"},
 			prefix:    "",
 			jwtSecret: []byte{},

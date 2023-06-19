@@ -17,10 +17,11 @@
 package utils
 
 import (
-	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/rlp"
-	"golang.org/x/crypto/sha3"
+	"hash"
+
+	"github.com/minio/sha256-simd"
 	"sync"
 )
 
@@ -33,26 +34,49 @@ var (
 
 // HasherPool holds LegacyKeccak256 hashers for rlpHash.
 var HasherPool = sync.Pool{
-	New: func() interface{} { return sha3.NewLegacyKeccak256() },
+	New: func() interface{} { return sha256.New() },
 }
 
 func RlpHash(x interface{}) (h types.Hash) {
-	sha := HasherPool.Get().(crypto.KeccakState)
+	sha := HasherPool.Get().(hash.Hash)
 	defer HasherPool.Put(sha)
 	sha.Reset()
 	rlp.Encode(sha, x)
-	sha.Read(h[:])
+	sha.Sum(h[:])
 	return h
 }
 
 // PrefixedRlpHash writes the prefix into the hasher before rlp-encoding x.
 // It's used for typed transactions.
 func PrefixedRlpHash(prefix byte, x interface{}) (h types.Hash) {
-	sha := HasherPool.Get().(crypto.KeccakState)
+	sha := HasherPool.Get().(hash.Hash)
 	defer HasherPool.Put(sha)
 	sha.Reset()
 	sha.Write([]byte{prefix})
 	rlp.Encode(sha, x)
-	sha.Read(h[:])
+	sha.Sum(h[:])
 	return h
+}
+
+// Hash defines a function that returns the sha256 checksum of the data passed in.
+// https://github.com/ethereum/consensus-specs/blob/v0.9.3/specs/core/0_beacon-chain.md#hash
+func Hash(data []byte) [32]byte {
+	h, ok := HasherPool.Get().(hash.Hash)
+	if !ok {
+		h = sha256.New()
+	}
+	defer HasherPool.Put(h)
+	h.Reset()
+
+	var b [32]byte
+
+	// The hash interface never returns an error, for that reason
+	// we are not handling the error below. For reference, it is
+	// stated here https://golang.org/pkg/hash/#Hash
+
+	// #nosec G104
+	h.Write(data)
+	h.Sum(b[:0])
+
+	return b
 }

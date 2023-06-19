@@ -5,13 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/amazechain/amc/utils"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/c2h5oh/datasize"
-	common2 "github.com/ledgerwatch/erigon-lib/common"
 	"github.com/ledgerwatch/erigon-lib/common/dbg"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	mdbx2 "github.com/ledgerwatch/erigon-lib/kv/mdbx"
@@ -135,7 +135,7 @@ func backupTable(ctx context.Context, src kv.RoDB, srcTx kv.Tx, dst kv.RwDB, tab
 			var m runtime.MemStats
 			dbg.ReadMemStats(&m)
 			log.Info("Progress", "table", table, "progress", fmt.Sprintf("%.1fm/%.1fm", float64(i)/1_000_000, float64(total)/1_000_000), "key", hex.EncodeToString(k),
-				"alloc", common2.ByteCount(m.Alloc), "sys", common2.ByteCount(m.Sys))
+				"alloc", utils.ByteCount(m.Alloc), "sys", utils.ByteCount(m.Sys))
 		default:
 		}
 	}

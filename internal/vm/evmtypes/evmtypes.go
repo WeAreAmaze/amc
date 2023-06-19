@@ -98,4 +98,6 @@ type IntraBlockState interface {
 	Snapshot() int
 
 	AddLog(*block.Log)
+
+	Sender() libcommon.Address
 }

@@ -591,7 +591,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs
 	header := env.header
 	noop := state.NewNoopWriter()
 	var miningCommitTx = func(txn *transaction.Transaction, coinbase types.Address, vmConfig *vm2.Config, chainConfig *params.ChainConfig, ibs *state.IntraBlockState, current *environment) ([]*block.Log, error) {
-		ibs.Prepare(txn.Hash(), types.Hash{}, env.tcount)
+		ibs.Prepare(txn.Hash(), types.Hash{}, env.tcount, *txn.From())
 		gasSnap := current.gasPool.Gas()
 		snap := ibs.Snapshot()
 		log.Debug("addTransactionsToMiningBlock", "txn hash", txn.Hash())

@@ -178,9 +178,9 @@ func (d Deposit) eventLoop() {
 				if nil != d.consensusConfig.APos && bytes.Compare(l.Address[:], depositContractByes[:]) == 0 {
 					log.Trace("log event topic[0]= ", "hash", l.Topics[0], "depositEventSignature", depositEventSignature, "withdrawnSignature", withdrawnSignature)
 					if l.Topics[0] == depositEventSignature {
-						d.handleDepositEvent(l.TxHash, l.TxAddress, l.Data)
+						d.handleDepositEvent(l.TxHash, l.Sender, l.Data)
 					} else if l.Topics[0] == withdrawnSignature {
-						d.handleWithdrawnEvent(l.TxHash, l.TxAddress, l.Data)
+						d.handleWithdrawnEvent(l.TxHash, l.Sender, l.Data)
 					}
 				}
 			}
@@ -189,9 +189,9 @@ func (d Deposit) eventLoop() {
 				if nil != d.consensusConfig.APos && bytes.Compare(l.Address[:], depositContractByes[:]) == 0 {
 					log.Trace("log event topic[0]= ", "hash", l.Topics[0], "depositEventSignature", depositEventSignature, "withdrawnSignature", withdrawnSignature)
 					if l.Topics[0] == depositEventSignature {
-						d.handleUndoDepositEvent(l.TxHash, l.TxAddress, l.Data)
+						d.handleUndoDepositEvent(l.TxHash, l.Sender, l.Data)
 					} else if l.Topics[0] == withdrawnSignature {
-						d.handleUndoWithdrawnEvent(l.TxHash, l.TxAddress, l.Data)
+						d.handleUndoWithdrawnEvent(l.TxHash, l.Sender, l.Data)
 					}
 				}
 			}

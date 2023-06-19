@@ -903,6 +903,7 @@ func makeLog(size int) executionFunc {
 			Address: scope.Contract.Address(),
 			Topics:  topics,
 			Data:    d,
+			Sender:  interpreter.evm.IntraBlockState().Sender(),
 			// This is a non-consensus field, but assigned here because
 			// core/state doesn't know the current block number.
 			BlockNumber: uint256.NewInt(interpreter.evm.Context().BlockNumber),

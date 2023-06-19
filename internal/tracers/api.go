@@ -1011,7 +1011,7 @@ func (api *API) traceTx(ctx context.Context, message *transaction.Message, txctx
 	defer cancel()
 
 	// Call Prepare to clear out the statedb access list
-	statedb.Prepare(txctx.TxHash, txctx.BlockHash, txctx.TxIndex)
+	statedb.Prepare(txctx.TxHash, txctx.BlockHash, txctx.TxIndex, common.Address{})
 	if _, err = core.ApplyMessage(vmenv, message, new(common2.GasPool).AddGas(message.Gas()), true, false); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}

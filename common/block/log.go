@@ -41,6 +41,10 @@ type Log struct {
 	BlockNumber *uint256.Int `json:"blockNumber"`
 	// hash of the transaction
 	TxHash types.Hash `json:"transactionHash" gencodec:"required"`
+
+	// Address of the transaction
+	TxAddress types.Address `json:"-"`
+
 	// index of the transaction in the block
 	TxIndex uint `json:"transactionIndex" gencodec:"required"`
 	// hash of the block in which the transaction was included

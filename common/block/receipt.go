@@ -121,11 +121,12 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash types.Hash, num
 		rs[i].BlockHash = hash
 		rs[i].BlockNumber = new(uint256.Int).SetUint64(number)
 		rs[i].TransactionIndex = uint(i)
+		// Deriving the signer is expensive, only do if it's actually needed
+		from, _ := transaction.Sender(signer, txs[i])
 
 		// The contract address can be derived from the transaction itself
 		if txs[i].To() == nil {
-			// Deriving the signer is expensive, only do if it's actually needed
-			from, _ := transaction.Sender(signer, txs[i])
+
 			rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
 		} else {
 			rs[i].ContractAddress = types.Address{}
@@ -145,6 +146,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash types.Hash, num
 			rs[i].Logs[j].TxHash = rs[i].TxHash
 			rs[i].Logs[j].TxIndex = uint(i)
 			rs[i].Logs[j].Index = logIndex
+			rs[i].Logs[j].Sender = from
 			logIndex++
 		}
 	}

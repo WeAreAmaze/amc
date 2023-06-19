@@ -108,7 +108,7 @@ func checkBlock2(getHashF func(n uint64) types.Hash, block *block2.Block, ibs *s
 
 	engine := apos.NewFaker()
 	for i, tx := range block.Transactions() {
-		ibs.Prepare(tx.Hash(), block.Hash(), i)
+		ibs.Prepare(tx.Hash(), block.Hash(), i, *tx.From())
 		_, _, err := internal.ApplyTransaction(chainConfig, getHashF, engine, &coinbase, gp, ibs, noop, header, tx, usedGas, cfg)
 		if err != nil {
 

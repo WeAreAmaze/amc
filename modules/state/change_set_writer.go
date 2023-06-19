@@ -140,9 +140,9 @@ func (w *ChangeSetWriter) CreateContract(address types.Address) error {
 }
 
 func (w *ChangeSetWriter) WriteChangeSets() error {
-	//if w.blockNumber == 547600 {
-	//	changeset.Truncate(w.db, 547600)
-	//}
+	if w.blockNumber == 547600 {
+		changeset.Truncate(w.db, 547600)
+	}
 	accountChanges, err := w.GetAccountChanges()
 	if err != nil {
 		return err

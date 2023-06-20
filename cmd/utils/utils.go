@@ -17,9 +17,6 @@
 package utils
 
 import (
-	// Tool imports for go:generate.
-	_ "github.com/fjl/gencodec"
-
 	"fmt"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"

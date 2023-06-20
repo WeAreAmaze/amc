@@ -278,7 +278,7 @@ func (s *Service) Started() bool {
 
 // Encoding returns the configured networking encoding.
 func (_ *Service) Encoding() encoder.NetworkEncoding {
-	return nil
+	return &encoder.SszNetworkEncoder{}
 }
 
 // PubSub returns the p2p pubsub framework.

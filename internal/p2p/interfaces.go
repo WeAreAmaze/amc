@@ -2,10 +2,9 @@ package p2p
 
 import (
 	"context"
+	"github.com/amazechain/amc/api/protocol/msg_proto"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/peers"
-	"github.com/influxdata/flux/metadata"
-
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -26,6 +25,9 @@ type P2P interface {
 	ConnectionHandler
 	PeersProvider
 	MetadataProvider
+
+	Start()
+	Stop() error
 }
 
 // Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
@@ -96,6 +98,6 @@ type PeersProvider interface {
 
 // MetadataProvider returns the metadata related information for the local peer.
 type MetadataProvider interface {
-	Metadata() metadata.Metadata
-	MetadataSeq() uint64
+	Metadata() *msg_proto.Metadata
+	//MetadataSeq() uint64
 }

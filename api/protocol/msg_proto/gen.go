@@ -16,4 +16,6 @@
 
 package msg_proto
 
-//go:generate protoc -I=../ -I=. -I=../include --go_out=paths=source_relative:. msg.proto
+////go:generate protoc -I=../ -I=. -I=../include --go_out=paths=source_relative:. msg.proto
+//go:generate protoc  -I=../ -I=. -I=../include --go-cast_out=paths=source_relative:. msg.proto
+//go:generate sszgen -path=. -objs=Status -include=../types_pb -output=generated.ssz.go

@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
-package types_pb
+package ext
 
-////go:generate protoc --plugin=/Users/mac/go/bin/protoc-gen-go-cast -I=../ -I=. -I=../include --go-cast_out=plugins=protoc-gen-go-cast,paths=source_relative:. types.proto
-//go:generate protoc  -I=../ -I=. -I=../include --go-cast_out=paths=source_relative:. types.proto
-//go:generate sszgen -path=. -objs=H128,H160,H256,H384,H768,H512,H1024,H2048,Header -output=generated.ssz.go
+//go:generate protoc -I=../ -I=. -I=../include --go_out=paths=source_relative:. options.proto

@@ -46,9 +46,9 @@ message ProtocolHandshakeMessage {
 
 //v2
 message Status {
-  string version = 1;
-  types_pb.H256 genesisHash = 2;
-  types_pb.H256 currentHeight = 3;
+//  string version = 1;
+  types_pb.H256 genesisHash = 1;
+  types_pb.H256 currentHeight = 2;
 }
 
 // todo

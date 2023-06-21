@@ -3,10 +3,10 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/amazechain/amc/internal/p2p/discover"
+	"github.com/amazechain/amc/internal/p2p/enode"
+	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/utils"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"net"
 	"time"
 

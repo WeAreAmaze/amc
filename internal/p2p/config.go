@@ -1,9 +1,5 @@
 package p2p
 
-import (
-	"github.com/ledgerwatch/erigon-lib/kv"
-)
-
 // Config for the p2p service. These parameters are set from application level flags
 // to initialize the p2p service.
 type Config struct {
@@ -27,5 +23,5 @@ type Config struct {
 	DenyListCIDR        []string
 	//highestBlockSub event.Subscription // Subscription for removed log event
 	//highestBlockCh  chan common.ChainHighestBlock
-	DB kv.Getter
+	//DB kv.Getter
 }

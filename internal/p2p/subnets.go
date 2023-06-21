@@ -3,10 +3,10 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"github.com/amazechain/amc/internal/p2p/enode"
 	"math"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )

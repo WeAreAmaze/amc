@@ -276,7 +276,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		AllowListCIDR:     "",
 		DenyListCIDR:      []string{},
 		EnableUPnP:        true,
-		DB:                chainKv.(kv.Getter),
 	})
 
 	node = Node{

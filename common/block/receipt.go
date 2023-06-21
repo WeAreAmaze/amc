@@ -257,6 +257,14 @@ func (r *Receipt) fromProtoMessage(message proto.Message) error {
 	return nil
 }
 
+// Copy creates a deep copy of the Receipt.
+func (r *Receipt) Copy() *Receipt {
+	pb := r.toProtoMessage()
+	cr := new(Receipt)
+	cr.fromProtoMessage(pb)
+	return cr
+}
+
 // storedReceipt is the consensus encoding of a receipt.
 type storedReceipt struct {
 	PostStateOrStatus uint64

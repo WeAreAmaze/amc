@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/common/math"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
@@ -82,7 +81,7 @@ const (
 
 type BlockChain struct {
 	chainConfig  *params.ChainConfig
-	engineConf   *conf.ConsensusConfig
+	engineConf   *params.ConsensusConfig
 	ctx          context.Context
 	cancel       context.CancelFunc
 	genesisBlock block2.IBlock
@@ -139,7 +138,7 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, pubsub common.IPubSub, config *conf.Config) (common.IBlockChain, error) {
+func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, pubsub common.IPubSub, pConf *params.ChainConfig, eConf *params.ConsensusConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	var current *block2.Block
 	_ = db.View(c, func(tx kv.Tx) error {
@@ -157,8 +156,8 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	numberCache, _ := lru.New[types.Hash, uint64](numberCacheLimit)
 	headerCache, _ := lru.New[types.Hash, *block2.Header](headerCacheLimit)
 	bc := &BlockChain{
-		chainConfig:  config.GenesisBlockCfg.Config, // Chain & network configuration
-		engineConf:   config.GenesisBlockCfg.Engine,
+		chainConfig:  pConf, // Chain & network configuration
+		engineConf:   eConf,
 		genesisBlock: genesisBlock,
 		blocks:       []block2.IBlock{},
 		//currentBlock:  current,
@@ -185,8 +184,8 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	bc.currentBlock.Store(current)
 	bc.forker = NewForkChoice(bc, nil)
 	//bc.process = avm.NewVMProcessor(ctx, bc, engine)
-	bc.process = NewStateProcessor(config.GenesisBlockCfg.Config, bc, engine)
-	bc.validator = NewBlockValidator(config.GenesisBlockCfg.Config, bc, engine)
+	bc.process = NewStateProcessor(pConf, bc, engine)
+	bc.validator = NewBlockValidator(pConf, bc, engine)
 
 	return bc, nil
 }

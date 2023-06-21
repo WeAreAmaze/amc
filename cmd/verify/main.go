@@ -25,7 +25,6 @@ import (
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/crypto/bls"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/state"
 	"github.com/go-kit/kit/transport/http/jsonrpc"
@@ -114,7 +113,7 @@ func main() {
 					}
 
 					root := verify(ctx, bean)
-					res := api.AggSign{}
+					res := aggsign.AggSign{}
 					res.Number = bean.Entire.Header.Number.Uint64()
 					res.Address = addressKey
 					res.StateRoot = root

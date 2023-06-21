@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/conf"
 	"math/big"
 	"sync"
 
@@ -36,7 +37,6 @@ import (
 
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 )
 
 var ErrGenesisNoConfig = errors.New("genesis has no chain configuration")
@@ -137,7 +137,7 @@ func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) 
 
 	var ExtraData []byte
 
-	switch g.GenesisBlockConfig.Engine.EngineName {
+	switch g.GenesisBlockConfig.Config.Engine.EngineName {
 	case "APoaEngine", "APosEngine":
 
 		var signers []types.Address
@@ -163,7 +163,7 @@ func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) 
 		}
 
 	default:
-		return nil, nil, fmt.Errorf("invalid engine name %s", g.GenesisBlockConfig.Engine.Etherbase)
+		return nil, nil, fmt.Errorf("invalid engine name %s", g.GenesisBlockConfig.Config.Engine.Etherbase)
 	}
 
 	head := &block2.Header{
@@ -174,7 +174,7 @@ func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) 
 		ReceiptHash: types.Hash{0},
 		Difficulty:  g.GenesisBlockConfig.Difficulty,
 		Number:      uint256.NewInt(g.GenesisBlockConfig.Number),
-		GasLimit:    g.GenesisBlockConfig.Engine.GasCeil,
+		GasLimit:    g.GenesisBlockConfig.Config.Engine.GasCeil,
 		GasUsed:     g.GenesisBlockConfig.GasUsed,
 		Time:        uint64(g.GenesisBlockConfig.Timestamp),
 		Extra:       g.GenesisBlockConfig.ExtraData,

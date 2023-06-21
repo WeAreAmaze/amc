@@ -35,9 +35,9 @@ type GenesisBlockConfig struct {
 	Mixhash    types.Hash    `json:"mixHash"`
 	Coinbase   types.Address `json:"coinbase"`
 
-	Engine *ConsensusConfig `json:"engine" yaml:"engine"`
-	Miners []string         `json:"miners" yaml:"miners"`
-	Alloc  []Allocate       `json:"alloc" yaml:"alloc"  gencodec:"required"`
+	//Engine *ConsensusConfig `json:"engine" yaml:"engine"`
+	Miners []string   `json:"miners" yaml:"miners"`
+	Alloc  []Allocate `json:"alloc" yaml:"alloc"  gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.

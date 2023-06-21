@@ -3,7 +3,6 @@ package apos
 import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/state"
@@ -98,7 +97,7 @@ func AccumulateRewards(r *Reward, number *uint256.Int, chain consensus.ChainHead
 	return rewardMap, unpayMap, nil
 }
 
-func doReward(chainConf *params.ChainConfig, consConf *conf.ConsensusConfig, state *state.IntraBlockState, header *block.Header, chain consensus.ChainHeaderReader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
+func doReward(chainConf *params.ChainConfig, consConf *params.ConsensusConfig, state *state.IntraBlockState, header *block.Header, chain consensus.ChainHeaderReader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
 	beijing, _ := uint256.FromBig(chainConf.BeijingBlock)
 	number := header.Number64()
 	var rewards block.Rewards

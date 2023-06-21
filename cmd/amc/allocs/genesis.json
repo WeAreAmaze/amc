@@ -20,24 +20,25 @@
     "berlinBlock": 0,
     "londonBlock": 0,
     "arrowGlacierBlock": 0,
-    "beijingBlock": 40000
-  },
-  "engine": {
-    "name": "APosEngine",
-    "period": 8,
-    "gasFloor": 0,
-    "gasCeil": 30000000,
-    "apos": {
-      "epoch": 3000,
-      "checkpointInterval": 0,
-      "inmemorySnapshots": 0,
-      "inmemorySignatures": 0,
-      "inMemory": false,
-      "rewardEpoch": 10800,
-      "rewardLimit": 500000000000000000,
-      "depositContract": "0xE78629fCEb0aB8Fb4901AE67d373C061fbd8AA14"
+    "beijingBlock": 40000,
+    "engine": {
+      "name": "APosEngine",
+      "period": 8,
+      "gasFloor": 0,
+      "gasCeil": 30000000,
+      "apos": {
+        "epoch": 3000,
+        "checkpointInterval": 0,
+        "inmemorySnapshots": 0,
+        "inmemorySignatures": 0,
+        "inMemory": false,
+        "rewardEpoch": 10800,
+        "rewardLimit": 500000000000000000,
+        "depositContract": "0xE78629fCEb0aB8Fb4901AE67d373C061fbd8AA14"
+      }
     }
   },
+
   "alloc": [
     {
       "address": "AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21",

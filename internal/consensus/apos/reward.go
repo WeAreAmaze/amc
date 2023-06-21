@@ -31,7 +31,6 @@ import (
 	"github.com/amazechain/amc/params"
 
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -62,7 +61,7 @@ func (r RewardResponseValues) Swap(i, j int) {
 }
 
 type Reward struct {
-	config      *conf.ConsensusConfig
+	config      *params.ConsensusConfig
 	chainConfig *params.ChainConfig
 
 	ctx         context.Context
@@ -89,7 +88,7 @@ func (r AccountRewards) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
-func newReward(config *conf.ConsensusConfig, chainConfig *params.ChainConfig) *Reward {
+func newReward(config *params.ConsensusConfig, chainConfig *params.ChainConfig) *Reward {
 	rewardLimitBig, _ := uint256.FromBig(config.APos.RewardLimit)
 	return &Reward{
 		ctx: context.TODO(), config: config, chainConfig: chainConfig,

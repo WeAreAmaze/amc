@@ -1,10 +1,10 @@
 package p2p
 
 import (
+	"github.com/amazechain/amc/internal/p2p/enode"
+	"github.com/amazechain/amc/internal/p2p/enr"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/pkg/errors"
 )
 

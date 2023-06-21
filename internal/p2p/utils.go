@@ -8,13 +8,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/utils"
 	"net"
 	"os"
 	"path"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/pkg/errors"
 )

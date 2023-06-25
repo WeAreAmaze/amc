@@ -22,3 +22,24 @@ type NetWorkConfig struct {
 	LocalPeerKey     string   `json:"private" yaml:"network_private"`
 	Bootstrapped     bool     `json:"discover" yaml:"discover"`
 }
+
+type P2PConfig struct {
+	NoDiscovery         bool     `json:"no_discovery" yaml:"no_discovery"`
+	EnableUPnP          bool     `json:"enable_upnp" yaml:"enable_upnp"`
+	StaticPeerID        bool     `json:"static_peer_id" yaml:"static_peer_id"`
+	StaticPeers         []string `json:"static_peers" yaml:"static_peers"`
+	BootstrapNodeAddr   []string `json:"bootstrap_node_addr" yaml:"bootstrap_node_addr"`
+	Discv5BootStrapAddr []string `json:"discv5_bootstrap_addr" yaml:"discv5_bootstrap_addr"`
+	RelayNodeAddr       string   `json:"relay_node_addr" yaml:"relay_node_addr"`
+	LocalIP             string   `json:"local_ip" yaml:"local_ip"`
+	HostAddress         string   `json:"host_address" yaml:"host_address"`
+	HostDNS             string   `json:"host_dns" yaml:"host_dns"`
+	PrivateKey          string   `json:"private_key" yaml:"private_key"`
+	DataDir             string   `json:"data_dir" yaml:"data_dir"`
+	MetaDataDir         string   `json:"metadata_dir" yaml:"metadata_dir"`
+	TCPPort             int      `json:"tcp_port" yaml:"tcp_port"`
+	UDPPort             int      `json:"udp_port" yaml:"udp_port"`
+	MaxPeers            int      `json:"max_peers" yaml:"max_peers"`
+	AllowListCIDR       string   `json:"allow_list_cidr" yaml:"allow_list_cidr"`
+	DenyListCIDR        []string `json:"deny_list_cidr" yaml:"deny_list_cidr"`
+}

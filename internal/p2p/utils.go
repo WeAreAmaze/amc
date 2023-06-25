@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/utils"
 	"net"
@@ -39,7 +40,7 @@ func SerializeENR(record *enr.Record) (string, error) {
 
 // Determines a private key for p2p networking from the p2p service's
 // configuration struct. If no key is found, it generates a new one.
-func privKey(cfg *Config) (*ecdsa.PrivateKey, error) {
+func privKey(cfg *conf.P2PConfig) (*ecdsa.PrivateKey, error) {
 	defaultKeyPath := path.Join(cfg.DataDir, keyPath)
 	privateKeyPath := cfg.PrivateKey
 
@@ -104,12 +105,12 @@ func privKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 // Retrieves node p2p metadata from a set of configuration values
 // from the p2p service.
 // TODO: Figure out how to do a v1/v2 check.
-func metaDataFromConfig(cfg *Config) (*msg_proto.Metadata, error) {
+func metaDataFromConfig(cfg *conf.P2PConfig) (*msg_proto.Metadata, error) {
 	return &msg_proto.Metadata{}, nil
 }
 
 // Attempt to dial an address to verify its connectivity
-func verifyConnectivity(addr string, port uint, protocol string) {
+func verifyConnectivity(addr string, port int, protocol string) {
 	if addr != "" {
 		a := net.JoinHostPort(addr, fmt.Sprintf("%d", port))
 

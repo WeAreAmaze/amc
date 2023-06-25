@@ -45,14 +45,18 @@ func appRun(ctx *cli.Context) error {
 			return err
 		}
 	} else {
-		lAddrs := listenAddress.Value()
-		bns := bootstraps.Value()
-		DefaultConfig.NetworkCfg.ListenersAddress = lAddrs
-
-		DefaultConfig.NetworkCfg.BootstrapPeers = bns
+		DefaultConfig.NetworkCfg.ListenersAddress = listenAddress.Value()
+		DefaultConfig.NetworkCfg.BootstrapPeers = bootstraps.Value()
 		if len(privateKey) > 0 {
 			DefaultConfig.NetworkCfg.LocalPeerKey = privateKey
 		}
+
+		DefaultConfig.P2PCfg.StaticPeers = p2pStaticPeers.Value()
+		DefaultConfig.P2PCfg.BootstrapNodeAddr = p2pBootstrapNode.Value()
+		DefaultConfig.P2PCfg.DenyListCIDR = p2pDenyList.Value()
+
+		//
+		DefaultConfig.P2PCfg.DataDir = DefaultConfig.NodeCfg.DataDir
 	}
 
 	log.Init(DefaultConfig.NodeCfg, DefaultConfig.LoggerCfg)

@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/amazechain/amc/conf"
 	"net"
 	"runtime"
 
@@ -99,7 +100,7 @@ var privateCIDRList = []string{
 
 // configureFilter looks at the provided allow lists and
 // deny lists to appropriately create a filter.
-func configureFilter(cfg *Config) (*multiaddr.Filters, error) {
+func configureFilter(cfg *conf.P2PConfig) (*multiaddr.Filters, error) {
 	addrFilter := multiaddr.NewFilters()
 	var privErr error
 	switch {

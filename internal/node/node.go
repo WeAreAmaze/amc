@@ -258,25 +258,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	// are required to add the backends later on.
 	accman := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.NodeCfg.InsecureUnlockAllowed})
 
-	p2p, err := p2p.NewService(c, &p2p.Config{
-		NoDiscovery:       false,
-		StaticPeers:       []string{},
-		BootstrapNodeAddr: []string{},
-		RelayNodeAddr:     "",
-		DataDir:           cfg.NodeCfg.DataDir,
-		LocalIP:           "0.0.0.0",
-		HostAddress:       "",
-		HostDNS:           "",
-		PrivateKey:        cfg.NodeCfg.NodePrivate,
-		StaticPeerID:      false,
-		MetaDataDir:       "",
-		TCPPort:           6666,
-		UDPPort:           5555,
-		MaxPeers:          2,
-		AllowListCIDR:     "",
-		DenyListCIDR:      []string{},
-		EnableUPnP:        true,
-	})
+	p2p, err := p2p.NewService(c, cfg.P2PCfg)
 
 	node = Node{
 		ctx:             c,

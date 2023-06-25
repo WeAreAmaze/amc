@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
 	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
@@ -110,7 +109,7 @@ func (h Header) Hash() types.Hash {
 	}
 
 	if h.Number.Uint64() == 0 {
-		log.Tracef("genesis header json Marshal: %s", string(buf))
+		//log.Tracef("genesis header json Marshal: %s", string(buf))
 	}
 
 	hash := types.BytesHash(buf)

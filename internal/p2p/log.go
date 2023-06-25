@@ -23,9 +23,9 @@ func logIPAddr(id peer.ID, addrs ...ma.Multiaddr) {
 	}
 }
 
-func logExternalIPAddr(id peer.ID, addr string, port uint) {
+func logExternalIPAddr(id peer.ID, addr string, port int) {
 	if addr != "" {
-		multiAddr, err := MultiAddressBuilder(addr, port)
+		multiAddr, err := MultiAddressBuilder(addr, uint(port))
 		if err != nil {
 			log.Error("Could not create multiaddress", "err", err)
 			return
@@ -34,7 +34,7 @@ func logExternalIPAddr(id peer.ID, addr string, port uint) {
 	}
 }
 
-func logExternalDNSAddr(id peer.ID, addr string, port uint) {
+func logExternalDNSAddr(id peer.ID, addr string, port int) {
 	if addr != "" {
 		p := strconv.FormatUint(uint64(port), 10)
 		log.Info("Node started external p2p server", "multiAddr", "/dns4/"+addr+"/tcp/"+p+"/p2p/"+id.String())

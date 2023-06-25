@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/enode"
 	"github.com/amazechain/amc/internal/p2p/enr"
@@ -57,7 +58,7 @@ type Service struct {
 	isPreGenesis          bool
 	pingMethod            func(ctx context.Context, id peer.ID) error
 	cancel                context.CancelFunc
-	cfg                   *Config
+	cfg                   *conf.P2PConfig
 	peers                 *peers.Status
 	addrFilter            *multiaddr.Filters
 	ipLimiter             *leakybucket.Collector
@@ -80,7 +81,7 @@ type Service struct {
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
-func NewService(ctx context.Context, cfg *Config) (*Service, error) {
+func NewService(ctx context.Context, cfg *conf.P2PConfig) (*Service, error) {
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().

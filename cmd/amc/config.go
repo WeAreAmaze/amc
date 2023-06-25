@@ -74,6 +74,8 @@ var DefaultConfig = conf.Config{
 		InfluxDBOrganization: "",
 	},
 
+	P2PCfg: &conf.P2PConfig{},
+
 	GenesisBlockCfg: ReadGenesis("allocs/genesis.json"),
 	GPO:             conf.FullNodeGPO,
 	Miner: conf.MinerConfig{

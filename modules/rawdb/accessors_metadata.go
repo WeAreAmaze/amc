@@ -62,5 +62,7 @@ func WriteChainConfig(db kv.RwTx, hash types.Hash, cfg *params.ChainConfig) erro
 }
 
 func NewMemoryDatabase(tmpDir string) kv.RwDB {
+	modules.AmcInit()
+	kv.ChaindataTablesCfg = modules.AmcTableCfg
 	return mdbx.NewMDBX(nil).InMem(tmpDir).MustOpen()
 }

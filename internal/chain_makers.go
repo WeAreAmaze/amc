@@ -29,6 +29,7 @@ import (
 	"github.com/amazechain/amc/modules/state"
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
+
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"math/big"
 )
@@ -552,9 +553,7 @@ func GenerateChainWithGenesis(db kv.RwDB, genesis *GenesisBlock, engine consensu
 }
 
 // makeBlockChain creates a deterministic chain of blocks from genesis
-func makeBlockChainWithGenesis(db kv.RwDB, genesis *GenesisBlock, n int, engine consensus.Engine, seed int) (kv.RwDB, []*block.Block) {
-	db, blocks, _ := GenerateChainWithGenesis(db, genesis, engine, n, func(i int, b *BlockGen) {
-		b.SetCoinbase(types.Address{0: byte(seed), 19: byte(i)})
-	})
+func makeBlockChainWithGenesis(db kv.RwDB, genesis *GenesisBlock, n int, engine consensus.Engine, gen func(i int, b *BlockGen)) (kv.RwDB, []*block.Block) {
+	db, blocks, _ := GenerateChainWithGenesis(db, genesis, engine, n, gen)
 	return db, blocks
 }

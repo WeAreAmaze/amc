@@ -234,9 +234,10 @@ var (
 		GrayGlacierBlock:      big.NewInt(0),
 		BeijingBlock:          big.NewInt(0),
 		Engine: &ConsensusConfig{
-			Period:   8,
-			GasFloor: 0,
-			GasCeil:  30000000,
+			EngineName: "APosEngine",
+			Period:     8,
+			GasFloor:   0,
+			GasCeil:    30000000,
 			APos: &APosConfig{
 				Epoch:              3000,
 				RewardEpoch:        10800,

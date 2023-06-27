@@ -889,8 +889,11 @@ func (bc *BlockChain) InsertChain(chain []block2.IBlock) (int, error) {
 				prev.Hash().Bytes()[:4], i, block.Number64().String(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
-	bc.lock.Lock()
+	if !bc.lock.TryLock() {
+		return 0, errChainStopped
+	}
 	defer bc.lock.Unlock()
+
 	return bc.insertChain(chain)
 }
 
@@ -1341,8 +1344,11 @@ func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock, td *uint256.In
 }
 
 func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error {
-	bc.lock.Lock()
+	if !bc.lock.TryLock() {
+		return errChainStopped
+	}
 	defer bc.lock.Unlock()
+
 	_, err := bc.writeBlockWithState(block, receipts, ibs, nopay)
 	return err
 }
@@ -1496,13 +1502,119 @@ func (bc *BlockChain) ReorgNeeded(current block2.IBlock, header block2.IBlock) b
 
 // SetHead set new head
 func (bc *BlockChain) SetHead(head uint64) error {
+	if !bc.lock.TryLock() {
+		return errChainStopped
+	}
+	defer bc.lock.Unlock()
+
+	current := bc.CurrentBlock()
 	newHeadBlock, err := bc.GetBlockByNumber(uint256.NewInt(head))
 	if err != nil {
+		return err
+	}
+	if current.Number64().Cmp(newHeadBlock.Number64()) == 0 {
 		return nil
 	}
-	return bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-		return rawdb.WriteHeadHeaderHash(tx, newHeadBlock.Hash())
-	})
+
+	if current.Number64().Cmp(newHeadBlock.Number64()) < 0 {
+		return errors.New("unbelievable chain")
+	}
+	// 1. collect txs for delete
+	// 2. send remove log event
+	// 3. rewind auth reward
+	// 4. rewind  state, changeSet
+	// 5. delete block, canonical header, receipts, td, transaction
+	// 6. send event remove logs, blocks
+	// pure cache
+
+	var (
+		deletedLogs []*block2.Log
+		deleteTxs   []types.Hash
+		rmBlocks    []block2.IBlock
+	)
+	recoverMap := make(map[types.Address]*uint256.Int)
+	for point := current; point.Hash() != newHeadBlock.Hash(); point = bc.GetBlock(point.ParentHash(), point.Number64().Uint64()-1) {
+		rmBlocks = append(rmBlocks, point)
+		for _, tx := range point.Transactions() {
+			deleteTxs = append(deleteTxs, tx.Hash())
+		}
+		if logs := bc.collectLogs(point.(*block2.Block), true); len(logs) > 0 {
+			deletedLogs = append(deletedLogs, logs...)
+		}
+		if bc.chainConfig.IsBeijing(point.Number64().Uint64()) {
+			beijing, _ := uint256.FromBig(bc.chainConfig.BeijingBlock)
+			if new(uint256.Int).Mod(new(uint256.Int).Sub(point.Number64(), beijing), uint256.NewInt(bc.engineConf.APos.RewardEpoch)).
+				Cmp(uint256.NewInt(0)) == 0 {
+				last := new(uint256.Int).Sub(point.Number64(), uint256.NewInt(bc.engineConf.APos.RewardEpoch))
+				rewardMap, err := bc.RewardsOfEpoch(point.Number64(), last)
+				if nil != err {
+					return err
+				}
+
+				for _, r := range point.Body().Reward() {
+					if _, ok := recoverMap[r.Address]; !ok {
+						recoverMap[r.Address], err = bc.GetAccountRewardUnpaid(r.Address)
+						if nil != err {
+							return err
+						}
+					}
+
+					high := new(uint256.Int).Add(recoverMap[r.Address], r.Amount)
+					if _, ok := rewardMap[r.Address]; ok {
+						recoverMap[r.Address] = high.Sub(high, rewardMap[r.Address])
+					}
+				}
+			}
+		}
+	}
+
+	if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
+		if err := state.UnwindState(context.Background(), tx, current.Number64().Uint64(), newHeadBlock.Number64().Uint64()); nil != err {
+			return fmt.Errorf("uwind state failed, start: %d, end: %d,  %v", current.Number64().Uint64(), newHeadBlock.Number64().Uint64(), err)
+		}
+		if err := bc.writeHeadBlock(tx, newHeadBlock); nil != err {
+			return err
+		}
+
+		for _, t := range deleteTxs {
+			if err := rawdb.DeleteTxLookupEntry(tx, t); nil != err {
+				return err
+			}
+		}
+
+		for i := newHeadBlock.Number64().Uint64() + 1; ; i++ {
+			hash, _ := rawdb.ReadCanonicalHash(tx, i)
+			if hash == (types.Hash{}) {
+				break
+			}
+			rawdb.TruncateCanonicalHash(tx, i, false)
+			rawdb.TruncateTd(tx, i)
+		}
+		for k, v := range recoverMap {
+			if err := rawdb.PutAccountReward(tx, k, v); nil != err {
+				return err
+			}
+		}
+		return nil
+	}); nil != err {
+		return err
+	}
+
+	bc.blockCache.Purge()
+	bc.numberCache.Purge()
+	bc.headerCache.Purge()
+	bc.futureBlocks.Purge()
+	bc.tdCache.Purge()
+	bc.receiptCache.Purge()
+
+	for i := len(rmBlocks) - 1; i >= 0; i-- {
+		// Also send event for blocks removed from the canon chain.
+		event.GlobalEvent.Send(&common.ChainSideEvent{Block: rmBlocks[i].(*block2.Block)})
+	}
+	if len(deletedLogs) > 0 {
+		event.GlobalEvent.Send(&common.RemovedLogsEvent{Logs: deletedLogs})
+	}
+	return nil
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
@@ -1707,6 +1819,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 				break
 			}
 			rawdb.TruncateCanonicalHash(tx, i, false)
+			rawdb.TruncateTd(tx, i)
 		}
 
 		// unwind reward

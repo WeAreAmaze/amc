@@ -15,6 +15,12 @@ interface IDeposit{
         bytes calldata signature
     ) external payable;
 
+    function depositForMiner(
+        bytes calldata pubkey,
+        bytes calldata signature,
+        address miner
+    ) external payable;
+
     function withdraw() external payable;
     function depositsOf(address payee) external view returns (uint256);
     function depositUnlockingTimestamp(address payee) external view returns (uint64);

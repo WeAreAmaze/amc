@@ -101,6 +101,33 @@ contract Deposit is Ownable, IDeposit {
         emit DepositEvent(pubkey, amount, signature);
     }
 
+    function depositForMiner(bytes calldata pubkey, bytes calldata signature, address miner) public payable virtual override {
+
+        uint256 amount = msg.value;
+        require(depositAllowed(amount), "DepositContract: payee is not allowed to deposit");
+        require(pubkey.length == 48, "DepositContract: invalid pubkey length");
+        require(signature.length == 96, "DepositContract: invalid signature length");
+
+        //
+        deposits[miner] = amount;
+        depositTime[miner] = uint64(block.timestamp);
+        allDeposits += amount;
+        //
+        if (amount == fiftyDeposit) {
+            fiftyDepositCount++;
+        }
+        //
+        if (amount == oneHundredDeposit) {
+            oneHundredDepositCount++;
+        }
+        //
+        if (amount == fiveHundredDeposit) {
+            fiveHundredDepositCount++;
+        }
+
+        emit DepositEvent(pubkey, amount, signature);
+    }
+
     function withdrawalAllowed(uint64 timestamp) public view returns (bool) {
         require(deposits[msg.sender] > 0 && depositTime[msg.sender] > 0, "Do not have deposits");
         require(address(this).balance >= deposits[msg.sender], "Insufficient balance");

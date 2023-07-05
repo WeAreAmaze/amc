@@ -97,16 +97,8 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 	switch {
 	case strings.Contains(topic, GossipBlockMessage):
 		return defaultBlockTopicParams(), nil
-	case strings.Contains(topic, GossipContributionAndProofMessage):
-		return defaultSyncContributionTopicParams(), nil
 	case strings.Contains(topic, GossipExitMessage):
 		return defaultVoluntaryExitTopicParams(), nil
-	case strings.Contains(topic, GossipProposerSlashingMessage):
-		return defaultProposerSlashingTopicParams(), nil
-	case strings.Contains(topic, GossipAttesterSlashingMessage):
-		return defaultAttesterSlashingTopicParams(), nil
-	case strings.Contains(topic, GossipBlsToExecutionChangeMessage):
-		return defaultBlsToExecutionChangeTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)
 	}

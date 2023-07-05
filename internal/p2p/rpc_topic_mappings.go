@@ -1,7 +1,8 @@
 package p2p
 
 import (
-	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
+	"github.com/amazechain/amc/api/protocol/types_pb"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -25,6 +26,12 @@ const PingMessageName = "/ping"
 // MetadataMessageName specifies the name for the metadata message topic.
 const MetadataMessageName = "/metadata"
 
+// BodiesByRangeMessageName specifies the name for the Bodies by range message topic.
+const BodiesByRangeMessageName = "/bodies_by_range"
+
+// HeadersByRangeMessageName specifies the name for the Headers by range message topic.
+const HeadersByRangeMessageName = "/headers_by_range"
+
 const (
 	// V1 RPC Topics
 	// RPCStatusTopicV1 defines the v1 topic for the status rpc method.
@@ -35,6 +42,12 @@ const (
 	RPCPingTopicV1 = protocolPrefix + PingMessageName + SchemaVersionV1
 	// RPCMetaDataTopicV1 defines the v1 topic for the metadata rpc method.
 	RPCMetaDataTopicV1 = protocolPrefix + MetadataMessageName + SchemaVersionV1
+
+	// RPCBodiesDataTopicV1 defines the v1 topic for the Bodies rpc method.
+	RPCBodiesDataTopicV1 = protocolPrefix + BodiesByRangeMessageName + SchemaVersionV1
+
+	// RPCHeadersDataTopicV1 defines the v1 topic for the Headers rpc method.
+	RPCHeadersDataTopicV1 = protocolPrefix + HeadersByRangeMessageName + SchemaVersionV1
 )
 
 // RPC errors for topic parsing.
@@ -45,7 +58,10 @@ const (
 // RPCTopicMappings map the base message type to the rpc request.
 var RPCTopicMappings = map[string]interface{}{
 	// RPC Status Message
-	RPCStatusTopicV1: new(msg_proto.Status),
+	RPCStatusTopicV1:     new(sync_pb.Status),
+	RPCPingTopicV1:       new(sync_pb.Ping),
+	RPCMetaDataTopicV1:   new(sync_pb.Metadata),
+	RPCBodiesDataTopicV1: new(types_pb.Block),
 }
 
 // Maps all registered protocol prefixes.
@@ -56,10 +72,12 @@ var protocolMapping = map[string]bool{
 // Maps all the protocol message names for the different rpc
 // topics.
 var messageMapping = map[string]bool{
-	StatusMessageName:   true,
-	GoodbyeMessageName:  true,
-	PingMessageName:     true,
-	MetadataMessageName: true,
+	StatusMessageName:         true,
+	GoodbyeMessageName:        true,
+	PingMessageName:           true,
+	MetadataMessageName:       true,
+	BodiesByRangeMessageName:  true,
+	HeadersByRangeMessageName: true,
 }
 
 var versionMapping = map[string]bool{

@@ -7,7 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/enode"
@@ -63,7 +63,7 @@ type Service struct {
 	addrFilter            *multiaddr.Filters
 	ipLimiter             *leakybucket.Collector
 	privKey               *ecdsa.PrivateKey
-	metaData              *msg_proto.Metadata //todo
+	metaData              *sync_pb.Metadata //todo
 	pubsub                *pubsub.PubSub
 	joinedTopics          map[string]*pubsub.Topic
 	joinedTopicsLock      sync.Mutex
@@ -211,19 +211,15 @@ func (s *Service) Start() {
 	s.RefreshENR()
 
 	// Periodic functions.
-	//async.RunEvery(s.ctx, params.BeaconNetworkConfig().TtfbTimeout, func() {
-	//	ensurePeerConnections(s.ctx, s.host, peersToWatch...)
-	//})
-	//async.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
-	//async.RunEvery(s.ctx, params.BeaconNetworkConfig().RespTimeout, s.updateMetrics)
-	//async.RunEvery(s.ctx, refreshRate, s.RefreshENR)
-	//async.RunEvery(s.ctx, 1*time.Minute, func() {
-	//	log.WithFields(logrus.Fields{
-	//		"inbound":     len(s.peers.InboundConnected()),
-	//		"outbound":    len(s.peers.OutboundConnected()),
-	//		"activePeers": len(s.peers.Active()),
-	//	}).Info("Peer summary")
-	//})
+	utils.RunEvery(s.ctx, 5*time.Second, func() {
+		ensurePeerConnections(s.ctx, s.host, peersToWatch...)
+	})
+	utils.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
+	utils.RunEvery(s.ctx, 10*time.Second, s.updateMetrics)
+	utils.RunEvery(s.ctx, refreshRate, s.RefreshENR)
+	utils.RunEvery(s.ctx, 1*time.Minute, func() {
+		log.Info("Peer summary", "inbound", len(s.peers.InboundConnected()), "outbound", len(s.peers.OutboundConnected()), "activePeers", len(s.peers.Active()), "disconnectedPeers", len(s.peers.Disconnected()))
+	})
 
 	multiAddrs := s.host.Network().ListenAddresses()
 	logIPAddr(s.host.ID(), multiAddrs...)
@@ -336,8 +332,13 @@ func (s *Service) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 }
 
 // Metadata returns a copy of the peer's metadata.
-func (s *Service) Metadata() *msg_proto.Metadata {
+func (s *Service) Metadata() *sync_pb.Metadata {
 	return s.metaData
+}
+
+// MetadataSeq returns the metadata sequence number.
+func (s *Service) MetadataSeq() uint64 {
+	return s.metaData.GetSeqNumber()
 }
 
 // AddPingMethod adds the metadata ping rpc method to the p2p service, so that it can

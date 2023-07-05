@@ -24,12 +24,13 @@ package peers
 
 import (
 	"context"
-	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/common/crypto/rand"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/internal/p2p/peers/peerdata"
 	"github.com/amazechain/amc/internal/p2p/peers/scorers"
 	"github.com/amazechain/amc/log"
+	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
 	"math"
 	"sort"
@@ -181,14 +182,14 @@ func (p *Status) ENR(pid peer.ID) (*enr.Record, error) {
 }
 
 // SetChainState sets the chain state of the given remote peer.
-func (p *Status) SetChainState(pid peer.ID, chainState *msg_proto.Status) {
+func (p *Status) SetChainState(pid peer.ID, chainState *sync_pb.Status) {
 	p.scorers.PeerStatusScorer().SetPeerStatus(pid, chainState, nil)
 }
 
 // ChainState gets the chain state of the given remote peer.
 // This will error if the peer does not exist.
 // This will error if there is no known chain state for the peer.
-func (p *Status) ChainState(pid peer.ID) (*msg_proto.Status, error) {
+func (p *Status) ChainState(pid peer.ID) (*sync_pb.Status, error) {
 	return p.scorers.PeerStatusScorer().PeerStatus(pid)
 }
 
@@ -225,15 +226,29 @@ func (p *Status) InboundLimit() int {
 	return int(float64(p.ConnectedPeerLimit()) * InboundRatio)
 }
 
-// todo
 // SetMetadata sets the metadata of the given remote peer.
-func (p *Status) SetMetadata(pid peer.ID, metaData msg_proto.Metadata) {
+func (p *Status) SetMetadata(pid peer.ID, metaData *sync_pb.Metadata) {
+	p.store.Lock()
+	defer p.store.Unlock()
+
+	peerData := p.store.PeerDataGetOrCreate(pid)
+	peerData.MetaData = metaData
 }
 
 // Metadata returns a copy of the metadata corresponding to the provided
 // peer id.
-func (p *Status) Metadata(pid peer.ID) (msg_proto.Metadata, error) {
-	return msg_proto.Metadata{}, nil
+func (p *Status) Metadata(pid peer.ID) (*sync_pb.Metadata, error) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	if peerData, ok := p.store.PeerData(pid); ok {
+		if peerData.MetaData == nil {
+			return nil, nil
+		}
+		//todo
+		return proto.Clone(peerData.MetaData).(*sync_pb.Metadata), nil
+	}
+	return nil, peerdata.ErrPeerUnknown
 }
 
 // CommitteeIndices retrieves the committee subnets the peer is subscribed to.

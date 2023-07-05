@@ -179,7 +179,7 @@ func (n *API) RPCGasCap() uint64 {
 	return rpcGasCap
 }
 
-// AmcAPI provides an API to access meta related information.
+// AmcAPI provides an API to access metadata related information.
 type AmcAPI struct {
 	api *API
 }
@@ -381,7 +381,7 @@ func (s *BlockChainAPI) GetCode(ctx context.Context, address mvm_common.Address,
 }
 
 // GetStorageAt returns the storage from the state at the given address, key and
-// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
+// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber metadata block
 // numbers are also allowed.
 func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address types.Address, key string, blockNrOrHash jsonrpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	tx, err := s.api.db.BeginRo(ctx)

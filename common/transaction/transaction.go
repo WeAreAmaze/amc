@@ -439,6 +439,11 @@ func (tx *Transaction) Hash() types.Hash {
 	return h
 }
 
+// GasFeeCapCmp compares the fee cap of two transactions.
+func (tx *Transaction) GasFeeCapCmp(other *Transaction) int {
+	return tx.inner.gasFeeCap().Cmp(other.inner.gasFeeCap())
+}
+
 // EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
 func (tx *Transaction) EffectiveGasTipIntCmp(other *uint256.Int, baseFee *uint256.Int) int {
 	if baseFee == nil {

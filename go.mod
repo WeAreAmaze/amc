@@ -27,7 +27,6 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.2
-	github.com/influxdata/flux v0.170.1
 	github.com/influxdata/influxdb v1.10.0
 	github.com/influxdata/influxdb-client-go/v2 v2.12.0
 	github.com/kr/pretty v0.3.1
@@ -41,6 +40,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.9.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.4
+	github.com/paulbellamy/ratecounter v0.2.0
 	github.com/peterh/liner v1.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
@@ -51,6 +51,7 @@ require (
 	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/torquem-ch/mdbx-go v0.30.0
+	github.com/trailofbits/go-mutexasserts v0.0.0-20230328101604-8cdbc5f3d279
 	github.com/urfave/cli/v2 v2.17.2-0.20221006022127-8f469abc00aa
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.24.0
@@ -111,6 +112,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/huin/goupnp v1.1.0 // indirect
+	github.com/influxdata/flux v0.170.1 // indirect
 	github.com/influxdata/influxql v1.1.1-0.20211004132434-7e7d61973256 // indirect
 	github.com/influxdata/line-protocol v0.0.0-20210311194329-9aa0e372d097 // indirect
 	github.com/ipfs/boxo v0.8.0 // indirect

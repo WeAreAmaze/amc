@@ -79,11 +79,3 @@ func (s *Service) broadcastObject(ctx context.Context, obj ssz.Marshaler, topic 
 	}
 	return nil
 }
-
-func attestationToTopic(subnet uint64, forkDigest [4]byte) string {
-	return fmt.Sprintf(AttestationSubnetTopicFormat, forkDigest, subnet)
-}
-
-func syncCommitteeToTopic(subnet uint64, forkDigest [4]byte) string {
-	return fmt.Sprintf(SyncCommitteeSubnetTopicFormat, forkDigest, subnet)
-}

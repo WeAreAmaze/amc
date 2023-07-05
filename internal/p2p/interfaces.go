@@ -2,7 +2,7 @@ package p2p
 
 import (
 	"context"
-	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/peers"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -98,6 +98,6 @@ type PeersProvider interface {
 
 // MetadataProvider returns the metadata related information for the local peer.
 type MetadataProvider interface {
-	Metadata() *msg_proto.Metadata
-	//MetadataSeq() uint64
+	Metadata() *sync_pb.Metadata
+	MetadataSeq() uint64
 }

@@ -7,10 +7,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/utils"
+	"google.golang.org/protobuf/proto"
 	"net"
 	"os"
 	"path"
@@ -104,9 +105,41 @@ func privKeyFromFile(path string) (*ecdsa.PrivateKey, error) {
 
 // Retrieves node p2p metadata from a set of configuration values
 // from the p2p service.
-// TODO: Figure out how to do a v1/v2 check.
-func metaDataFromConfig(cfg *conf.P2PConfig) (*msg_proto.Metadata, error) {
-	return &msg_proto.Metadata{}, nil
+func metaDataFromConfig(cfg *conf.P2PConfig) (*sync_pb.Metadata, error) {
+	defaultKeyPath := path.Join(cfg.DataDir, metaDataPath)
+	metaDataPath := cfg.MetaDataDir
+
+	_, err := os.Stat(defaultKeyPath)
+	defaultMetadataExist := !os.IsNotExist(err)
+	if err != nil && defaultMetadataExist {
+		return nil, err
+	}
+	if metaDataPath == "" && !defaultMetadataExist {
+		metaData := &sync_pb.Metadata{
+			SeqNumber: 0,
+		}
+		dst, err := proto.Marshal(metaData)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(defaultKeyPath, dst, 0600); err != nil {
+			return nil, err
+		}
+		return metaData, nil
+	}
+	if defaultMetadataExist && metaDataPath == "" {
+		metaDataPath = defaultKeyPath
+	}
+	src, err := os.ReadFile(metaDataPath) // #nosec G304
+	if err != nil {
+		log.Error("Error reading metadata from file", "err", err)
+		return nil, err
+	}
+	metaData := &sync_pb.Metadata{}
+	if err := proto.Unmarshal(src, metaData); err != nil {
+		return nil, err
+	}
+	return metaData, nil
 }
 
 // Attempt to dial an address to verify its connectivity

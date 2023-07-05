@@ -2,7 +2,7 @@ package scorers
 
 import (
 	"errors"
-	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/internal/p2p/peers/peerdata"
 	"github.com/amazechain/amc/internal/p2p/types"
 	"github.com/amazechain/amc/utils"
@@ -83,9 +83,9 @@ func (s *PeerStatusScorer) isBadPeer(pid peer.ID) bool {
 	}
 	// Mark peer as bad, if the latest error is one of the terminal ones.
 	terminalErrs := []error{
-		types.ErrWrongForkDigestVersion,
-		types.ErrInvalidFinalizedRoot,
-		types.ErrInvalidRequest,
+		p2ptypes.ErrWrongForkDigestVersion,
+		p2ptypes.ErrInvalidFinalizedRoot,
+		p2ptypes.ErrInvalidRequest,
 	}
 	for _, err := range terminalErrs {
 		if errors.Is(peerData.ChainStateValidationError, err) {
@@ -110,7 +110,7 @@ func (s *PeerStatusScorer) BadPeers() []peer.ID {
 }
 
 // SetPeerStatus sets chain state data for a given peer.
-func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *msg_proto.Status, validationError error) {
+func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *sync_pb.Status, validationError error) {
 	s.store.Lock()
 	defer s.store.Unlock()
 
@@ -130,14 +130,14 @@ func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *msg_proto.Stat
 // PeerStatus gets the chain state of the given remote peer.
 // This can return nil if there is no known chain state for the peer.
 // This will error if the peer does not exist.
-func (s *PeerStatusScorer) PeerStatus(pid peer.ID) (*msg_proto.Status, error) {
+func (s *PeerStatusScorer) PeerStatus(pid peer.ID) (*sync_pb.Status, error) {
 	s.store.RLock()
 	defer s.store.RUnlock()
 	return s.peerStatus(pid)
 }
 
 // peerStatus lock-free version of PeerStatus.
-func (s *PeerStatusScorer) peerStatus(pid peer.ID) (*msg_proto.Status, error) {
+func (s *PeerStatusScorer) peerStatus(pid peer.ID) (*sync_pb.Status, error) {
 	if peerData, ok := s.store.PeerData(pid); ok {
 		if peerData.ChainState == nil {
 			return nil, peerdata.ErrNoPeerStatus

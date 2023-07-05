@@ -44,18 +44,6 @@ message ProtocolHandshakeMessage {
 }
 
 
-//v2
-message Status {
-//  string version = 1;
-  types_pb.H256 genesisHash = 1;
-  types_pb.H256 currentHeight = 2;
-}
-
-// todo
-message Metadata {
-  string version = 1;
-}
-
 message TopicScoreSnapshot {
   // Time a peer has spent in the gossip mesh.
   uint64 time_in_mesh = 1;

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"github.com/amazechain/amc/api/protocol/msg_proto"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
-	"github.com/influxdata/flux/metadata"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -53,8 +53,8 @@ type PeerData struct {
 	Enr           *enr.Record
 	NextValidTime time.Time
 	// Chain related data.
-	MetaData                  metadata.Metadata
-	ChainState                *msg_proto.Status
+	MetaData                  *sync_pb.Metadata
+	ChainState                *sync_pb.Status
 	ChainStateLastUpdated     time.Time
 	ChainStateValidationError error
 	// Scorers internal data.

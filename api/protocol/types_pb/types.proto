@@ -99,9 +99,9 @@ message Reward {
 }
 
 message Body {
-  repeated Transaction txs = 1;
-  repeated Verifier verifiers = 2;
-  repeated Reward rewards = 3;
+  repeated Transaction txs = 1 [(ext.ssz_max) = "104857600"];
+  repeated Verifier verifiers = 2 [(ext.ssz_max) = "104857600"];
+  repeated Reward rewards = 3 [(ext.ssz_max) = "104857600"];
 }
 
 message Transaction {
@@ -112,8 +112,8 @@ message Transaction {
   H256 feePerGas = 5;
   H256 priorityFeePerGas = 6;
   H256 value = 7;
-  bytes data = 8;
-  bytes sign = 9;
+  bytes data = 8 [(ext.ssz_max) = "104857600"];
+  bytes sign = 9 [(ext.ssz_max) = "104857600"];
   H160 to = 10;
   H160 from = 11;
   uint64 chainID = 12;

@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"github.com/holiman/uint256"
+	"github.com/amazechain/amc/api/protocol/types_pb"
 	"reflect"
 
 	"google.golang.org/protobuf/proto"
@@ -9,12 +9,14 @@ import (
 
 // gossipTopicMappings represent the protocol ID to protobuf message type map for easy
 // lookup.
-var gossipTopicMappings = map[string]proto.Message{}
+var gossipTopicMappings = map[string]proto.Message{
+	BlockTopicFormat:       &types_pb.Block{},
+	TransactionTopicFormat: &types_pb.Transaction{},
+}
 
 // GossipTopicMappings is a function to return the assigned data type
 // versioned by epoch.
-func GossipTopicMappings(topic string, number *uint256.Int) proto.Message {
-
+func GossipTopicMappings(topic string) proto.Message {
 	return gossipTopicMappings[topic]
 }
 
@@ -36,10 +38,4 @@ func init() {
 	for k, v := range gossipTopicMappings {
 		GossipTypeMapping[reflect.TypeOf(v)] = k
 	}
-	// Specially handle Altair objects.
-	//GossipTypeMapping[reflect.TypeOf(&ethpb.SignedBeaconBlockAltair{})] = BlockSubnetTopicFormat
-	// Specially handle Bellatrix objects.
-	//GossipTypeMapping[reflect.TypeOf(&ethpb.SignedBeaconBlockBellatrix{})] = BlockSubnetTopicFormat
-	// Specially handle Capella objects
-	//GossipTypeMapping[reflect.TypeOf(&ethpb.SignedBeaconBlockCapella{})] = BlockSubnetTopicFormat
 }

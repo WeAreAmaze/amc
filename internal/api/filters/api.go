@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// filter is a helper struct that holds meta information over the filter type
+// filter is a helper struct that holds metadata information over the filter type
 // and associated subscription in the event system.
 type filter struct {
 	typ      Type

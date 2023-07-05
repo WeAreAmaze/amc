@@ -259,6 +259,9 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	accman := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.NodeCfg.InsecureUnlockAllowed})
 
 	p2p, err := p2p.NewService(c, cfg.P2PCfg)
+	if err != nil {
+		return nil, err
+	}
 
 	node = Node{
 		ctx:             c,
@@ -384,6 +387,7 @@ func (n *Node) Start() error {
 		}
 	}
 
+	//n.p2p.AddConnectionHandler()
 	n.p2p.Start()
 
 	n.SetupMetrics(n.config.MetricsCfg)

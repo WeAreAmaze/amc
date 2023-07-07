@@ -17,5 +17,5 @@
 package sync_pb
 
 ////go:generate protoc --plugin=/Users/mac/go/bin/protoc-gen-go-cast -I=../ -I=. -I=../include --go-cast_out=plugins=protoc-gen-go-cast,paths=source_relative:. types.proto
-//go:generate protoc  -I=../ -I=. -I=../include --go-cast_out=paths=source_relative:. sync.proto
+//go:generate protoc  -I=../ -I=. -I=../include --go-cast_out=paths=source_relative:. sync_pb.proto
 //go:generate sszgen -path=. -objs=BodiesByRangeRequest,HeadersByRangeRequest,Metadata,Ping,ForkData,Status --include=../types_pb -output=generated.ssz.go

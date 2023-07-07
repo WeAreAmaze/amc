@@ -34,7 +34,7 @@ type Listener interface {
 // to be dynamically discoverable by others given our tracked committee ids.
 func (s *Service) RefreshENR() {
 	// return early if discv5 isnt running
-	if s.dv5Listener == nil || !s.isInitialized() {
+	if s.dv5Listener == nil {
 		return
 	}
 
@@ -221,7 +221,6 @@ func (s *Service) startDiscoveryV5(
 //  6. Peer's fork digest in their ENR matches that of
 //     our localnodes.
 func (s *Service) filterPeer(node *enode.Node) bool {
-
 	// Ignore nil node entries passed in.
 	if node == nil {
 		return false

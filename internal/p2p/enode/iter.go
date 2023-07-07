@@ -118,6 +118,9 @@ func (f *filterIter) Next() bool {
 	for f.Iterator.Next() {
 		if f.check(f.Node()) {
 			return true
+		} else {
+			//todo
+			return false
 		}
 	}
 	return false

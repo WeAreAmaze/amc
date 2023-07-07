@@ -24,6 +24,7 @@ package peers
 
 import (
 	"context"
+	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/common/crypto/rand"
 	"github.com/amazechain/amc/internal/p2p/enr"
@@ -33,6 +34,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
 	"math"
+	"net"
 	"sort"
 	"time"
 
@@ -181,6 +183,47 @@ func (p *Status) ENR(pid peer.ID) (*enr.Record, error) {
 	return nil, peerdata.ErrPeerUnknown
 }
 
+// IP returns the ip address for the corresponding peer id.
+func (p *Status) IP(pid peer.ID) (net.IP, error) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	if peerData, ok := p.store.PeerData(pid); ok {
+		IP, err := manet.ToIP(peerData.Address)
+		if err != nil {
+			return nil, err
+		}
+		return IP, nil
+	}
+	return nil, peerdata.ErrPeerUnknown
+}
+
+// DialArgs returns the ip address for the corresponding peer id.
+func (p *Status) DialArgs(pid peer.ID) (string, error) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	if peerData, ok := p.store.PeerData(pid); ok && peerData.Address != nil {
+		protocol, details, err := manet.DialArgs(peerData.Address)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s://%s", protocol, details), nil
+	}
+	return "", peerdata.ErrPeerUnknown
+}
+
+// ConnState
+func (p *Status) ConnState(pid peer.ID) (peerdata.PeerConnectionState, error) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	if peerData, ok := p.store.PeerData(pid); ok {
+		return peerData.ConnState, nil
+	}
+	return 0, peerdata.ErrPeerUnknown
+}
+
 // SetChainState sets the chain state of the given remote peer.
 func (p *Status) SetChainState(pid peer.ID, chainState *sync_pb.Status) {
 	p.scorers.PeerStatusScorer().SetPeerStatus(pid, chainState, nil)
@@ -249,22 +292,6 @@ func (p *Status) Metadata(pid peer.ID) (*sync_pb.Metadata, error) {
 		return proto.Clone(peerData.MetaData).(*sync_pb.Metadata), nil
 	}
 	return nil, peerdata.ErrPeerUnknown
-}
-
-// CommitteeIndices retrieves the committee subnets the peer is subscribed to.
-func (p *Status) CommitteeIndices(pid peer.ID) ([]uint64, error) {
-	return nil, nil
-}
-
-// SubscribedToSubnet retrieves the peers subscribed to the given
-// committee subnet.
-func (p *Status) SubscribedToSubnet(index uint64) []peer.ID {
-	p.store.RLock()
-	defer p.store.RUnlock()
-
-	peers := make([]peer.ID, 0)
-
-	return peers
 }
 
 // SetConnectionState sets the connection state of the given remote peer.

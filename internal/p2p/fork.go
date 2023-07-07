@@ -4,16 +4,11 @@ import (
 	"github.com/amazechain/amc/internal/p2p/enode"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 // ForkDigest returns the current fork digest of
 // the node according to the local clock.
 func (s *Service) currentForkDigest() ([4]byte, error) {
-	if !s.isInitialized() {
-		return [4]byte{}, errors.New("state is not initialized")
-	}
 	return [4]byte{}, nil
 }
 

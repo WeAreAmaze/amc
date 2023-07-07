@@ -201,6 +201,7 @@ func (it *lookupIterator) Next() bool {
 	if len(it.buffer) > 0 {
 		it.buffer = it.buffer[1:]
 	}
+	retries := 0
 	// Advance the lookup to refill the buffer.
 	for len(it.buffer) == 0 {
 		if it.ctx.Err() != nil {
@@ -217,6 +218,11 @@ func (it *lookupIterator) Next() bool {
 			continue
 		}
 		it.buffer = it.lookup.replyBuffer
+		retries++
+		//todo
+		if retries > 10 {
+			return false
+		}
 	}
 	return true
 }

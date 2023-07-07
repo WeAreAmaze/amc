@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/enode"
@@ -52,6 +53,10 @@ const pubsubQueueSize = 600
 // maxDialTimeout is the timeout for a single peer dial.
 var maxDialTimeout = 10 * time.Second
 
+// todo
+const ttfbTimeout = 5 * time.Second  // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
+const respTimeout = 10 * time.Second // RespTimeout is the maximum time for complete response transfer.
+
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
 	started               bool
@@ -67,9 +72,6 @@ type Service struct {
 	pubsub                *pubsub.PubSub
 	joinedTopics          map[string]*pubsub.Topic
 	joinedTopicsLock      sync.Mutex
-	subnetsLock           map[uint64]*sync.RWMutex
-	subnetsLockLock       sync.Mutex // Lock access to subnetsLock
-	initializationLock    sync.Mutex
 	dv5Listener           Listener
 	startupErr            error
 	ctx                   context.Context
@@ -92,7 +94,6 @@ func NewService(ctx context.Context, cfg *conf.P2PConfig) (*Service, error) {
 		cfg:          cfg,
 		isPreGenesis: true,
 		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
-		subnetsLock:  make(map[uint64]*sync.RWMutex),
 	}
 
 	dv5Nodes := parseBootStrapAddrs(s.cfg.BootstrapNodeAddr)
@@ -163,9 +164,6 @@ func (s *Service) Start() {
 		return
 	}
 
-	// Waits until the state is initialized via an event feed.
-	// Used for fork-related data when connecting peers.
-	s.awaitStateInitialized()
 	s.isPreGenesis = false
 
 	var peersToWatch []string
@@ -211,14 +209,27 @@ func (s *Service) Start() {
 	s.RefreshENR()
 
 	// Periodic functions.
-	utils.RunEvery(s.ctx, 5*time.Second, func() {
-		ensurePeerConnections(s.ctx, s.host, peersToWatch...)
-	})
+	if len(peersToWatch) > 0 {
+		utils.RunEvery(s.ctx, ttfbTimeout, func() {
+			ensurePeerConnections(s.ctx, s.host, peersToWatch...)
+		})
+	}
+
 	utils.RunEvery(s.ctx, 30*time.Minute, s.Peers().Prune)
 	utils.RunEvery(s.ctx, 10*time.Second, s.updateMetrics)
 	utils.RunEvery(s.ctx, refreshRate, s.RefreshENR)
 	utils.RunEvery(s.ctx, 1*time.Minute, func() {
+		//utils.RunEvery(s.ctx, 5*time.Second, func() {
 		log.Info("Peer summary", "inbound", len(s.peers.InboundConnected()), "outbound", len(s.peers.OutboundConnected()), "activePeers", len(s.peers.Active()), "disconnectedPeers", len(s.peers.Disconnected()))
+		for _, p := range s.peers.All() {
+			//addr, _ := s.peers.Address(p)
+			//IP, _ := s.peers.IP(p)
+			//ENR, _ := s.peers.ENR(p)
+			dialArgs, _ := s.peers.DialArgs(p)
+			direction, _ := s.peers.Direction(p)
+			connState, _ := s.peers.ConnState(p)
+			log.Info("Peer details", "perrId", hexutil.Encode([]byte(p)[0:4]), "dialArgs", dialArgs, "Direction", direction, "connState", connState)
+		}
 	})
 
 	multiAddrs := s.host.Network().ListenAddresses()
@@ -360,18 +371,6 @@ func (s *Service) pingPeers() {
 	}
 }
 
-// Waits for the beacon state to be initialized, important
-// for initializing the p2p service as p2p needs to be aware
-// of genesis information for peering.
-func (s *Service) awaitStateInitialized() {
-	s.initializationLock.Lock()
-	defer s.initializationLock.Unlock()
-
-	if s.isInitialized() {
-		return
-	}
-}
-
 func (s *Service) connectWithAllPeers(multiAddrs []multiaddr.Multiaddr) {
 	addrInfos, err := peer.AddrInfosFromP2pAddrs(multiAddrs...)
 	if err != nil {
@@ -426,10 +425,4 @@ func (s *Service) connectToBootnodes() error {
 	multiAddresses := convertToMultiAddr(nodes)
 	s.connectWithAllPeers(multiAddresses)
 	return nil
-}
-
-// Returns true if the service is aware of the genesis time and genesis validators root. This is
-// required for discovery and pubsub validation.
-func (s *Service) isInitialized() bool {
-	return !s.genesisTime.IsZero() && len(s.genesisValidatorsRoot) == 32
 }

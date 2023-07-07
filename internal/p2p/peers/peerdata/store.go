@@ -32,6 +32,14 @@ type StoreConfig struct {
 	MaxPeers int
 }
 
+func (c PeerConnectionState) String() string {
+	str := [...]string{"PeerDisconnected", "PeerDisconnecting", "PeerConnected", "PeerConnecting"}
+	if c < 0 || int(c) >= len(str) {
+		return "(unrecognized)"
+	}
+	return str[c]
+}
+
 // Store is a container for various peer related data (both protocol and app level).
 // Container implements RWMutex, so data access can be restricted on the container level. This allows
 // different components rely on the very same peer map container.

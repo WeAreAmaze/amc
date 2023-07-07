@@ -20,9 +20,6 @@ const pubsubSubscriptionRequestLimit = 200
 
 // CanSubscribe returns true if the topic is of interest and we could subscribe to it.
 func (s *Service) CanSubscribe(topic string) bool {
-	if !s.isInitialized() {
-		return false
-	}
 	parts := strings.Split(topic, "/")
 	if len(parts) != 5 {
 		return false
@@ -36,7 +33,6 @@ func (s *Service) CanSubscribe(topic string) bool {
 	}
 
 	//fork
-
 	//if parts[4] != encoder.ProtocolSuffixSSZSnappy {
 	//	return false
 	//}

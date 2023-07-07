@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/internal/p2p/encoder"
+	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/internal/p2p/peers"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/connmgr"
@@ -33,8 +34,6 @@ type P2P interface {
 // Broadcaster broadcasts messages to peers over the p2p pubsub protocol.
 type Broadcaster interface {
 	Broadcast(context.Context, proto.Message) error
-	//BroadcastAttestation(ctx context.Context, subnet uint64, att *ethpb.Attestation) error
-	//BroadcastSyncCommitteeMessage(ctx context.Context, subnet uint64, sMsg *ethpb.SyncCommitteeMessage) error
 }
 
 // SetStreamHandler configures p2p to handle streams of a certain topic ID.
@@ -79,10 +78,9 @@ type PeerManager interface {
 	Disconnect(peer.ID) error
 	PeerID() peer.ID
 	Host() host.Host
-	//ENR() *enr.Record
+	ENR() *enr.Record
 	DiscoveryAddresses() ([]multiaddr.Multiaddr, error)
 	RefreshENR()
-	FindPeersWithSubnet(ctx context.Context, topic string, subIndex uint64, threshold int) (bool, error)
 	AddPingMethod(reqFunc func(ctx context.Context, id peer.ID) error)
 }
 

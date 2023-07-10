@@ -27,6 +27,7 @@ type Listener interface {
 	Ping(*enode.Node) error
 	RequestENR(*enode.Node) (*enode.Node, error)
 	LocalNode() *enode.LocalNode
+	AllNodes() []*enode.Node
 }
 
 // RefreshENR uses an epoch to refresh the enr entry for our node

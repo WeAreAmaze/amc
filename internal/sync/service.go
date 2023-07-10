@@ -95,12 +95,18 @@ type Service struct {
 }
 
 // NewService initializes new regular sync service.
-func NewService(ctx context.Context, cfg *config) *Service {
+func NewService(ctx context.Context, opts ...Option) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	r := &Service{
 		ctx:    ctx,
 		cancel: cancel,
-		cfg:    cfg,
+		cfg:    &config{},
+	}
+
+	for _, opt := range opts {
+		if err := opt(r); err != nil {
+			return nil
+		}
 	}
 
 	r.subHandler = newSubTopicHandler()

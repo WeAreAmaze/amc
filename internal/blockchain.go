@@ -225,13 +225,13 @@ func (bc *BlockChain) GenesisBlock() block2.IBlock {
 }
 
 func (bc *BlockChain) Start() error {
-	if bc.pubsub == nil {
-		return ErrInvalidPubSub
-	}
+	//if bc.pubsub == nil {
+	//	return ErrInvalidPubSub
+	//}
 
 	bc.wg.Add(3)
 	go bc.runLoop()
-	go bc.newBlockLoop()
+	//go bc.newBlockLoop()
 	go bc.updateFutureBlocksLoop()
 
 	return nil
@@ -400,10 +400,10 @@ func (bc *BlockChain) LatestBlockCh() (block2.IBlock, error) {
 
 func (bc *BlockChain) newBlockLoop() {
 	bc.wg.Done()
-	if bc.pubsub == nil {
-		bc.errorCh <- ErrInvalidPubSub
-		return
-	}
+	//if bc.pubsub == nil {
+	//	bc.errorCh <- ErrInvalidPubSub
+	//	return
+	//}
 
 	topic, err := bc.pubsub.JoinTopic(message.GossipBlockMessage)
 	if err != nil {

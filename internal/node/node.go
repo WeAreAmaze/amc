@@ -322,15 +322,15 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 }
 
 func (n *Node) Start() error {
-	if err := n.service.Start(); err != nil {
-		log.Errorf("failed setup p2p service, err: %v", err)
-		return err
-	}
-
-	if err := n.pubsubServer.Start(); err != nil {
-		log.Errorf("failed setup amc pubsub service, err: %v", err)
-		return err
-	}
+	//if err := n.service.Start(); err != nil {
+	//	log.Errorf("failed setup p2p service, err: %v", err)
+	//	return err
+	//}
+	//
+	//if err := n.pubsubServer.Start(); err != nil {
+	//	log.Errorf("failed setup amc pubsub service, err: %v", err)
+	//	return err
+	//}
 
 	if err := n.blocks.Start(); err != nil {
 		log.Errorf("failed setup blocks service, err: %v", err)
@@ -397,8 +397,8 @@ func (n *Node) Start() error {
 		return err
 	}
 
-	go n.txsBroadcastLoop()
-	go n.txsMessageFetcherLoop()
+	//go n.txsBroadcastLoop()
+	//go n.txsMessageFetcherLoop()
 
 	n.depositContract.Start()
 

@@ -315,7 +315,7 @@ var (
 	P2PStaticID = &cli.BoolFlag{
 		Name:        "p2p.static-id",
 		Usage:       "Enables the peer id of the node to be fixed by saving the generated network key to the default key path.",
-		Value:       false,
+		Value:       true,
 		Destination: &DefaultConfig.P2PCfg.StaticPeerID,
 	}
 	// P2PMetadata defines a flag to specify the location of the peer metadata file.

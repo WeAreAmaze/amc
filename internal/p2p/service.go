@@ -8,7 +8,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
-	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/enode"
@@ -228,7 +227,14 @@ func (s *Service) Start() {
 			dialArgs, _ := s.peers.DialArgs(p)
 			direction, _ := s.peers.Direction(p)
 			connState, _ := s.peers.ConnState(p)
-			log.Info("Peer details", "perrId", hexutil.Encode([]byte(p)[0:4]), "dialArgs", dialArgs, "Direction", direction, "connState", connState)
+			// hexutil.Encode([]byte(p))
+			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState)
+		}
+
+		allNodes := s.dv5Listener.AllNodes()
+		log.Info("Nodes stored in the discovery table:")
+		for i, n := range allNodes {
+			log.Info(fmt.Sprintf("P2P details %d", i), "ENR", n.String(), "Node ID", n.ID(), "IP", n.IP(), "UDP", n.UDP(), "TCP", n.TCP())
 		}
 	})
 
@@ -392,6 +398,7 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	defer span.End()
 
 	if info.ID == s.host.ID() {
+		log.Warn("bootNode ID == localNode ID")
 		return nil
 	}
 	if s.Peers().IsBad(info.ID) {
@@ -399,6 +406,8 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	}
 	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
 	defer cancel()
+
+	log.Debug("start connect", "peer info", info)
 	if err := s.host.Connect(ctx, info); err != nil {
 		s.Peers().Scorers().BadResponsesScorer().Increment(info.ID)
 		return err

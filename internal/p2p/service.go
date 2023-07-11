@@ -50,7 +50,7 @@ const maxBadResponses = 5
 const pubsubQueueSize = 600
 
 // maxDialTimeout is the timeout for a single peer dial.
-var maxDialTimeout = 10 * time.Second
+const maxDialTimeout = 10 * time.Second
 
 // todo
 const ttfbTimeout = 5 * time.Second  // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
@@ -229,6 +229,10 @@ func (s *Service) Start() {
 			connState, _ := s.peers.ConnState(p)
 			// hexutil.Encode([]byte(p))
 			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState)
+			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
+			for _, id := range pids {
+				log.Info("Protocol details:", "ProtocolID", id)
+			}
 		}
 
 		allNodes := s.dv5Listener.AllNodes()

@@ -135,7 +135,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 
 				s.peers.SetConnectionState(conn.RemotePeer(), peers.PeerConnecting)
 				if err := reqFunc(context.TODO(), conn.RemotePeer()); err != nil && err != io.EOF {
-					log.Trace("Handshake failed", "err", err)
+					log.Warn("Handshake failed", "err", err)
 					disconnectFromPeer()
 					return
 				}

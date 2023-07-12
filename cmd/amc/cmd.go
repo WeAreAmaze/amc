@@ -258,6 +258,33 @@ var (
 )
 
 var (
+	AuthRPCFlag = &cli.BoolFlag{
+		Name:        "authrpc",
+		Usage:       "Enable the AUTH-RPC server",
+		Value:       false,
+		Destination: &DefaultConfig.NodeCfg.AuthRPC,
+	}
+	// Authenticated RPC HTTP settings
+	AuthRPCListenFlag = &cli.StringFlag{
+		Name:        "authrpc.addr",
+		Usage:       "Listening address for authenticated APIs",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.AuthAddr,
+	}
+	AuthRPCPortFlag = &cli.IntFlag{
+		Name:        "authrpc.port",
+		Usage:       "Listening port for authenticated APIs",
+		Destination: &DefaultConfig.NodeCfg.AuthPort,
+	}
+	JWTSecretFlag = &cli.StringFlag{
+		Name:        "authrpc.jwtsecret",
+		Usage:       "Path to a JWT secret to use for authenticated RPC endpoints",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.JWTSecret,
+	}
+)
+
+var (
 	// Account settings
 	UnlockedAccountFlag = &cli.StringFlag{
 		Name:  "account.unlock",
@@ -352,6 +379,12 @@ var (
 )
 
 var (
+	authRPCFlag = []cli.Flag{
+		AuthRPCFlag,
+		AuthRPCListenFlag,
+		AuthRPCPortFlag,
+		JWTSecretFlag,
+	}
 	settingFlag = []cli.Flag{
 		DataDirFlag,
 	}

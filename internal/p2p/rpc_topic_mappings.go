@@ -23,9 +23,6 @@ const GoodbyeMessageName = "/goodbye"
 // PingMessageName Specifies the name for the ping message topic.
 const PingMessageName = "/ping"
 
-// MetadataMessageName specifies the name for the metadata message topic.
-const MetadataMessageName = "/metadata"
-
 // BodiesByRangeMessageName specifies the name for the Bodies by range message topic.
 const BodiesByRangeMessageName = "/bodies_by_range"
 
@@ -40,8 +37,6 @@ const (
 	RPCGoodByeTopicV1 = protocolPrefix + GoodbyeMessageName + SchemaVersionV1
 	// RPCPingTopicV1 defines the v1 topic for the ping rpc method.
 	RPCPingTopicV1 = protocolPrefix + PingMessageName + SchemaVersionV1
-	// RPCMetaDataTopicV1 defines the v1 topic for the metadata rpc method.
-	RPCMetaDataTopicV1 = protocolPrefix + MetadataMessageName + SchemaVersionV1
 
 	// RPCBodiesDataTopicV1 defines the v1 topic for the Bodies rpc method.
 	RPCBodiesDataTopicV1 = protocolPrefix + BodiesByRangeMessageName + SchemaVersionV1
@@ -60,7 +55,6 @@ var RPCTopicMappings = map[string]interface{}{
 	// RPC Status Message
 	RPCStatusTopicV1:     new(sync_pb.Status),
 	RPCPingTopicV1:       new(sync_pb.Ping),
-	RPCMetaDataTopicV1:   new(sync_pb.Metadata),
 	RPCBodiesDataTopicV1: new(types_pb.Block),
 }
 
@@ -75,7 +69,6 @@ var messageMapping = map[string]bool{
 	StatusMessageName:         true,
 	GoodbyeMessageName:        true,
 	PingMessageName:           true,
-	MetadataMessageName:       true,
 	BodiesByRangeMessageName:  true,
 	HeadersByRangeMessageName: true,
 }

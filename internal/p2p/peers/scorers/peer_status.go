@@ -122,8 +122,8 @@ func (s *PeerStatusScorer) SetPeerStatus(pid peer.ID, chainState *sync_pb.Status
 	// Update maximum known head slot (scores will be calculated with respect to that maximum value).
 	//todo
 	currentHeight := utils.ConvertH256ToUint256Int(chainState.CurrentHeight)
-	if chainState != nil && currentHeight.Cmp(s.highestPeerHeadSlot) == 1 {
-		s.highestPeerHeadSlot = utils.ConvertH256ToUint256Int(chainState.CurrentHeight)
+	if chainState != nil && s.highestPeerHeadSlot == nil || currentHeight.Cmp(s.highestPeerHeadSlot) == 1 {
+		s.highestPeerHeadSlot = currentHeight
 	}
 }
 

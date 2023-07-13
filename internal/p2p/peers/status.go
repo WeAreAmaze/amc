@@ -269,27 +269,26 @@ func (p *Status) InboundLimit() int {
 	return int(float64(p.ConnectedPeerLimit()) * InboundRatio)
 }
 
-// SetMetadata sets the metadata of the given remote peer.
-func (p *Status) SetMetadata(pid peer.ID, metaData *sync_pb.Metadata) {
+// SetMetadata
+func (p *Status) SetPing(pid peer.ID, ping *sync_pb.Ping) {
 	p.store.Lock()
 	defer p.store.Unlock()
 
 	peerData := p.store.PeerDataGetOrCreate(pid)
-	peerData.MetaData = metaData
+	peerData.Ping = ping
 }
 
-// Metadata returns a copy of the metadata corresponding to the provided
-// peer id.
-func (p *Status) Metadata(pid peer.ID) (*sync_pb.Metadata, error) {
+// GetSeqNumber
+func (p *Status) GetPing(pid peer.ID) (*sync_pb.Ping, error) {
 	p.store.RLock()
 	defer p.store.RUnlock()
 
 	if peerData, ok := p.store.PeerData(pid); ok {
-		if peerData.MetaData == nil {
+		if peerData.Ping == nil {
 			return nil, nil
 		}
 		//todo
-		return proto.Clone(peerData.MetaData).(*sync_pb.Metadata), nil
+		return proto.Clone(peerData.Ping).(*sync_pb.Ping), nil
 	}
 	return nil, peerdata.ErrPeerUnknown
 }

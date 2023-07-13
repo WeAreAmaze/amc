@@ -16,6 +16,7 @@ import (
 	"github.com/amazechain/amc/internal/p2p/peers"
 	"github.com/amazechain/amc/internal/p2p/peers/scorers"
 	"github.com/amazechain/amc/utils"
+	"github.com/golang/protobuf/proto"
 	"sync"
 	"time"
 
@@ -67,7 +68,6 @@ type Service struct {
 	addrFilter            *multiaddr.Filters
 	ipLimiter             *leakybucket.Collector
 	privKey               *ecdsa.PrivateKey
-	metaData              *sync_pb.Metadata //todo
 	pubsub                *pubsub.PubSub
 	joinedTopics          map[string]*pubsub.Topic
 	joinedTopicsLock      sync.Mutex
@@ -78,6 +78,7 @@ type Service struct {
 	genesisTime           time.Time
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
+	ping                  *sync_pb.Ping
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -91,6 +92,7 @@ func NewService(ctx context.Context, cfg *conf.P2PConfig) (*Service, error) {
 		ctx:          ctx,
 		cancel:       cancel,
 		cfg:          cfg,
+		ping:         &sync_pb.Ping{SeqNumber: 0},
 		isPreGenesis: true,
 		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
 	}
@@ -103,11 +105,6 @@ func NewService(ctx context.Context, cfg *conf.P2PConfig) (*Service, error) {
 	s.privKey, err = privKey(s.cfg)
 	if err != nil {
 		log.Error("Failed to generate p2p private key", "err", err)
-		return nil, err
-	}
-	s.metaData, err = metaDataFromConfig(s.cfg)
-	if err != nil {
-		log.Error("Failed to create peer metadata", "err", err)
 		return nil, err
 	}
 	s.addrFilter, err = configureFilter(s.cfg)
@@ -154,6 +151,14 @@ func NewService(ctx context.Context, cfg *conf.P2PConfig) (*Service, error) {
 	//types.InitializeDataMaps()
 
 	return s, nil
+}
+
+func (s *Service) GetPing() *sync_pb.Ping {
+	return proto.Clone(s.ping).(*sync_pb.Ping)
+}
+
+func (s *Service) IncSeqNumber() {
+	s.ping.SeqNumber++
 }
 
 // Start the p2p service.
@@ -350,16 +355,6 @@ func (s *Service) DiscoveryAddresses() ([]multiaddr.Multiaddr, error) {
 		return nil, nil
 	}
 	return convertToUdpMultiAddr(s.dv5Listener.Self())
-}
-
-// Metadata returns a copy of the peer's metadata.
-func (s *Service) Metadata() *sync_pb.Metadata {
-	return s.metaData
-}
-
-// MetadataSeq returns the metadata sequence number.
-func (s *Service) MetadataSeq() uint64 {
-	return s.metaData.GetSeqNumber()
 }
 
 // AddPingMethod adds the metadata ping rpc method to the p2p service, so that it can

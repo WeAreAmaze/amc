@@ -37,18 +37,15 @@ func (s *Service) Send(ctx context.Context, message interface{}, baseTopic strin
 		//tracing.AnnotateError(span, err)
 		return nil, err
 	}
-	// do not encode anything if we are sending a metadata request
-	if baseTopic != RPCMetaDataTopicV1 {
-		castedMsg, ok := message.(ssz.Marshaler)
-		if !ok {
-			return nil, errors.Errorf("%T does not support the ssz marshaller interface", message)
-		}
-		if _, err := s.Encoding().EncodeWithMaxLength(stream, castedMsg); err != nil {
-			//tracing.AnnotateError(span, err)
-			_err := stream.Reset()
-			_ = _err
-			return nil, err
-		}
+	castedMsg, ok := message.(ssz.Marshaler)
+	if !ok {
+		return nil, errors.Errorf("%T does not support the ssz marshaller interface", message)
+	}
+	if _, err := s.Encoding().EncodeWithMaxLength(stream, castedMsg); err != nil {
+		//tracing.AnnotateError(span, err)
+		_err := stream.Reset()
+		_ = _err
+		return nil, err
 	}
 
 	// Close stream for writing.

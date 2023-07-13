@@ -33,11 +33,6 @@ message HeadersByRangeRequest {
 }
 
 // todo
-message Metadata {
-  uint64 seq_number = 1;
-}
-
-// todo
 message Ping {
   uint64 seq_number = 1;
 }

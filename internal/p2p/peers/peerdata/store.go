@@ -61,7 +61,7 @@ type PeerData struct {
 	Enr           *enr.Record
 	NextValidTime time.Time
 	// Chain related data.
-	MetaData                  *sync_pb.Metadata
+	Ping                      *sync_pb.Ping
 	ChainState                *sync_pb.Status
 	ChainStateLastUpdated     time.Time
 	ChainStateValidationError error

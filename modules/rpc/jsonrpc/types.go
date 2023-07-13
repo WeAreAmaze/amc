@@ -29,8 +29,9 @@ import (
 )
 
 type API struct {
-	Namespace string
-	Service   interface{}
+	Namespace     string
+	Service       interface{}
+	Authenticated bool // whether the api should only be available behind authentication.
 }
 
 type ServerCodec interface {

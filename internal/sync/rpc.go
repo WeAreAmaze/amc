@@ -47,24 +47,17 @@ func (s *Service) registerRPCHandlers() {
 		p2p.RPCBodiesDataTopicV1,
 		s.bodiesByRangeRPCHandler,
 	)
-
-	s.registerRPC(
-		p2p.RPCMetaDataTopicV1,
-		s.metaDataHandler,
-	)
 }
 
 // Remove all Stream handlers
 func (s *Service) unregisterHandlers() {
 	fullBodiesRangeTopic := p2p.RPCBodiesDataTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
 	fullStatusTopic := p2p.RPCStatusTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
-	fullMetadataTopic := p2p.RPCMetaDataTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
 	fullGoodByeTopic := p2p.RPCGoodByeTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
 	fullPingTopic := p2p.RPCPingTopicV1 + s.cfg.p2p.Encoding().ProtocolSuffix()
 
 	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullBodiesRangeTopic))
 	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullStatusTopic))
-	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullMetadataTopic))
 	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullGoodByeTopic))
 	s.cfg.p2p.Host().RemoveStreamHandler(protocol.ID(fullPingTopic))
 }
@@ -128,20 +121,6 @@ func (s *Service) registerRPC(baseTopic string, handle rpcHandler) {
 
 		// Increment message received counter.
 		messageReceivedCounter.WithLabelValues(topic).Inc()
-
-		// since metadata requests do not have any data in the payload, we
-		// do not decode anything.
-		// todo
-		if baseTopic == p2p.RPCMetaDataTopicV1 {
-			if err := handle(ctx, base, stream); err != nil {
-				messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-				if err != p2ptypes.ErrWrongForkDigestVersion {
-					log.Debug("Could not handle p2p RPC", "err", err)
-				}
-				//tracing.AnnotateError(span, err)
-			}
-			return
-		}
 
 		// Given we have an input argument that can be pointer or the actual object, this gives us
 		// a way to check for its reflect.Kind and based on the result, we can decode

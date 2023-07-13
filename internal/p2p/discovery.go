@@ -39,6 +39,7 @@ func (s *Service) RefreshENR() {
 		return
 	}
 
+	s.IncSeqNumber()
 	// ping all peers to inform them of new metadata
 	s.pingPeers()
 }

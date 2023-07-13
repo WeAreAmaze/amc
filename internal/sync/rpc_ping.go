@@ -7,8 +7,6 @@ import (
 	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/internal/p2p"
 	p2ptypes "github.com/amazechain/amc/internal/p2p/types"
-	"github.com/amazechain/amc/log"
-	"strings"
 	"time"
 
 	libp2pcore "github.com/libp2p/go-libp2p/core"
@@ -39,7 +37,7 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}
-	sq := &sync_pb.Ping{SeqNumber: s.cfg.p2p.MetadataSeq()}
+	sq := s.cfg.p2p.GetPing()
 	if _, err := s.cfg.p2p.Encoding().EncodeWithMaxLength(stream, sq); err != nil {
 		return err
 	}
@@ -47,28 +45,10 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	closeStream(stream)
 
 	if valid {
+		s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), m)
 		// If the sequence number was valid we're done.
 		return nil
 	}
-
-	// The sequence number was not valid.  Start our own ping back to the peer.
-	go func() {
-		// New context so the calling function doesn't cancel on us.
-		ctx, cancel := context.WithTimeout(context.Background(), ttfbTimeout)
-		defer cancel()
-		md, err := s.sendMetaDataRequest(ctx, stream.Conn().RemotePeer())
-		if err != nil {
-			// We cannot compare errors directly as the stream muxer error
-			// type isn't compatible with the error we have, so a direct
-			// equality checks fails.
-			if !strings.Contains(err.Error(), p2ptypes.ErrIODeadline.Error()) {
-				log.Debug("Could not send metadata request", "peer", stream.Conn().RemotePeer(), "err", err)
-			}
-			return
-		}
-		// update metadata if there is no error
-		s.cfg.p2p.Peers().SetMetadata(stream.Conn().RemotePeer(), md)
-	}()
 
 	return nil
 }
@@ -77,7 +57,7 @@ func (s *Service) sendPingRequest(ctx context.Context, id peer.ID) error {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
-	pingReq := &sync_pb.Ping{SeqNumber: s.cfg.p2p.MetadataSeq()}
+	pingReq := s.cfg.p2p.GetPing()
 	topic, err := p2p.TopicFromMessage(p2p.PingMessageName)
 	if err != nil {
 		return err
@@ -115,28 +95,23 @@ func (s *Service) sendPingRequest(ctx context.Context, id peer.ID) error {
 	if valid {
 		return nil
 	}
-	md, err := s.sendMetaDataRequest(ctx, stream.Conn().RemotePeer())
-	if err != nil {
-		// do not increment bad responses, as its
-		// already done in the request method.
-		return err
-	}
-	s.cfg.p2p.Peers().SetMetadata(stream.Conn().RemotePeer(), md)
+	s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), pingResponse)
 	return nil
 }
 
 // validates the peer's sequence number.
 func (s *Service) validateSequenceNum(seq uint64, id peer.ID) (bool, error) {
-	md, err := s.cfg.p2p.Peers().Metadata(id)
+	md, err := s.cfg.p2p.Peers().GetPing(id)
 	if err != nil {
 		return false, err
 	}
+	//
 	if md == nil {
-		return false, nil
+		return true, nil
 	}
 	// Return error on invalid sequence number.
-	if md.GetSeqNumber() > uint64(seq) {
+	if md.GetSeqNumber() > seq {
 		return false, p2ptypes.ErrInvalidSequenceNum
 	}
-	return md.GetSeqNumber() == uint64(seq), nil
+	return md.GetSeqNumber() <= seq, nil
 }

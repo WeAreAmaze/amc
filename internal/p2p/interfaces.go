@@ -25,7 +25,7 @@ type P2P interface {
 	PeerManager
 	ConnectionHandler
 	PeersProvider
-	MetadataProvider
+	PingProvider
 
 	Start()
 	Stop() error
@@ -94,8 +94,8 @@ type PeersProvider interface {
 	Peers() *peers.Status
 }
 
-// MetadataProvider returns the metadata related information for the local peer.
-type MetadataProvider interface {
-	Metadata() *sync_pb.Metadata
-	MetadataSeq() uint64
+// PingProvider returns the metadata related information for the local peer.
+type PingProvider interface {
+	GetPing() *sync_pb.Ping
+	IncSeqNumber()
 }

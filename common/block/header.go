@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 	"sync/atomic"
 
 	"github.com/amazechain/amc/api/protocol/types_pb"

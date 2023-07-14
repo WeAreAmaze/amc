@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"math/rand"
 	"time"
 

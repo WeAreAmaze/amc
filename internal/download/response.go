@@ -23,7 +23,7 @@ import (
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/holiman/uint256"
 )

@@ -18,8 +18,8 @@ package download
 
 import (
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 	"math/rand"
 	"time"
 

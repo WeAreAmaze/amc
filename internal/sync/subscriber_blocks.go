@@ -3,7 +3,7 @@ package sync
 import (
 	"context"
 	block2 "github.com/amazechain/amc/common/block"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) blockSubscriber(ctx context.Context, msg proto.Message) error {

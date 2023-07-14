@@ -25,9 +25,9 @@ import (
 	"github.com/amazechain/amc/internal/p2p"
 	amcsync "github.com/amazechain/amc/internal/sync"
 	"github.com/amazechain/amc/internal/tracers"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/common/cmp"
+	"google.golang.org/protobuf/proto"
 	"runtime"
 	"strings"
 
@@ -134,6 +134,8 @@ type Node struct {
 func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	//1. init db
 	var name = kv.ChainDB.String()
+	c, cancel := context.WithCancel(ctx)
+
 	var (
 		genesisBlock block.IBlock
 		privateKey   crypto.PrivKey
@@ -212,6 +214,11 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
+	p2p, err := p2p.NewService(c, cfg.P2PCfg)
+	if err != nil {
+		return nil, err
+	}
+
 	switch cfg.GenesisBlockCfg.Engine.EngineName {
 	case "APoaEngine":
 		engine = apoa.New(cfg.GenesisBlockCfg.Engine, chainKv)
@@ -221,8 +228,14 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Engine.EngineName)
 	}
 
-	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, pubsubServer, cfg.GenesisBlockCfg.Config)
+	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisBlockCfg.Config)
 	pool, _ := txspool.NewTxsPool(ctx, bc)
+
+	syncServer := amcsync.NewService(
+		ctx,
+		amcsync.WithP2P(p2p),
+		amcsync.WithChainService(bc),
+	)
 
 	//todo
 	var txs []*transaction.Transaction
@@ -243,8 +256,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 	//bc.SetEngine(engine)
 
-	c, cancel := context.WithCancel(ctx)
-
 	downloader = download.NewDownloader(ctx, bc, s, pubsubServer, peers)
 
 	_ = s.SetHandler(message.MsgDownloader, downloader.ConnHandler)
@@ -259,17 +270,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/amc)
 	// are required to add the backends later on.
 	accman := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.NodeCfg.InsecureUnlockAllowed})
-
-	p2p, err := p2p.NewService(c, cfg.P2PCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	syncServer := amcsync.NewService(
-		ctx,
-		amcsync.WithP2P(p2p),
-		amcsync.WithChainService(bc),
-	)
 
 	node = Node{
 		ctx:             c,

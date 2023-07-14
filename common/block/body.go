@@ -22,7 +22,7 @@ import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type Body struct {

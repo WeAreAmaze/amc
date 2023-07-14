@@ -52,7 +52,7 @@ func (s *Service) validateBlockPubSub(ctx context.Context, pid peer.ID, msg *pub
 		return pubsub.ValidationReject, errors.New("msg is not types_pb.Block")
 	}
 
-	var iBlock block.IBlock
+	iBlock := new(block.Block)
 	if err = iBlock.FromProtoMessage(blk); err != nil {
 		return pubsub.ValidationReject, errors.New("block.Block is nil")
 	}

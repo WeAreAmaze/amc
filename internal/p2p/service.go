@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/enode"
@@ -75,7 +76,7 @@ type Service struct {
 	startupErr            error
 	ctx                   context.Context
 	host                  host.Host
-	genesisTime           time.Time
+	genesisHash           types.Hash
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
 	ping                  *sync_pb.Ping
@@ -83,7 +84,7 @@ type Service struct {
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
-func NewService(ctx context.Context, cfg *conf.P2PConfig) (*Service, error) {
+func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig) (*Service, error) {
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
@@ -95,6 +96,7 @@ func NewService(ctx context.Context, cfg *conf.P2PConfig) (*Service, error) {
 		ping:         &sync_pb.Ping{SeqNumber: 0},
 		isPreGenesis: true,
 		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
+		genesisHash:  genesisHash,
 	}
 
 	dv5Nodes := parseBootStrapAddrs(s.cfg.BootstrapNodeAddr)
@@ -287,9 +289,6 @@ func (s *Service) Status() error {
 	}
 	if s.startupErr != nil {
 		return s.startupErr
-	}
-	if s.genesisTime.IsZero() {
-		return errors.New("no genesis time set")
 	}
 	return nil
 }

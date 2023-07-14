@@ -19,11 +19,11 @@ package api
 import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
-	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"math/big"
 )
@@ -118,7 +118,7 @@ func RPCMarshalHeader(head block.IHeader) map[string]interface{} {
 		"parentHash":       mvm_types.FromAmcHash(header.ParentHash),
 		"nonce":            header.Nonce,
 		"mixHash":          mvm_types.FromAmcHash(header.MixDigest),
-		"sha3Uncles":       mvm_types.FromAmcHash(utils.EmptyUncleHash),
+		"sha3Uncles":       mvm_types.FromAmcHash(hash.EmptyUncleHash),
 		"miner":            mvm_types.FromAmcAddress(&header.Coinbase),
 		"difficulty":       (*hexutil.Big)(header.Difficulty.ToBig()),
 		"extraData":        hexutil.Bytes(header.Extra),

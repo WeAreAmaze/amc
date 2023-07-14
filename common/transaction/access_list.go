@@ -17,8 +17,8 @@
 package transaction
 
 import (
+	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -108,7 +108,7 @@ func (tx *AccessListTx) from() *types.Address    { return tx.From }
 func (tx *AccessListTx) sign() []byte            { return tx.Sign }
 
 func (tx *AccessListTx) hash() types.Hash {
-	hash := utils.PrefixedRlpHash(AccessListTxType, []interface{}{
+	hash := hash.PrefixedRlpHash(AccessListTxType, []interface{}{
 		tx.ChainID,
 		tx.Nonce,
 		tx.GasPrice,

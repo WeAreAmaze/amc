@@ -22,11 +22,12 @@ import (
 	"github.com/amazechain/amc/common/account"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/hash"
+
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/rlp"
 	"github.com/amazechain/amc/log"
-	"github.com/amazechain/amc/utils"
 	"golang.org/x/crypto/sha3"
 	"sort"
 	"unsafe"
@@ -992,7 +993,7 @@ func (sdb *IntraBlockState) SlotInAccessList(addr types.Address, slot types.Hash
 // GenerateRootHash calculate root hash
 func (s *IntraBlockState) GenerateRootHash() types.Hash {
 	if len(s.stateObjectsDirty) == 0 {
-		return utils.NilHash
+		return hash.NilHash
 	}
 
 	sortAds := make(types.Addresses, 0, len(s.stateObjectsDirty))
@@ -1001,8 +1002,8 @@ func (s *IntraBlockState) GenerateRootHash() types.Hash {
 	}
 	sort.Sort(sortAds)
 	//
-	sha := utils.HasherPool.Get().(crypto.KeccakState)
-	defer utils.HasherPool.Put(sha)
+	sha := hash.HasherPool.Get().(crypto.KeccakState)
+	defer hash.HasherPool.Put(sha)
 	sha.Reset()
 
 	for _, address := range sortAds {

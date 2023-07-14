@@ -161,8 +161,8 @@ func NewBlockFromReceipt(h IHeader, txs []*transaction.Transaction, uncles []IHe
 	//}
 
 	block.header.Bloom = CreateBloom(receipts)
-	block.header.TxHash = hashing.DeriveSha(transaction.Transactions(txs))
-	block.header.ReceiptHash = hashing.DeriveSha(Receipts(receipts))
+	block.header.TxHash = hash.DeriveSha(transaction.Transactions(txs))
+	block.header.ReceiptHash = hash.DeriveSha(Receipts(receipts))
 
 	return block
 }

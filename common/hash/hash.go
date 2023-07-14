@@ -14,15 +14,62 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
+package hash
 
 import (
+	"bytes"
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/rlp"
-	"golang.org/x/crypto/sha3"
 	"sync"
+
+	"golang.org/x/crypto/sha3"
 )
+
+// hasherPool holds LegacyKeccak256 hashers for rlpHash.
+var HasherPool = sync.Pool{
+	New: func() interface{} { return sha3.NewLegacyKeccak256() },
+}
+
+// encodeBufferPool holds temporary encoder buffers for DeriveSha and TX encoding.
+var encodeBufferPool = sync.Pool{
+	New: func() interface{} { return new(bytes.Buffer) },
+}
+
+// DerivableList is the input to DeriveSha.
+// It is implemented by the 'Transactions' and 'Receipts' types.
+// This is internal, do not use these methods.
+type DerivableList interface {
+	Len() int
+	EncodeIndex(int, *bytes.Buffer)
+}
+
+func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
+	buf.Reset()
+	list.EncodeIndex(i, buf)
+	// It's really unfortunate that we need to do perform this copy.
+	// StackTrie holds onto the values until Hash is called, so the values
+	// written to it must not alias.
+	return types.CopyBytes(buf.Bytes())
+}
+
+// DeriveSha creates the tree hashes of transactions and receipts in a block header.
+func DeriveSha(list DerivableList) (h types.Hash) {
+
+	sha := HasherPool.Get().(crypto.KeccakState)
+	defer HasherPool.Put(sha)
+	sha.Reset()
+
+	valueBuf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(valueBuf)
+
+	for i := 0; i < list.Len(); i++ {
+		value := encodeForDerive(list, i, valueBuf)
+		sha.Write(value)
+	}
+	sha.Read(h[:])
+	return h
+}
 
 var (
 	// NilHash sum(nil)
@@ -30,11 +77,6 @@ var (
 	// EmptyUncleHash rlpHash([]*Header(nil))
 	EmptyUncleHash = types.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
 )
-
-// HasherPool holds LegacyKeccak256 hashers for rlpHash.
-var HasherPool = sync.Pool{
-	New: func() interface{} { return sha3.NewLegacyKeccak256() },
-}
 
 func RlpHash(x interface{}) (h types.Hash) {
 	sha := HasherPool.Get().(crypto.KeccakState)

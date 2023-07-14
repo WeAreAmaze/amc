@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/common/u256"
 	"github.com/amazechain/amc/params"
-	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"math/big"
 )
@@ -198,7 +198,7 @@ func (s londonSigner) Hash(tx *Transaction) types.Hash {
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Hash(tx)
 	}
-	return utils.PrefixedRlpHash(
+	return hash.PrefixedRlpHash(
 		tx.Type(),
 		[]interface{}{
 			s.chainId,
@@ -279,7 +279,7 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 func (s eip2930Signer) Hash(tx *Transaction) types.Hash {
 	switch tx.Type() {
 	case LegacyTxType:
-		return utils.RlpHash([]interface{}{
+		return hash.RlpHash([]interface{}{
 			tx.Nonce(),
 			tx.GasPrice(),
 			tx.Gas(),
@@ -289,7 +289,7 @@ func (s eip2930Signer) Hash(tx *Transaction) types.Hash {
 			s.chainId, uint(0), uint(0),
 		})
 	case AccessListTxType:
-		return utils.PrefixedRlpHash(
+		return hash.PrefixedRlpHash(
 			tx.Type(),
 			[]interface{}{
 				s.chainId,
@@ -373,7 +373,7 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s EIP155Signer) Hash(tx *Transaction) types.Hash {
-	return utils.RlpHash([]interface{}{
+	return hash.RlpHash([]interface{}{
 		tx.Nonce(),
 		tx.GasPrice(),
 		tx.Gas(),
@@ -443,7 +443,7 @@ func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (fs FrontierSigner) Hash(tx *Transaction) types.Hash {
-	return utils.RlpHash([]interface{}{
+	return hash.RlpHash([]interface{}{
 		tx.Nonce(),
 		tx.GasPrice(),
 		tx.Gas(),

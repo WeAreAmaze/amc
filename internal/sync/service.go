@@ -62,8 +62,9 @@ type validationFn func(ctx context.Context) (pubsub.ValidationResult, error)
 
 // config to hold dependencies for the sync service.
 type config struct {
-	p2p   p2p.P2P
-	chain common.IBlockChain
+	p2p         p2p.P2P
+	chain       common.IBlockChain
+	initialSync Checker
 }
 
 // This defines the interface for interacting with block chain service
@@ -76,8 +77,6 @@ type Service struct {
 	cfg    *config
 	ctx    context.Context
 	cancel context.CancelFunc
-
-	initialSync Checker
 
 	subHandler  *subTopicHandler
 	rateLimiter *limiter

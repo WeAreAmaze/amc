@@ -20,3 +20,10 @@ func WithChainService(chain common.IBlockChain) Option {
 		return nil
 	}
 }
+
+func WithInitialSync(initialSync Checker) Option {
+	return func(s *Service) error {
+		s.cfg.initialSync = initialSync
+		return nil
+	}
+}

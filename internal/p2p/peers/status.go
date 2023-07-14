@@ -613,6 +613,10 @@ func (p *Status) BestPeers(wantPeers int, ourCurrentHeight *uint256.Int) (*uint2
 		potentialPIDs = potentialPIDs[:wantPeers]
 	}
 
+	if len(potentialPIDs) == 0 {
+		return uint256.NewInt(0), []peer.ID{}
+	}
+
 	// Select the target epoch, which has enough peers' votes (>= minPeers).
 	var targetBlockNumber *uint256.Int
 	targetBlockNumber = pidHead[potentialPIDs[len(potentialPIDs)]]

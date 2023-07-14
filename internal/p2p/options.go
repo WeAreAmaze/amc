@@ -52,7 +52,7 @@ func (s *Service) buildOptions(ip net.IP, priKey *ecdsa.PrivateKey) []libp2p.Opt
 	if err != nil {
 		log.Crit("Failed to retrieve peer id", "err", err)
 	}
-	log.Info("Running node with peer id of %s ", id.String())
+	log.Info(fmt.Sprintf("Running node with peer id of %s ", id.String()))
 
 	options := []libp2p.Option{
 		privKeyOption(priKey),

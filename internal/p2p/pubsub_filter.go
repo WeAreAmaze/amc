@@ -2,14 +2,13 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/amazechain/amc/internal/p2p/encoder"
 	"strings"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
-
-var _ pubsub.SubscriptionFilter = (*Service)(nil)
 
 // It is set at this limit to handle the possibility
 // of double topic subscriptions at fork boundaries.
@@ -28,14 +27,14 @@ func (s *Service) CanSubscribe(topic string) bool {
 	if parts[0] != "" {
 		return false
 	}
-	if parts[1] != "eth2" {
+	if parts[1] != "amc" {
 		return false
 	}
 
 	//fork
-	//if parts[4] != encoder.ProtocolSuffixSSZSnappy {
-	//	return false
-	//}
+	if parts[4] != encoder.ProtocolSuffixSSZSnappy {
+		return false
+	}
 
 	// Check the incoming topic matches any topic mapping. This includes a check for part[3].
 	for gt := range gossipTopicMappings {

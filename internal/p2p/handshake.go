@@ -84,7 +84,7 @@ func (s *Service) AddConnectionHandler(reqFunc, goodByeFunc func(ctx context.Con
 				s.peers.Add(nil /* ENR */, remotePeer, conn.RemoteMultiaddr(), conn.Stat().Direction)
 				// Defensive check in the event we still get a bad peer.
 				if s.peers.IsBad(remotePeer) {
-					log.Trace("Ignoring connection request", "reason", "bad peer")
+					log.Debug("Ignoring connection request", "reason", "bad peer")
 					disconnectFromPeer()
 					return
 				}

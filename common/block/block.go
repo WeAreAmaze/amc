@@ -19,7 +19,7 @@ package block
 import (
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
-	"github.com/amazechain/amc/common/hashing"
+	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/utils"

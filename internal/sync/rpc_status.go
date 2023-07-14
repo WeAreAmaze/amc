@@ -74,17 +74,19 @@ func (s *Service) maintainPeerStatuses() {
 func (s *Service) resyncIfBehind() {
 	utils.RunEvery(s.ctx, resyncInterval, func() {
 		//todo  header should > body ?
-		if s.initialSync != nil && !s.initialSync.Syncing() {
+		if s.cfg.initialSync != nil && !s.cfg.initialSync.Syncing() {
 			// Factor number of expected minimum sync peers, to make sure that enough peers are
 			// available to resync (some peers may go away between checking non-finalized peers and
 			// actual resyncing).
+
+			//
 			highestBlockNr, _ := s.cfg.p2p.Peers().BestPeers(minimumSyncPeers*2, s.cfg.chain.CurrentBlock().Number64())
 			// Check if the current node is more than 1 epoch behind.
 			if highestBlockNr.Cmp(new(uint256.Int).AddUint64(s.cfg.chain.CurrentBlock().Number64(), 5)) >= 0 {
 				log.Info("Fallen behind peers; reverting to initial sync to catch up", "currentBlockNr", s.cfg.chain.CurrentBlock().Number64(), "peersBlockNr", highestBlockNr)
 				numberOfTimesResyncedCounter.Inc()
 				//s.clearPendingSlots()
-				if err := s.initialSync.Resync(); err != nil {
+				if err := s.cfg.initialSync.Resync(); err != nil {
 					log.Error("Could not resync chain", "err", err)
 				}
 			}

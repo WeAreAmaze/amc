@@ -31,7 +31,7 @@ func (s *Service) validateBlockPubSub(ctx context.Context, pid peer.ID, msg *pub
 	}
 
 	// We should not attempt to process blocks until fully synced, but propagation is OK.
-	if s.initialSync.Syncing() {
+	if s.cfg.initialSync.Syncing() {
 		return pubsub.ValidationIgnore, nil
 	}
 

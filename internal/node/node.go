@@ -24,6 +24,7 @@ import (
 	"github.com/amazechain/amc/internal/debug"
 	"github.com/amazechain/amc/internal/p2p"
 	amcsync "github.com/amazechain/amc/internal/sync"
+	initialsync "github.com/amazechain/amc/internal/sync/initial-sync"
 	"github.com/amazechain/amc/internal/tracers"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/common/cmp"
@@ -129,6 +130,7 @@ type Node struct {
 
 	p2p  p2p.P2P
 	sync *amcsync.Service
+	is   *initialsync.Service
 }
 
 func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
@@ -231,10 +233,16 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisBlockCfg.Config)
 	pool, _ := txspool.NewTxsPool(ctx, bc)
 
+	is := initialsync.NewService(c, &initialsync.Config{
+		Chain: bc,
+		P2P:   p2p,
+	})
+
 	syncServer := amcsync.NewService(
 		ctx,
 		amcsync.WithP2P(p2p),
 		amcsync.WithChainService(bc),
+		amcsync.WithInitialSync(is),
 	)
 
 	//todo
@@ -302,6 +310,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 		p2p:  p2p,
 		sync: syncServer,
+		is:   is,
 	}
 
 	// Apply flags.

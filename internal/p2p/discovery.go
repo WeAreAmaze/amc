@@ -189,7 +189,7 @@ func (s *Service) createLocalNode(
 	localNode.SetFallbackIP(ipAddr)
 	localNode.SetFallbackUDP(udpPort)
 
-	localNode, err = addForkEntry(localNode, s.genesisTime, s.genesisValidatorsRoot)
+	localNode, err = addForkEntry(localNode, s.genesisHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not add eth2 fork version entry to enr")
 	}
@@ -258,11 +258,9 @@ func (s *Service) filterPeer(node *enode.Node) bool {
 	nodeENR := node.Record()
 	// Decide whether or not to connect to peer that does not
 	// match the proper fork ENR data with our local node.
-	if s.genesisValidatorsRoot != nil {
-		if err := s.compareForkENR(nodeENR); err != nil {
-			log.Trace("Fork ENR mismatches between peer and local node", "err", err)
-			return false
-		}
+	if err := s.compareForkENR(nodeENR); err != nil {
+		log.Trace("Fork ENR mismatches between peer and local node", "err", err)
+		return false
 	}
 	// Add peer to peer handler.
 	s.peers.Add(nodeENR, peerData.ID, multiAddr, network.DirUnknown)

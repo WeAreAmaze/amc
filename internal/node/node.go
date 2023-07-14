@@ -214,7 +214,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
-	p2p, err := p2p.NewService(c, cfg.P2PCfg)
+	p2p, err := p2p.NewService(c, genesisBlock.Hash(), cfg.P2PCfg)
 	if err != nil {
 		return nil, err
 	}

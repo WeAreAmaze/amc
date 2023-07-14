@@ -55,8 +55,10 @@ const (
 var RPCTopicMappings = map[string]interface{}{
 	// RPC Status Message
 	RPCStatusTopicV1:     new(sync_pb.Status),
-	RPCPingTopicV1:       new(ssztype.SSZUint64),
 	RPCBodiesDataTopicV1: new(types_pb.Block),
+
+	RPCPingTopicV1:    new(ssztype.SSZUint64),
+	RPCGoodByeTopicV1: new(ssztype.SSZUint64),
 }
 
 // Maps all registered protocol prefixes.

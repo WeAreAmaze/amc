@@ -16,7 +16,7 @@ import (
 	"github.com/amazechain/amc/internal/p2p/peers"
 	"github.com/amazechain/amc/internal/p2p/peers/scorers"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"sync"
 	"time"
 

@@ -56,7 +56,8 @@ func (s *PeerStatusScorer) score(pid peer.ID) float64 {
 	if !ok || peerData.ChainState == nil {
 		return score
 	}
-	if peerData.CurrentHeight().Cmp(s.ourCurrentHeight) == -1 {
+	// todo
+	if s.ourCurrentHeight != nil && peerData.CurrentHeight().Cmp(s.ourCurrentHeight) == -1 {
 		return score
 	}
 	// Calculate score as a ratio to the known maximum head slot.

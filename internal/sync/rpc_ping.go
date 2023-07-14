@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
+	ssztype "github.com/amazechain/amc/common/types/ssz"
 	"github.com/amazechain/amc/internal/p2p"
 	p2ptypes "github.com/amazechain/amc/internal/p2p/types"
 	"time"
@@ -17,7 +18,7 @@ import (
 func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pcore.Stream) error {
 	SetRPCStreamDeadlines(stream)
 
-	m, ok := msg.(*sync_pb.Ping)
+	m, ok := msg.(*ssztype.SSZUint64)
 	if !ok {
 		return fmt.Errorf("wrong message type for ping, got %T, wanted *uint64", msg)
 	}
@@ -25,7 +26,7 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
-	valid, err := s.validateSequenceNum(m.GetSeqNumber(), stream.Conn().RemotePeer())
+	valid, err := s.validateSequenceNum(*m, stream.Conn().RemotePeer())
 	if err != nil {
 		// Descore peer for giving us a bad sequence number.
 		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
@@ -45,7 +46,7 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	closeStream(stream)
 
 	if valid {
-		s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), m)
+		s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), &sync_pb.Ping{SeqNumber: uint64(*m)})
 		// If the sequence number was valid we're done.
 		return nil
 	}
@@ -57,12 +58,12 @@ func (s *Service) sendPingRequest(ctx context.Context, id peer.ID) error {
 	ctx, cancel := context.WithTimeout(ctx, respTimeout)
 	defer cancel()
 
-	pingReq := s.cfg.p2p.GetPing()
+	pingReq := ssztype.SSZUint64(s.cfg.p2p.GetPing().SeqNumber)
 	topic, err := p2p.TopicFromMessage(p2p.PingMessageName)
 	if err != nil {
 		return err
 	}
-	stream, err := s.cfg.p2p.Send(ctx, pingReq, topic, id)
+	stream, err := s.cfg.p2p.Send(ctx, &pingReq, topic, id)
 	if err != nil {
 		return err
 	}
@@ -80,11 +81,11 @@ func (s *Service) sendPingRequest(ctx context.Context, id peer.ID) error {
 		s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 		return errors.New(errMsg)
 	}
-	var pingResponse *sync_pb.Ping
+	pingResponse := new(ssztype.SSZUint64)
 	if err := s.cfg.p2p.Encoding().DecodeWithMaxLength(stream, pingResponse); err != nil {
 		return err
 	}
-	valid, err := s.validateSequenceNum(pingResponse.GetSeqNumber(), stream.Conn().RemotePeer())
+	valid, err := s.validateSequenceNum(*pingResponse, stream.Conn().RemotePeer())
 	if err != nil {
 		// Descore peer for giving us a bad sequence number.
 		if errors.Is(err, p2ptypes.ErrInvalidSequenceNum) {
@@ -95,12 +96,12 @@ func (s *Service) sendPingRequest(ctx context.Context, id peer.ID) error {
 	if valid {
 		return nil
 	}
-	s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), pingResponse)
+	s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), &sync_pb.Ping{SeqNumber: uint64(*pingResponse)})
 	return nil
 }
 
 // validates the peer's sequence number.
-func (s *Service) validateSequenceNum(seq uint64, id peer.ID) (bool, error) {
+func (s *Service) validateSequenceNum(seq ssztype.SSZUint64, id peer.ID) (bool, error) {
 	md, err := s.cfg.p2p.Peers().GetPing(id)
 	if err != nil {
 		return false, err
@@ -110,8 +111,8 @@ func (s *Service) validateSequenceNum(seq uint64, id peer.ID) (bool, error) {
 		return true, nil
 	}
 	// Return error on invalid sequence number.
-	if md.GetSeqNumber() > seq {
+	if md.GetSeqNumber() > uint64(seq) {
 		return false, p2ptypes.ErrInvalidSequenceNum
 	}
-	return md.GetSeqNumber() <= seq, nil
+	return md.GetSeqNumber() <= uint64(seq), nil
 }

@@ -19,8 +19,8 @@ package block
 import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 )
 
 type IHeader interface {

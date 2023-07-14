@@ -21,9 +21,9 @@ import (
 	"github.com/amazechain/amc/common/account"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/modules"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
+	"google.golang.org/protobuf/proto"
 )
 
 var _ WriterWithChangeSets = (*PlainStateWriter)(nil)

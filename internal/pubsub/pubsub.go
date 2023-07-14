@@ -19,7 +19,7 @@ package pubsub
 import (
 	"context"
 	"errors"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"sync"
 	"sync/atomic"
 
@@ -135,7 +135,7 @@ func (m *AmcPubSub) Publish(topic string, msg proto.Message) error {
 	if t, ok := m.topicsMap[topic]; ok {
 		data, err := proto.Marshal(msg)
 		if err != nil {
-			log.Errorf("failed to publish topic(%s), data: %s, err: %v", topic, msg.String(), err)
+			log.Errorf("failed to publish topic(%s), data: %s, err: %v", topic, msg, err)
 			return err
 		}
 

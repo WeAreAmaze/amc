@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"go.opencensus.io/trace"
+	"google.golang.org/protobuf/proto"
 )
 
 const pubsubMessageTimeout = 30 * time.Second

@@ -21,8 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/contracts/deposit"
-	"github.com/golang/protobuf/proto"
+	"github.com/amazechain/amc/internal/p2p"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -101,6 +102,7 @@ type BlockChain struct {
 	chBlocks chan block2.IBlock
 
 	pubsub common.IPubSub
+	p2p    p2p.P2P
 
 	errorCh chan error
 
@@ -136,7 +138,7 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, pubsub common.IPubSub, config *params.ChainConfig) (common.IBlockChain, error) {
+func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, p2p p2p.P2P, config *params.ChainConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	var current *block2.Block
 	_ = db.View(c, func(tx kv.Tx) error {
@@ -165,7 +167,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		peers:         make(map[peer.ID]bool),
 		chBlocks:      make(chan block2.IBlock, 100),
 		errorCh:       make(chan error),
-		pubsub:        pubsub,
+		p2p:           p2p,
 		downloader:    downloader,
 		latestBlockCh: make(chan block2.IBlock, 50),
 		engine:        engine,
@@ -784,10 +786,10 @@ func (bc *BlockChain) GetBlock(hash types.Hash, number uint64) block2.IBlock {
 	//return block2.NewBlock(header, body.Transactions())
 }
 
-func (bc *BlockChain) SealedBlock(b block2.IBlock) {
+func (bc *BlockChain) SealedBlock(b block2.IBlock) error {
 	pbBlock := b.ToProtoMessage()
-
-	_ = bc.pubsub.Publish(message.GossipBlockMessage, pbBlock)
+	//_ = bc.pubsub.Publish(message.GossipBlockMessage, pbBlock)
+	return bc.p2p.Broadcast(context.TODO(), pbBlock)
 }
 
 // StopInsert stop insert

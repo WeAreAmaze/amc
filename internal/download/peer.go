@@ -23,10 +23,10 @@ import (
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 	"math/rand"
 	"sync"
 )

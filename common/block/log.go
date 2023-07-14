@@ -22,8 +22,8 @@ import (
 	"github.com/amazechain/amc/common/types"
 
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 )
 
 type Log struct {

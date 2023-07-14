@@ -22,11 +22,11 @@ import (
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"google.golang.org/protobuf/proto"
 )
 
 type IDownloader interface {

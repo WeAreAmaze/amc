@@ -47,7 +47,7 @@ type IBlockChain interface {
 	InsertBlock(blocks []block.IBlock, isSync bool) (int, error)
 	SetEngine(engine consensus.Engine)
 	GetBlocksFromHash(hash types.Hash, n int) (blocks []block.IBlock)
-	SealedBlock(b block.IBlock)
+	SealedBlock(b block.IBlock) error
 	Engine() consensus.Engine
 	GetReceipts(blockHash types.Hash) (block.Receipts, error)
 	GetLogs(blockHash types.Hash) ([][]*block.Log, error)

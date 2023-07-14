@@ -3,6 +3,7 @@ package p2p
 import (
 	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/api/protocol/types_pb"
+	ssztype "github.com/amazechain/amc/common/types/ssz"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -54,7 +55,7 @@ const (
 var RPCTopicMappings = map[string]interface{}{
 	// RPC Status Message
 	RPCStatusTopicV1:     new(sync_pb.Status),
-	RPCPingTopicV1:       new(sync_pb.Ping),
+	RPCPingTopicV1:       new(ssztype.SSZUint64),
 	RPCBodiesDataTopicV1: new(types_pb.Block),
 }
 

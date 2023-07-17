@@ -293,6 +293,7 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 		}
 		if response.err != nil {
 			switch response.err {
+			//todo
 			case errSlotIsTooHigh:
 				// Current window is already too big, re-request previous epochs.
 				for _, fsm := range q.smm.machines {

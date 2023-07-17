@@ -3,8 +3,10 @@ package initialsync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	block2 "github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"time"
 
@@ -81,8 +83,8 @@ func (s *Service) processBatchedBlocks(ctx context.Context, blks []*types_pb.Blo
 	if len(blks) == 0 {
 		return 0, errors.New("0 blocks provided into method")
 	}
-	blocks := make([]block2.IBlock, len(blks))
 
+	blocks := make([]block2.IBlock, len(blks))
 	for _, blk := range blks {
 		var block block2.IBlock
 		if err := block.FromProtoMessage(blk); err != nil {
@@ -90,6 +92,22 @@ func (s *Service) processBatchedBlocks(ctx context.Context, blks []*types_pb.Blo
 		}
 		blocks = append(blocks, block)
 	}
+
+	firstBlock := blocks[0]
+	for s.cfg.Chain.CurrentBlock().Number64().Uint64() >= firstBlock.Number64().Uint64() {
+		if len(blocks) == 1 {
+			return 0, fmt.Errorf("ourCurrentBlockNumber:%d, blockNumber:%d , root %s:%w", s.cfg.Chain.CurrentBlock().Number64().Uint64(), firstBlock.Number64().Uint64(), firstBlock.Hash(), errBlockAlreadyProcessed)
+		}
+		blocks = blocks[1:]
+		firstBlock = blocks[0]
+	}
+
+	if !s.cfg.Chain.HasBlock(firstBlock.ParentHash(), firstBlock.Number64().Uint64()-1) {
+		return 0, fmt.Errorf("%w: %s (in processBatchedBlocks, Number=%d)", errParentDoesNotExist, firstBlock.ParentHash(), firstBlock.Number64().Uint64())
+	}
+
+	s.logBatchSyncStatus(blks)
+
 	return bFunc(blocks)
 }
 
@@ -106,4 +124,25 @@ func (s *Service) updatePeerScorerStats(pid peer.ID, startBlockNr *uint256.Int) 
 		scorer := s.cfg.P2P.Peers().Scorers().BlockProviderScorer()
 		scorer.IncrementProcessedBlocks(pid, diff)
 	}
+}
+
+// logBatchSyncStatus and increments the block processing counter.
+func (s *Service) logBatchSyncStatus(blks []*types_pb.Block) {
+	s.counter.Incr(int64(len(blks)))
+	rate := float64(s.counter.Rate()) / counterSeconds
+	if rate == 0 {
+		rate = 1
+	}
+	targetNumber, _ := s.cfg.P2P.Peers().BestPeers(1, s.cfg.Chain.CurrentBlock().Number64())
+	firstBlock := blks[0]
+	firstBlockNumber := utils.ConvertH256ToUint256Int(firstBlock.Header.Number)
+	log.Info(
+		fmt.Sprintf("Processing block batch of size %d starting from  %s %d - estimated block remaining %s",
+			len(blks),
+			utils.ConvertH256ToHash(firstBlock.Header.Root),
+			firstBlockNumber.Uint64(),
+			new(uint256.Int).Sub(targetNumber, firstBlockNumber).Uint64(),
+		),
+		"peers", len(s.cfg.P2P.Peers().Connected()),
+		"blocksPerSecond", fmt.Sprintf("%.1f", rate))
 }

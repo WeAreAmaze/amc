@@ -17,7 +17,7 @@ func (s *Service) blockSubscriber(ctx context.Context, msg proto.Message) error 
 	blocks := make([]block2.IBlock, 0)
 	blocks = append(blocks, iBlock)
 
-	log.Info("Subscriber new Block", "hash", iBlock.Hash())
+	log.Info("Subscriber new Block", "hash", iBlock.Header().Hash(), "blockNr", iBlock.Header().Number64().Uint64())
 
 	if _, err := s.cfg.chain.InsertChain(blocks); err != nil {
 		// todo bad block

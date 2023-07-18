@@ -49,7 +49,7 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCStatusTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// Bodies Message
-	topicMap[addEncoding(p2p.RPCBodiesDataTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCBodiesDataTopicV1)] = leakybucket.NewCollector(1, 1024, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// Headers Message
 	topicMap[addEncoding(p2p.RPCHeadersDataTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)

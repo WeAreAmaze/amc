@@ -421,6 +421,8 @@ func (n *Node) Start() error {
 
 	n.depositContract.Start()
 
+	n.is.Start()
+
 	//rwTx, _ := n.db.BeginRw(n.ctx)
 	//defer rwTx.Rollback()
 	//rawdb.PutDeposit(rwTx, types.HexToAddress("0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9").Bytes(), []byte("1111"))

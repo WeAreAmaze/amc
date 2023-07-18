@@ -234,8 +234,9 @@ func (s *Service) Start() {
 			dialArgs, _ := s.peers.DialArgs(p)
 			direction, _ := s.peers.Direction(p)
 			connState, _ := s.peers.ConnState(p)
+			chainState, _ := s.peers.ChainState(p)
 			// hexutil.Encode([]byte(p))
-			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState)
+			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
 				log.Info("Protocol details:", "ProtocolID", id)

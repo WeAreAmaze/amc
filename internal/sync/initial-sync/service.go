@@ -61,7 +61,7 @@ func (s *Service) Start() {
 		}
 		panic(err)
 	}
-	log.Info("Synced up to blockNr: %d", s.cfg.Chain.CurrentBlock().Number64())
+	log.Info("Synced up to blockNr: %d", s.cfg.Chain.CurrentBlock().Number64().Uint64())
 	s.markSynced()
 }
 
@@ -113,15 +113,12 @@ func (s *Service) waitForMinimumPeers() (highestExpectedBlockNr *uint256.Int) {
 	required := minimumSyncPeers
 	var peers []peer.ID
 	for {
-		cb := s.cfg.Chain.CurrentBlock()
-		highestExpectedBlockNr, peers = s.cfg.P2P.Peers().BestPeers(minimumSyncPeers, cb.Number64())
+		//todo
+		highestExpectedBlockNr, peers = s.cfg.P2P.Peers().BestPeers(minimumSyncPeers, s.cfg.Chain.CurrentBlock().Number64())
 		if len(peers) >= required {
 			break
 		}
-		log.Info("Waiting for enough suitable peers before syncing",
-			"suitable", len(peers),
-			"required", required,
-		)
+		log.Info("Waiting for enough suitable peers before syncing (initial-sync.Server)", "suitable", len(peers), "required", required)
 		time.Sleep(handshakePollingInterval)
 	}
 	return

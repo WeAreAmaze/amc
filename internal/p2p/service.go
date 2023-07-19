@@ -239,14 +239,14 @@ func (s *Service) Start() {
 			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
-				log.Info("Protocol details:", "ProtocolID", id)
+				log.Trace("Protocol details:", "ProtocolID", id)
 			}
 		}
 
 		allNodes := s.dv5Listener.AllNodes()
 		log.Info("Nodes stored in the discovery table:")
 		for i, n := range allNodes {
-			log.Info(fmt.Sprintf("P2P details %d", i), "ENR", n.String(), "Node ID", n.ID(), "IP", n.IP(), "UDP", n.UDP(), "TCP", n.TCP())
+			log.Trace(fmt.Sprintf("P2P details %d", i), "ENR", n.String(), "Node ID", n.ID(), "IP", n.IP(), "UDP", n.UDP(), "TCP", n.TCP())
 		}
 	})
 

@@ -164,7 +164,7 @@ func (q *blocksQueue) loop() {
 	// Define initial state machines.
 	startBlockNr := q.chain.CurrentBlock().Number64()
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
-	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i.AddUint64(i, blocksPerRequest) {
+	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {
 		q.smm.addStateMachine(i)
 	}
 
@@ -195,7 +195,7 @@ func (q *blocksQueue) loop() {
 					)
 					if errors.Is(err, errNoRequiredPeers) {
 						forceExit := q.exitConditions.noRequiredPeersErrRetries > noRequiredPeersErrMaxRetries
-						if q.mode == modeStopOnFinalizedEpoch || forceExit {
+						if forceExit {
 							q.cancel()
 						} else {
 							q.exitConditions.noRequiredPeersErrRetries++

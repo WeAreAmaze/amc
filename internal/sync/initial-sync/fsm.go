@@ -73,9 +73,9 @@ func (smm *stateMachineManager) addEventHandler(event eventID, state stateID, fn
 
 // addStateMachine allocates memory for new FSM.
 func (smm *stateMachineManager) addStateMachine(startBlockNr *uint256.Int) *stateMachine {
-	smm.machines[startBlockNr] = &stateMachine{
+	smm.machines[startBlockNr.Clone()] = &stateMachine{
 		smm:     smm,
-		start:   startBlockNr,
+		start:   startBlockNr.Clone(),
 		state:   stateNew,
 		blocks:  []*types_pb.Block{},
 		updated: time.Now(),

@@ -66,7 +66,7 @@ func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, err
 		if len(peers) >= required {
 			return peers, nil
 		}
-		log.Info("Waiting for enough suitable peers before syncing", "suitable", len(peers), "required", required)
+		log.Info("Waiting for enough suitable peers before syncing （blocksFetcher）", "suitable", len(peers), "required", required)
 		time.Sleep(handshakePollingInterval)
 	}
 }

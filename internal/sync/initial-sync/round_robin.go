@@ -61,7 +61,7 @@ func (s *Service) syncToFinalizedBlockNr(ctx context.Context, highestExpectedBlo
 		s.processFetchedData(ctx, s.cfg.Chain.CurrentBlock().Number64(), data)
 	}
 
-	log.Info("Synced to finalized epoch - now syncing blocks up to current head", "syncedBlockNr", s.cfg.Chain.CurrentBlock().Number64(), "highestExpectedBlockNr", highestExpectedBlockNr)
+	log.Info("Synced to finalized epoch - now syncing blocks up to current head", "syncedBlockNr", s.cfg.Chain.CurrentBlock().Number64().Uint64(), "highestExpectedBlockNr", highestExpectedBlockNr.Uint64())
 	if err := queue.stop(); err != nil {
 		log.Debug("Error stopping queue", "err", err)
 	}

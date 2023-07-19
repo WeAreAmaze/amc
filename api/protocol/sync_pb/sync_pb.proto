@@ -20,14 +20,8 @@ option go_package = "github.com/amazechain/amc/api/protocol/sync_pb";
 
 import "types_pb/types.proto";
 
-message BodiesByRangeRequest {
-  types_pb.H256 start_block_number = 1;
-  uint64 count = 2;
-  uint64 step = 3;
-}
-
 message HeadersByRangeRequest {
-  types_pb.H256 start_block_number = 1;
+  types_pb.H256 startBlockNumber = 1;
   uint64 count = 2;
   uint64 step = 3;
 }
@@ -47,4 +41,10 @@ message Status {
 message ForkData {
   types_pb.H256 current_version = 1;
   types_pb.H256 genesis_validators_root = 2;
+}
+
+message BodiesByRangeRequest {
+  types_pb.H256 startBlockNumber = 1;
+  uint64 count = 2;
+  uint64 step = 3;
 }

@@ -34,7 +34,7 @@ type eventID uint8
 type stateMachineManager struct {
 	// todo
 	keys     []*uint256.Int
-	machines map[*uint256.Int]*stateMachine
+	machines map[uint64]*stateMachine
 	handlers map[stateID]map[eventID]eventHandlerFn
 }
 
@@ -56,7 +56,7 @@ type eventHandlerFn func(m *stateMachine, data interface{}) (newState stateID, e
 func newStateMachineManager() *stateMachineManager {
 	return &stateMachineManager{
 		keys:     make([]*uint256.Int, 0, lookaheadSteps),
-		machines: make(map[*uint256.Int]*stateMachine, lookaheadSteps),
+		machines: make(map[uint64]*stateMachine, lookaheadSteps),
 		handlers: make(map[stateID]map[eventID]eventHandlerFn),
 	}
 }
@@ -73,7 +73,7 @@ func (smm *stateMachineManager) addEventHandler(event eventID, state stateID, fn
 
 // addStateMachine allocates memory for new FSM.
 func (smm *stateMachineManager) addStateMachine(startBlockNr *uint256.Int) *stateMachine {
-	smm.machines[startBlockNr.Clone()] = &stateMachine{
+	smm.machines[startBlockNr.Uint64()] = &stateMachine{
 		smm:     smm,
 		start:   startBlockNr.Clone(),
 		state:   stateNew,
@@ -81,16 +81,16 @@ func (smm *stateMachineManager) addStateMachine(startBlockNr *uint256.Int) *stat
 		updated: time.Now(),
 	}
 	smm.recalculateMachineAttribs()
-	return smm.machines[startBlockNr]
+	return smm.machines[startBlockNr.Uint64()]
 }
 
 // removeStateMachine frees memory of a processed/finished FSM.
 func (smm *stateMachineManager) removeStateMachine(startSlot *uint256.Int) error {
-	if _, ok := smm.machines[startSlot]; !ok {
+	if _, ok := smm.machines[startSlot.Uint64()]; !ok {
 		return fmt.Errorf("state for machine %v is not found", startSlot)
 	}
-	smm.machines[startSlot].blocks = nil
-	delete(smm.machines, startSlot)
+	smm.machines[startSlot.Uint64()].blocks = nil
+	delete(smm.machines, startSlot.Uint64())
 	smm.recalculateMachineAttribs()
 	return nil
 }
@@ -110,7 +110,7 @@ func (smm *stateMachineManager) removeAllStateMachines() error {
 func (smm *stateMachineManager) recalculateMachineAttribs() {
 	keys := make([]*uint256.Int, 0, lookaheadSteps)
 	for key := range smm.machines {
-		keys = append(keys, key)
+		keys = append(keys, uint256.NewInt(key))
 	}
 	sort.Slice(keys, func(i, j int) bool {
 		return keys[i].Cmp(keys[j]) == -1
@@ -120,7 +120,7 @@ func (smm *stateMachineManager) recalculateMachineAttribs() {
 
 // findStateMachine returns a state machine for a given start slot (if exists).
 func (smm *stateMachineManager) findStateMachine(startSlot *uint256.Int) (*stateMachine, bool) {
-	fsm, ok := smm.machines[startSlot]
+	fsm, ok := smm.machines[startSlot.Uint64()]
 	return fsm, ok
 }
 
@@ -130,7 +130,7 @@ func (smm *stateMachineManager) highestStartSlot() (*uint256.Int, error) {
 		return uint256.NewInt(0), errors.New("no state machine exist")
 	}
 	key := smm.keys[len(smm.keys)-1]
-	return smm.machines[key].start, nil
+	return smm.machines[key.Uint64()].start, nil
 }
 
 // allMachinesInState checks whether all registered state machines are in the same state.

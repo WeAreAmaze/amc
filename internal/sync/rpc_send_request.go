@@ -49,6 +49,7 @@ func SendBodiesByRangeRequest(ctx context.Context, chain common.IBlockChain, p2p
 		return nil
 	}
 	var prevBlockNr *uint256.Int
+	blockStart := utils.ConvertH256ToUint256Int(req.StartBlockNumber)
 	for i := uint64(0); ; i++ {
 		isFirstChunk := i == 0
 		blk, err := ReadChunkedBlock(stream, chain, p2pProvider, isFirstChunk)
@@ -64,7 +65,6 @@ func SendBodiesByRangeRequest(ctx context.Context, chain common.IBlockChain, p2p
 			return nil, ErrInvalidFetchedData
 		}
 		blockNr := utils.ConvertH256ToUint256Int(blk.Header.Number)
-		blockStart := utils.ConvertH256ToUint256Int(req.StartBlockNumber)
 		// Returned blocks MUST be in the slot range [start_slot, start_slot + count * step).
 		if blockNr.Cmp(blockStart) == -1 || blockNr.Cmp(new(uint256.Int).AddUint64(blockStart, req.Count*req.Step)) >= 0 {
 			return nil, ErrInvalidFetchedData
@@ -72,18 +72,19 @@ func SendBodiesByRangeRequest(ctx context.Context, chain common.IBlockChain, p2p
 		// Returned blocks, where they exist, MUST be sent in a consecutive order.
 		// Consecutive blocks MUST have values in `step` increments (slots may be skipped in between).
 		isSlotOutOfOrder := false
-		if prevBlockNr.Cmp(blockNr) >= 0 {
+		if prevBlockNr != nil && prevBlockNr.Cmp(blockNr) >= 0 {
 			isSlotOutOfOrder = true
-		} else if req.Step != 0 && new(uint256.Int).Mod(new(uint256.Int).Sub(blockNr, prevBlockNr), uint256.NewInt(req.Step)).Uint64() != 0 {
+		} else if prevBlockNr != nil && req.Step != 0 && new(uint256.Int).Mod(new(uint256.Int).Sub(blockNr, prevBlockNr), uint256.NewInt(req.Step)).Uint64() != 0 {
 			isSlotOutOfOrder = true
 		}
 		if !isFirstChunk && isSlotOutOfOrder {
 			return nil, ErrInvalidFetchedData
 		}
-		prevBlockNr = blockNr
+		prevBlockNr = blockNr.Clone()
 		if err := process(blk); err != nil {
 			return nil, err
 		}
 	}
+
 	return blocks, nil
 }

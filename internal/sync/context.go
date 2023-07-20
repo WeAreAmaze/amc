@@ -13,22 +13,7 @@ const forkDigestLength = 4
 
 // writes peer's current context for the expected payload to the stream.
 func writeContextToStream(objCtx []byte, stream network.Stream, chain common.IBlockChain) error {
-	// The rpc context for our v2 methods is the fork-digest of
-	// the relevant payload. We write the associated fork-digest(context)
-	// into the stream for the payload.
-	rpcCtx, err := rpcContext(stream, chain)
-	if err != nil {
-		return err
-	}
-	// Exit early if there is an empty context.
-	if len(rpcCtx) == 0 {
-		return nil
-	}
-	// Always choose the object's context when writing to the stream.
-	if objCtx != nil {
-		rpcCtx = objCtx
-	}
-	_, err = stream.Write(rpcCtx)
+	_, err := stream.Write(objCtx)
 	return err
 }
 

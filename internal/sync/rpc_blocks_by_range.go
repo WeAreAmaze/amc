@@ -67,9 +67,6 @@ func (s *Service) bodiesByRangeRPCHandler(ctx context.Context, msg interface{}, 
 		trace.StringAttribute("peer", stream.Conn().RemotePeer().Pretty()),
 		trace.Int64Attribute("remaining_capacity", remainingBucketCapacity),
 	)
-	// prevRoot is used to ensure that returned chains are strictly linear for singular steps
-	// by comparing the previous root of the block in the list with the current block's parent.
-	var prevRoot [32]byte
 	for startBlockNumber.Cmp(endReqBlockNumber) <= 0 {
 		if err := s.rateLimiter.validateRequest(stream, allowedBlocksPerSecond); err != nil {
 			//tracing.AnnotateError(span, err)
@@ -83,7 +80,7 @@ func (s *Service) bodiesByRangeRPCHandler(ctx context.Context, msg interface{}, 
 			return err
 		}
 
-		err := s.writeBodiesRangeToStream(ctx, startBlockNumber, endBlockNumber, m.Step, &prevRoot, stream)
+		err := s.writeBodiesRangeToStream(ctx, startBlockNumber, endBlockNumber, m.Step, stream)
 		if err != nil && !errors.Is(err, p2ptypes.ErrInvalidParent) {
 			return err
 		}
@@ -98,7 +95,6 @@ func (s *Service) bodiesByRangeRPCHandler(ctx context.Context, msg interface{}, 
 			break
 		}
 
-		//startBlockNumberClone := startBlockNumber.Clone()
 		// Recalculate start and end slots for the next batch to be returned to the remote peer.
 		startBlockNumber = new(uint256.Int).AddUint64(endBlockNumber, m.Step)
 
@@ -119,14 +115,12 @@ func (s *Service) bodiesByRangeRPCHandler(ctx context.Context, msg interface{}, 
 	return nil
 }
 
-func (s *Service) writeBodiesRangeToStream(ctx context.Context, startSlot, endSlot *uint256.Int, step uint64, prevRoot *[32]byte, stream libp2pcore.Stream) error {
+func (s *Service) writeBodiesRangeToStream(ctx context.Context, startSlot, endSlot *uint256.Int, step uint64, stream libp2pcore.Stream) error {
 	ctx, span := trace.StartSpan(ctx, "sync.WriteBodiesRangeToStream")
 	defer span.End()
 
-	//filter := filters.NewFilter().SetStartSlot(startSlot).SetEndSlot(endSlot).SetSlotStep(step)
-
 	var blks = make([]types.IBlock, 0)
-	for ; startSlot.Cmp(endSlot) == 1; startSlot.AddUint64(startSlot, step) {
+	for ; startSlot.Cmp(endSlot) <= 0; startSlot = startSlot.AddUint64(startSlot, step) {
 		b, err := s.cfg.chain.GetBlockByNumber(startSlot)
 		if err != nil {
 			//tracing.AnnotateError(span, err)
@@ -135,10 +129,10 @@ func (s *Service) writeBodiesRangeToStream(ctx context.Context, startSlot, endSl
 			return err
 		}
 		blks = append(blks, b)
-
 	}
 
 	start := time.Now()
+
 	for _, b := range blks {
 		if chunkErr := s.chunkBlockWriter(stream, b); chunkErr != nil {
 			log.Debug("Could not send a chunked response", "err", chunkErr)

@@ -162,7 +162,7 @@ func (q *blocksQueue) loop() {
 	}
 
 	// Define initial state machines.
-	startBlockNr := q.chain.CurrentBlock().Number64()
+	startBlockNr := new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
 	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {
 		q.smm.addStateMachine(i)
@@ -184,7 +184,7 @@ func (q *blocksQueue) loop() {
 		select {
 		case <-ticker.C:
 			for _, key := range q.smm.keys {
-				fsm := q.smm.machines[key]
+				fsm := q.smm.machines[key.Uint64()]
 				if err := fsm.trigger(eventTick, nil); err != nil {
 					log.Debug("Can not trigger event",
 						"highestExpectedBlockNr", q.highestExpectedBlockNr,

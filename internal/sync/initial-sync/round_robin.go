@@ -84,9 +84,9 @@ func (s *Service) processBatchedBlocks(ctx context.Context, blks []*types_pb.Blo
 		return 0, errors.New("0 blocks provided into method")
 	}
 
-	blocks := make([]block2.IBlock, len(blks))
+	blocks := make([]block2.IBlock, 0, len(blks))
 	for _, blk := range blks {
-		var block block2.IBlock
+		block := new(block2.Block)
 		if err := block.FromProtoMessage(blk); err != nil {
 			return 0, err
 		}

@@ -114,6 +114,7 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 		log.Error("Failed to create address filter", "err", err)
 		return nil, err
 	}
+	//todo
 	s.ipLimiter = leakybucket.NewCollector(ipLimit, ipBurst, 30*time.Second, true /* deleteEmptyBuckets */)
 
 	opts := s.buildOptions(ipAddr, s.privKey)
@@ -161,6 +162,10 @@ func (s *Service) GetPing() *sync_pb.Ping {
 
 func (s *Service) IncSeqNumber() {
 	s.ping.SeqNumber++
+}
+
+func (s *Service) GetConfig() *conf.P2PConfig {
+	return s.cfg
 }
 
 // Start the p2p service.

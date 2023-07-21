@@ -18,8 +18,6 @@ import (
 
 // todo
 const minimumSyncPeers = 1
-const blockBatchLimit = 10
-const blockBatchLimitBurstFactor = 2
 
 // Config to set up the initial sync service.
 type Config struct {

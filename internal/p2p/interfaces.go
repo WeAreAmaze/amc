@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
+	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/internal/p2p/peers"
@@ -29,6 +30,7 @@ type P2P interface {
 
 	Start()
 	Stop() error
+	GetConfig() *conf.P2PConfig
 }
 
 // Broadcaster broadcasts messages to peers over the p2p pubsub protocol.

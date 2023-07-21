@@ -52,7 +52,7 @@ func SendBodiesByRangeRequest(ctx context.Context, chain common.IBlockChain, p2p
 	blockStart := utils.ConvertH256ToUint256Int(req.StartBlockNumber)
 	for i := uint64(0); ; i++ {
 		isFirstChunk := i == 0
-		blk, err := ReadChunkedBlock(stream, chain, p2pProvider, isFirstChunk)
+		blk, err := ReadChunkedBlock(stream, p2pProvider, isFirstChunk)
 		if errors.Is(err, io.EOF) {
 			break
 		}

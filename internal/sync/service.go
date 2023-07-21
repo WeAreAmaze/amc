@@ -23,21 +23,12 @@ import (
 
 const rangeLimit = 1024
 const seenBlockSize = 1000
-const seenUnaggregatedAttSize = 20000
-const seenAggregatedAttSize = 1024
-const seenSyncMsgSize = 1000         // Maximum of 512 sync committee members, 1000 is a safe amount.
-const seenSyncContributionSize = 512 // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
-const seenExitSize = 100
-const seenProposerSlashingSize = 100
 const badBlockSize = 1000
 const syncMetricsInterval = 10 * time.Second
 
 // todo
 const ttfbTimeout = 5 * time.Second  // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
 const respTimeout = 10 * time.Second // RespTimeout is the maximum time for complete response transfer.
-
-// todo
-const blockBatchLimit = 10
 
 // todo
 const maxRequestBlocks = 1024

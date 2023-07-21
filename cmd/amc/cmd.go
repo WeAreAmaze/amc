@@ -350,6 +350,21 @@ var (
 			"default is to accept all connections.",
 		Destination: p2pDenyList,
 	}
+
+	// P2PBlockBatchLimit specifies the requested block batch size.
+	P2PBlockBatchLimit = &cli.IntFlag{
+		Name:        "p2p.limit.block-batch",
+		Usage:       "The amount of blocks the local peer is bounded to request and respond to in a batch.",
+		Value:       64,
+		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimit,
+	}
+	// P2PBlockBatchLimitBurstFactor specifies the factor by which block batch size may increase.
+	P2PBlockBatchLimitBurstFactor = &cli.IntFlag{
+		Name:        "p2p.limit.block-burst-factor",
+		Usage:       "The factor by which block batch limit may increase on burst.",
+		Value:       2,
+		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimit,
+	}
 )
 
 var (
@@ -506,5 +521,10 @@ var (
 		P2PStaticPeers,
 		P2PUDPPort,
 		P2PTCPPort,
+	}
+
+	p2pLimitFlags = []cli.Flag{
+		P2PBlockBatchLimit,
+		P2PBlockBatchLimitBurstFactor,
 	}
 )

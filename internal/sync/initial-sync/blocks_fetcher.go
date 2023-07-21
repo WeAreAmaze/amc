@@ -106,12 +106,13 @@ type fetchRequestResponse struct {
 
 // newBlocksFetcher creates ready to use fetcher.
 func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetcher {
-	blocksPerPeriod := blockBatchLimit
-	allowedBlocksBurst := blockBatchLimitBurstFactor * blockBatchLimit
+
+	// Initialize block limits.
+	allowedBlocksPerSecond := float64(cfg.p2p.GetConfig().P2PLimit.BlockBatchLimit)
+	allowedBlocksBurst := int64(cfg.p2p.GetConfig().P2PLimit.BlockBatchLimitBurstFactor * cfg.p2p.GetConfig().P2PLimit.BlockBatchLimit)
+
 	// Allow fetcher to go almost to the full burst capacity (less a single batch).
-	rateLimiter := leakybucket.NewCollector(
-		float64(blocksPerPeriod), int64(allowedBlocksBurst-blocksPerPeriod),
-		blockLimiterPeriod, false /* deleteEmptyBuckets */)
+	rateLimiter := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockLimiterPeriod, false /* deleteEmptyBuckets */)
 
 	capacityWeight := cfg.peerFilterCapacityWeight
 	if capacityWeight >= 1 {
@@ -125,7 +126,7 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 		rand:            rand.NewGenerator(),
 		chain:           cfg.chain,
 		p2p:             cfg.p2p,
-		blocksPerPeriod: uint64(blocksPerPeriod),
+		blocksPerPeriod: uint64(allowedBlocksPerSecond),
 		rateLimiter:     rateLimiter,
 		peerLocks:       make(map[peer.ID]*peerLock),
 		fetchRequests:   make(chan *fetchRequestParams, maxPendingRequests),
@@ -280,7 +281,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 			f.p2p.Peers().Scorers().BlockProviderScorer().Touch(peers[i])
 			return blocks, peers[i], err
 		} else {
-			log.Debug("Could not request blocks by range", "err", err)
+			log.Warn("Could not request blocks by range", "err", err)
 		}
 	}
 	return nil, "", errNoPeersAvailable

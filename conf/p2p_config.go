@@ -42,4 +42,11 @@ type P2PConfig struct {
 	MaxPeers            int      `json:"max_peers" yaml:"max_peers"`
 	AllowListCIDR       string   `json:"allow_list_cidr" yaml:"allow_list_cidr"`
 	DenyListCIDR        []string `json:"deny_list_cidr" yaml:"deny_list_cidr"`
+
+	P2PLimit *P2PLimit
+}
+
+type P2PLimit struct {
+	BlockBatchLimit            int `json:"block_batch_limit" yaml:"block_batch_limit"`
+	BlockBatchLimitBurstFactor int `json:"block_batch_limit_burst_factor" yaml:"block_batch_limit_burst_factor"`
 }

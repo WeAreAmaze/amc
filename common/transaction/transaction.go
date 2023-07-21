@@ -116,6 +116,9 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 		var itx LegacyTx
 		if nil != pbTx.To {
 			itx.To = utils.ConvertH160ToPAddress(pbTx.To)
+			if *itx.To == (types.Address{}) {
+				itx.To = nil
+			}
 		}
 		itx.From = utils.ConvertH160ToPAddress(pbTx.From)
 		itx.Sign = pbTx.Sign
@@ -153,6 +156,9 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 		altt.Data = pbTx.Data
 		if nil != pbTx.To {
 			altt.To = utils.ConvertH160ToPAddress(pbTx.To)
+			if *altt.To == (types.Address{}) {
+				altt.To = nil
+			}
 		}
 		//altt.To = utils.ConvertH160ToPAddress(pbTx.To)
 		altt.From = utils.ConvertH160ToPAddress(pbTx.From)
@@ -178,7 +184,11 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 		dftt.Data = pbTx.Data
 		if nil != pbTx.To {
 			dftt.To = utils.ConvertH160ToPAddress(pbTx.To)
+			if *dftt.To == (types.Address{}) {
+				dftt.To = nil
+			}
 		}
+
 		//dftt.To = utils.ConvertH160ToPAddress(pbTx.To)
 		dftt.From = utils.ConvertH160ToPAddress(pbTx.From)
 		dftt.Sign = pbTx.Sign

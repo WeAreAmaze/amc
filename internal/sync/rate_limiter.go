@@ -39,6 +39,10 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 		return topic + p2pProvider.Encoding().ProtocolSuffix()
 	}
 
+	// Initialize block limits.
+	allowedBlocksPerSecond := float64(p2pProvider.GetConfig().P2PLimit.BlockBatchLimit)
+	allowedBlocksBurst := int64(p2pProvider.GetConfig().P2PLimit.BlockBatchLimitBurstFactor * p2pProvider.GetConfig().P2PLimit.BlockBatchLimit)
+
 	// Set topic map for all rpc topics.
 	topicMap := make(map[string]*leakybucket.Collector, len(p2p.RPCTopicMappings))
 	// Goodbye Message
@@ -49,10 +53,10 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCStatusTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// Bodies Message
-	topicMap[addEncoding(p2p.RPCBodiesDataTopicV1)] = leakybucket.NewCollector(1, 1024, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCBodiesDataTopicV1)] = leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// Headers Message
-	topicMap[addEncoding(p2p.RPCHeadersDataTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCHeadersDataTopicV1)] = leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)

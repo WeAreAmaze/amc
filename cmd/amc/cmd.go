@@ -363,7 +363,7 @@ var (
 		Name:        "p2p.limit.block-burst-factor",
 		Usage:       "The factor by which block batch limit may increase on burst.",
 		Value:       2,
-		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimit,
+		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimitBurstFactor,
 	}
 )
 

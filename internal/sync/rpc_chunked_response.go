@@ -41,18 +41,18 @@ func WriteBlockChunk(stream libp2pcore.Stream, chain common.IBlockChain, encodin
 
 // ReadChunkedBlock handles each response chunk that is sent by the
 // peer and converts it into a beacon block.
-func ReadChunkedBlock(stream libp2pcore.Stream, chain common.IBlockChain, p2p p2p.EncodingProvider, isFirstChunk bool) (*types_pb.Block, error) {
+func ReadChunkedBlock(stream libp2pcore.Stream, p2p p2p.EncodingProvider, isFirstChunk bool) (*types_pb.Block, error) {
 	// Handle deadlines differently for first chunk
 	if isFirstChunk {
-		return readFirstChunkedBlock(stream, chain, p2p)
+		return readFirstChunkedBlock(stream, p2p)
 	}
 
-	return readResponseChunk(stream, chain, p2p)
+	return readResponseChunk(stream, p2p)
 }
 
 // readFirstChunkedBlock reads the first chunked block and applies the appropriate deadlines to
 // it.
-func readFirstChunkedBlock(stream libp2pcore.Stream, chain common.IBlockChain, p2p p2p.EncodingProvider) (*types_pb.Block, error) {
+func readFirstChunkedBlock(stream libp2pcore.Stream, p2p p2p.EncodingProvider) (*types_pb.Block, error) {
 	code, errMsg, err := ReadStatusCode(stream, p2p.Encoding())
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func readFirstChunkedBlock(stream libp2pcore.Stream, chain common.IBlockChain, p
 
 // readResponseChunk reads the response from the stream and decodes it into the
 // provided message type.
-func readResponseChunk(stream libp2pcore.Stream, chain common.IBlockChain, p2p p2p.EncodingProvider) (*types_pb.Block, error) {
+func readResponseChunk(stream libp2pcore.Stream, p2p p2p.EncodingProvider) (*types_pb.Block, error) {
 	SetStreamReadDeadline(stream, respTimeout)
 	code, errMsg, err := readStatusCodeNoDeadline(stream, p2p.Encoding())
 	if err != nil {

@@ -43,7 +43,7 @@ func (s *Service) bodiesByRangeRPCHandler(ctx context.Context, msg interface{}, 
 	}
 	// The initial count for the first batch to be returned back.
 	count := m.Count
-	allowedBlocksPerSecond := uint64(blockBatchLimit)
+	allowedBlocksPerSecond := uint64(s.cfg.p2p.GetConfig().P2PLimit.BlockBatchLimit)
 	if count > allowedBlocksPerSecond {
 		count = allowedBlocksPerSecond
 	}

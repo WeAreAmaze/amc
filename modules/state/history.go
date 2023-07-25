@@ -18,17 +18,28 @@ package state
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/amazechain/amc/common/account"
 	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules"
 	"github.com/amazechain/amc/modules/changeset"
 	"github.com/amazechain/amc/modules/ethdb"
 	"github.com/amazechain/amc/modules/ethdb/bitmapdb"
+	"github.com/amazechain/amc/modules/rawdb"
+	"github.com/ledgerwatch/erigon-lib/common"
+	"github.com/ledgerwatch/erigon-lib/common/dbg"
+	"github.com/ledgerwatch/erigon-lib/common/hexutility"
+	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv"
+	"golang.org/x/exp/slices"
+	"os"
+	"runtime"
+	"time"
 )
 
 func GetAsOf(tx kv.Tx, indexC kv.Cursor, changesC kv.CursorDupSort, storage bool, key []byte, timestamp uint64) ([]byte, error) {
@@ -355,5 +366,254 @@ func WalkAsOfAccounts(tx kv.Tx, startAddress types.Address, timestamp uint64, wa
 		}
 	}
 	return err
+}
 
+func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) error {
+	// unwind history
+	if err := UnwindHistory(tx, modules.AccountChangeSet, unwindPoint, ctx.Done()); nil != err {
+		return fmt.Errorf("unwind AccountHistoryIndex failed, %v", err)
+	}
+
+	if err := UnwindHistory(tx, modules.StorageChangeSet, unwindPoint, ctx.Done()); nil != err {
+		return fmt.Errorf("unwind StorageHistoryIndex failed, %v", err)
+	}
+
+	// unwind account and storage
+	storageKeyLength := types.AddressLength + types.IncarnationLength + types.HashLength
+	changes := etl.NewCollector("unwind state", os.TempDir(), etl.NewOldestEntryBuffer(etl.BufferOptimalSize))
+	defer changes.Close()
+	//errRewind := changeset.RewindData(tx, current, unwindPoint, changes, ctx.Done())
+	//if errRewind != nil {
+	//	return fmt.Errorf("getting rewind data: %w", errRewind)
+	//}
+	if err := changeset.WalkAndCollect(
+		changes.Collect,
+		tx, modules.AccountChangeSet,
+		unwindPoint, current,
+		ctx.Done(),
+	); err != nil {
+		return fmt.Errorf("getting account rewind data: %w", err)
+	}
+	if err := changes.Load(tx, modules.Account, func(k, v []byte, table etl.CurrentTableReader, next etl.LoadNextFunc) error {
+		if len(k) == 20 {
+			if len(v) > 0 {
+				var acc account.StateAccount
+				if err := acc.DecodeForStorage(v); err != nil {
+					return err
+				}
+
+				// Fetch the code hash
+				recoverCodeHashPlain(&acc, tx, k)
+				var address types.Address
+				copy(address[:], k)
+
+				// cleanup contract code bucket
+				original, err := NewPlainStateReader(tx).ReadAccountData(address)
+				if err != nil {
+					return fmt.Errorf("read account for %x: %w", address, err)
+				}
+				if original != nil {
+					// clean up all the code incarnations original incarnation and the new one
+					for incarnation := original.Incarnation; incarnation > acc.Incarnation && incarnation > 0; incarnation-- {
+						err = tx.Delete(kv.PlainContractCode, modules.PlainGenerateStoragePrefix(address[:], incarnation))
+						if err != nil {
+							return fmt.Errorf("writeAccountPlain for %x: %w", address, err)
+						}
+					}
+				}
+
+				newV := make([]byte, acc.EncodingLengthForStorage())
+				acc.EncodeForStorage(newV)
+				//if accumulator != nil {
+				//	accumulator.ChangeAccount(address, acc.Incarnation, newV)
+				//}
+				if err := next(k, k, newV); err != nil {
+					return err
+				}
+			} else {
+				//if accumulator != nil {
+				//	var address common.Address
+				//	copy(address[:], k)
+				//	accumulator.DeleteAccount(address)
+				//}
+				if err := next(k, k, nil); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		//if accumulator != nil {
+		//	var address common.Address
+		//	var incarnation uint64
+		//	var location common.Hash
+		//	copy(address[:], k[:length.Addr])
+		//	incarnation = binary.BigEndian.Uint64(k[length.Addr:])
+		//	copy(location[:], k[length.Addr+length.Incarnation:])
+		//	log.Debug(fmt.Sprintf("un ch st: %x, %d, %x, %x\n", address, incarnation, location, common.Copy(v)))
+		//	accumulator.ChangeStorage(address, incarnation, location, common.Copy(v))
+		//}
+		if len(v) > 0 {
+			if err := next(k, k[:storageKeyLength], v); err != nil {
+				return err
+			}
+		} else {
+			if err := next(k, k[:storageKeyLength], nil); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	}, etl.TransformArgs{Quit: ctx.Done()}); err != nil {
+		return err
+	}
+	if err := changeset.WalkAndCollect(
+		changes.Collect,
+		tx, modules.StorageChangeSet,
+		unwindPoint, current,
+		ctx.Done(),
+	); err != nil {
+		return fmt.Errorf("getting storage rewind data: %w", err)
+	}
+	if err := changes.Load(tx, modules.Storage, func(k, v []byte, table etl.CurrentTableReader, next etl.LoadNextFunc) error {
+		if len(k) == 20 {
+			if len(v) > 0 {
+				var acc account.StateAccount
+				if err := acc.DecodeForStorage(v); err != nil {
+					return err
+				}
+
+				// Fetch the code hash
+				recoverCodeHashPlain(&acc, tx, k)
+				var address types.Address
+				copy(address[:], k)
+
+				// cleanup contract code bucket
+				original, err := NewPlainStateReader(tx).ReadAccountData(address)
+				if err != nil {
+					return fmt.Errorf("read account for %x: %w", address, err)
+				}
+				if original != nil {
+					// clean up all the code incarnations original incarnation and the new one
+					for incarnation := original.Incarnation; incarnation > acc.Incarnation && incarnation > 0; incarnation-- {
+						err = tx.Delete(kv.PlainContractCode, modules.PlainGenerateStoragePrefix(address[:], incarnation))
+						if err != nil {
+							return fmt.Errorf("writeAccountPlain for %x: %w", address, err)
+						}
+					}
+				}
+
+				newV := make([]byte, acc.EncodingLengthForStorage())
+				acc.EncodeForStorage(newV)
+				//if accumulator != nil {
+				//	accumulator.ChangeAccount(address, acc.Incarnation, newV)
+				//}
+				if err := next(k, k, newV); err != nil {
+					return err
+				}
+			} else {
+				//if accumulator != nil {
+				//	var address common.Address
+				//	copy(address[:], k)
+				//	accumulator.DeleteAccount(address)
+				//}
+				if err := next(k, k, nil); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		//if accumulator != nil {
+		//	var address common.Address
+		//	var incarnation uint64
+		//	var location common.Hash
+		//	copy(address[:], k[:length.Addr])
+		//	incarnation = binary.BigEndian.Uint64(k[length.Addr:])
+		//	copy(location[:], k[length.Addr+length.Incarnation:])
+		//	log.Debug(fmt.Sprintf("un ch st: %x, %d, %x, %x\n", address, incarnation, location, common.Copy(v)))
+		//	accumulator.ChangeStorage(address, incarnation, location, common.Copy(v))
+		//}
+		if len(v) > 0 {
+			if err := next(k, k[:storageKeyLength], v); err != nil {
+				return err
+			}
+		} else {
+			if err := next(k, k[:storageKeyLength], nil); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	}, etl.TransformArgs{Quit: ctx.Done()}); err != nil {
+		return err
+	}
+
+	// unwind changeSet
+	if err := changeset.Truncate(tx, unwindPoint); err != nil {
+		return err
+	}
+
+	// delete receipt and log
+	if err := rawdb.TruncateReceipts(tx, unwindPoint); err != nil {
+		return fmt.Errorf("truncate receipts: %w", err)
+	}
+	//if err := rawdb.TruncateBorReceipts(tx, u.UnwindPoint+1); err != nil {
+	//	return fmt.Errorf("truncate bor receipts: %w", err)
+	//}
+	//if err := rawdb.DeleteNewerEpochs(tx, u.UnwindPoint+1); err != nil {
+	//	return fmt.Errorf("delete newer epochs: %w", err)
+	//}
+	return nil
+}
+
+func recoverCodeHashPlain(acc *account.StateAccount, db kv.Tx, key []byte) {
+	var address types.Address
+	copy(address[:], key)
+	if acc.Incarnation > 0 && acc.IsEmptyCodeHash() {
+		if codeHash, err2 := db.GetOne(modules.PlainContractCode, modules.PlainGenerateStoragePrefix(address[:], acc.Incarnation)); err2 == nil {
+			copy(acc.CodeHash[:], codeHash)
+		}
+	}
+}
+
+func UnwindHistory(db kv.RwTx, csBucket string, to uint64, quitCh <-chan struct{}) error {
+	logEvery := time.NewTicker(30 * time.Second)
+	defer logEvery.Stop()
+
+	updates := map[string]struct{}{}
+	if err := changeset.ForEach(db, csBucket, hexutility.EncodeTs(to), func(blockN uint64, k, v []byte) error {
+		select {
+		case <-logEvery.C:
+			var m runtime.MemStats
+			dbg.ReadMemStats(&m)
+			log.Info(fmt.Sprintf("[%s] Progress", "unwindhistory"), "number", blockN, "alloc", common.ByteCount(m.Alloc), "sys", common.ByteCount(m.Sys))
+		case <-quitCh:
+			return common.ErrStopped
+		default:
+		}
+		k = modules.CompositeKeyWithoutIncarnation(k)
+		updates[string(k)] = struct{}{}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if err := truncateBitmaps64(db, changeset.Mapper[csBucket].IndexBucket, updates, to); err != nil {
+		return err
+	}
+	return nil
+}
+
+func truncateBitmaps64(tx kv.RwTx, bucket string, inMem map[string]struct{}, to uint64) error {
+	keys := make([]string, 0, len(inMem))
+	for k := range inMem {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		if err := bitmapdb.TruncateRange64(tx, bucket, []byte(k), to+1); err != nil {
+			return fmt.Errorf("fail TruncateRange: bucket=%s, %w", bucket, err)
+		}
+	}
+
+	return nil
 }

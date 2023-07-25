@@ -96,7 +96,7 @@ func FindStorage(c kv.CursorDupSort, blockNumber uint64, k []byte) ([]byte, erro
 // RewindDataPlain generates rewind data for all plain buckets between the timestamp
 // timestapSrc is the current timestamp, and timestamp Dst is where we rewind
 func RewindData(db kv.Tx, timestampSrc, timestampDst uint64, changes *etl.Collector, quit <-chan struct{}) error {
-	if err := walkAndCollect(
+	if err := WalkAndCollect(
 		changes.Collect,
 		db, modules.AccountChangeSet,
 		timestampDst+1, timestampSrc,
@@ -105,7 +105,7 @@ func RewindData(db kv.Tx, timestampSrc, timestampDst uint64, changes *etl.Collec
 		return err
 	}
 
-	if err := walkAndCollect(
+	if err := WalkAndCollect(
 		changes.Collect,
 		db, modules.StorageChangeSet,
 		timestampDst+1, timestampSrc,
@@ -117,7 +117,7 @@ func RewindData(db kv.Tx, timestampSrc, timestampDst uint64, changes *etl.Collec
 	return nil
 }
 
-func walkAndCollect(collectorFunc func([]byte, []byte) error, db kv.Tx, bucket string, timestampDst, timestampSrc uint64, quit <-chan struct{}) error {
+func WalkAndCollect(collectorFunc func([]byte, []byte) error, db kv.Tx, bucket string, timestampDst, timestampSrc uint64, quit <-chan struct{}) error {
 	return ForRange(db, bucket, timestampDst, timestampSrc+1, func(bl uint64, k, v []byte) error {
 		if err := libcommon.Stopped(quit); err != nil {
 			return err

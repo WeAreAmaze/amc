@@ -54,6 +54,7 @@ type ChainHeaderReader interface {
 
 	GetDepositInfo(address types.Address) (*uint256.Int, *uint256.Int)
 	GetAccountRewardUnpaid(account types.Address) (*uint256.Int, error)
+	RewardsOfEpoch(number *uint256.Int, lastEpoch *uint256.Int) (map[types.Address]*uint256.Int, error)
 }
 
 // ChainReader defines a small collection of methods needed to access the local

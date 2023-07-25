@@ -120,7 +120,7 @@ type Node struct {
 	ws            *httpServer
 	inprocHandler *jsonrpc.Server
 
-	//n.config.GenesisBlockCfg.Engine.Etherbase
+	//n.config.GenesisBlockCfg.Config.Engine.Etherbase
 	etherbase types.Address
 	lock      sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
@@ -221,16 +221,16 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
-	switch cfg.GenesisBlockCfg.Engine.EngineName {
+	switch cfg.GenesisBlockCfg.Config.Engine.EngineName {
 	case "APoaEngine":
-		engine = apoa.New(cfg.GenesisBlockCfg.Engine, chainKv)
+		engine = apoa.New(cfg.GenesisBlockCfg.Config.Engine, chainKv)
 	case "APosEngine":
-		engine = apos.New(cfg.GenesisBlockCfg.Engine, chainKv, cfg.GenesisBlockCfg.Config)
+		engine = apos.New(cfg.GenesisBlockCfg.Config.Engine, chainKv, cfg.GenesisBlockCfg.Config)
 	default:
-		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Engine.EngineName)
+		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Config.Engine.EngineName)
 	}
 
-	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisBlockCfg.Config)
+	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisBlockCfg.Config, cfg.GenesisBlockCfg.Config.Engine)
 	pool, _ := txspool.NewTxsPool(ctx, bc)
 
 	is := initialsync.NewService(c, &initialsync.Config{
@@ -296,13 +296,13 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		txspool:         pool,
 		txsFetcher:      txsFetcher,
 		engine:          engine,
-		depositContract: deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Engine, bc, chainKv),
+		depositContract: deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Config.Engine, bc, chainKv),
 
 		inprocHandler: jsonrpc.NewServer(),
 		http:          newHTTPServer(),
 		ws:            newHTTPServer(),
 		ipc:           newIPCServer(&cfg.NodeCfg),
-		etherbase:     types.HexToAddress(cfg.GenesisBlockCfg.Engine.Etherbase),
+		etherbase:     types.HexToAddress(cfg.GenesisBlockCfg.Config.Engine.Etherbase),
 
 		accman:     accman,
 		keyDir:     keyDir,

@@ -22,6 +22,7 @@ import (
 	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
@@ -46,6 +47,31 @@ type Block struct {
 
 	ReceiveAt    time.Time
 	ReceivedFrom interface{}
+}
+
+func (b *Block) Copy() *Block {
+	var hashValue atomic.Value
+	if value := b.hash.Load(); value != nil {
+		hash := value.(types.Hash)
+		hashCopy := types.BytesToHash(hash.Bytes())
+		hashValue.Store(hashCopy)
+	}
+
+	var sizeValue atomic.Value
+	if size := b.size.Load(); size != nil {
+		sizeValue.Store(size)
+	}
+	pb := b.body.ToProtoMessage()
+	cbody := new(Body)
+	if err := cbody.FromProtoMessage(pb); nil != err {
+		log.Warn("body copy failed!", err)
+	}
+	return &Block{
+		header: CopyHeader(b.header),
+		body:   cbody,
+		hash:   hashValue,
+		size:   sizeValue,
+	}
 }
 
 type Verify struct {

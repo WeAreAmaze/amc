@@ -82,6 +82,7 @@ type IntraBlockState struct {
 
 	thash, bhash types.Hash
 	txIndex      int
+	sender       types.Address
 	logs         map[types.Hash][]*block.Log
 	logSize      uint
 
@@ -112,6 +113,10 @@ func New(stateReader StateReader) *IntraBlockState {
 		accessList:        newAccessList(),
 		balanceInc:        map[types.Address]*BalanceIncrease{},
 	}
+}
+
+func (sdb *IntraBlockState) Sender() types.Address {
+	return sdb.sender
 }
 
 func (sdb *IntraBlockState) BeginWriteSnapshot() {
@@ -915,11 +920,12 @@ func (sdb *IntraBlockState) Print() {
 
 // Prepare sets the current transaction hash and index and block hash which is
 // used when the EVM emits new state logs.
-func (sdb *IntraBlockState) Prepare(thash, bhash types.Hash, ti int) {
+func (sdb *IntraBlockState) Prepare(thash, bhash types.Hash, ti int, sender types.Address) {
 	sdb.thash = thash
 	sdb.bhash = bhash
 	sdb.txIndex = ti
 	sdb.accessList = newAccessList()
+	sdb.sender = sender
 }
 
 // no not lock

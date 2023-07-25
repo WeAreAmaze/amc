@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
-package miner
+package internal
 
 import "github.com/amazechain/amc/params"
 

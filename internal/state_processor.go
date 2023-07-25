@@ -83,7 +83,7 @@ func (p *StateProcessor) Process(b *block.Block, ibs *state.IntraBlockState, sta
 
 	//posa, isPoSA := p.engine.(*apoa.Apoa)
 	for i, tx := range b.Transactions() {
-		ibs.Prepare(tx.Hash(), b.Hash(), i)
+		ibs.Prepare(tx.Hash(), b.Hash(), i, *tx.From())
 		receipt, _, err := ApplyTransaction(chainConfig, blockHashFunc, p.engine, nil, gp, ibs, noop, header.(*block.Header), tx, usedGas, cfg)
 		if err != nil {
 			if !cfg.StatelessExec {
@@ -126,7 +126,6 @@ func (p *StateProcessor) Process(b *block.Block, ibs *state.IntraBlockState, sta
 	//if err := rw.Commit(); nil != err {
 	//	return nil, nil, 0, err
 	//}
-
 	return receipts, nopay, allLogs, *usedGas, nil
 }
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/math"
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/internal/p2p"
 	"github.com/holiman/uint256"
@@ -81,6 +82,7 @@ const (
 
 type BlockChain struct {
 	chainConfig  *params.ChainConfig
+	engineConf   *params.ConsensusConfig
 	ctx          context.Context
 	cancel       context.CancelFunc
 	genesisBlock block2.IBlock
@@ -138,7 +140,7 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, p2p p2p.P2P, config *params.ChainConfig) (common.IBlockChain, error) {
+func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, p2p p2p.P2P, pConf *params.ChainConfig, eConf *params.ConsensusConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	var current *block2.Block
 	_ = db.View(c, func(tx kv.Tx) error {
@@ -156,7 +158,8 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	numberCache, _ := lru.New[types.Hash, uint64](numberCacheLimit)
 	headerCache, _ := lru.New[types.Hash, *block2.Header](headerCacheLimit)
 	bc := &BlockChain{
-		chainConfig:  config, // Chain & network configuration
+		chainConfig:  pConf, // Chain & network configuration
+		engineConf:   eConf,
 		genesisBlock: genesisBlock,
 		blocks:       []block2.IBlock{},
 		//currentBlock:  current,
@@ -183,8 +186,8 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	bc.currentBlock.Store(current)
 	bc.forker = NewForkChoice(bc, nil)
 	//bc.process = avm.NewVMProcessor(ctx, bc, engine)
-	bc.process = NewStateProcessor(config, bc, engine)
-	bc.validator = NewBlockValidator(config, bc, engine)
+	bc.process = NewStateProcessor(pConf, bc, engine)
+	bc.validator = NewBlockValidator(pConf, bc, engine)
 
 	return bc, nil
 }
@@ -888,8 +891,11 @@ func (bc *BlockChain) InsertChain(chain []block2.IBlock) (int, error) {
 				prev.Hash().Bytes()[:4], i, block.Number64().String(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
 	}
-	bc.lock.Lock()
+	if !bc.lock.TryLock() {
+		return 0, errChainStopped
+	}
 	defer bc.lock.Unlock()
+
 	return bc.insertChain(chain)
 }
 
@@ -958,7 +964,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		// head full block(new pivot point).
 		for block != nil && bc.skipBlock(err) {
 			log.Debug("Writing previously known block", "number", block.Number64(), "hash", block.Hash())
-			if err := bc.writeKnownBlock(nil, block); err != nil {
+			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
 			}
 			lastCanon = block
@@ -1178,7 +1184,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 // insertSideChain
 func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (int, error) {
 	var (
-		externTd  uint256.Int
+		externTd  *uint256.Int
 		lastBlock = block
 		current   = bc.CurrentBlock()
 	)
@@ -1198,7 +1204,7 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 				// we can get it directly, and not (like further below) use
 				// the parent and then add the block on top
 				pt := bc.GetTd(block.Hash(), block.Number64())
-				externTd = *pt
+				externTd = pt
 				continue
 			}
 			if canonical != nil && canonical.StateRoot() == block.StateRoot() {
@@ -1217,14 +1223,14 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 				return it.index, errors.New("sidechain ghost-state attack")
 			}
 		}
-		if externTd.Cmp(uint256.NewInt(0)) == 0 {
-			externTd = *bc.GetTd(block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)))
+		if externTd == nil {
+			externTd = bc.GetTd(block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)))
 		}
-		externTd = *externTd.Add(&externTd, block.Difficulty())
+		externTd = externTd.Add(externTd, block.Difficulty())
 
 		if !bc.HasBlock(block.Hash(), block.Number64().Uint64()) {
 			start := time.Now()
-			if err := bc.WriteBlockWithoutState(block); err != nil {
+			if err := bc.WriteBlockWithoutState(block, externTd); err != nil {
 				return it.index, err
 			}
 			log.Debug("Injected sidechain block", "number", block.Number64(), "hash", block.Hash(),
@@ -1250,7 +1256,7 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 		numbers []uint64
 	)
 	parent := it.previous()
-	for parent != nil && !bc.HasState(parent.StateRoot()) {
+	for parent != nil && !bc.HasState(parent.Hash()) {
 		hashes = append(hashes, parent.Hash())
 		numbers = append(numbers, parent.Number64().Uint64())
 
@@ -1323,7 +1329,7 @@ func (bc *BlockChain) recoverAncestors(block block2.IBlock) (types.Hash, error) 
 }
 
 // WriteBlockWithoutState without state
-func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock) (err error) {
+func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock, td *uint256.Int) (err error) {
 	if bc.insertStopped() {
 		return errInsertionInterrupted
 	}
@@ -1331,6 +1337,7 @@ func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock) (err error) {
 	//	return err
 	//}
 	return bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
+		rawdb.WriteTd(tx, block.Hash(), block.Number64().Uint64(), td)
 		if err := rawdb.WriteBlock(tx, block.(*block2.Block)); err != nil {
 			return err
 		}
@@ -1339,8 +1346,11 @@ func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock) (err error) {
 }
 
 func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error {
-	bc.lock.Lock()
+	if !bc.lock.TryLock() {
+		return errChainStopped
+	}
 	defer bc.lock.Unlock()
+
 	_, err := bc.writeBlockWithState(block, receipts, ibs, nopay)
 	return err
 }
@@ -1405,7 +1415,7 @@ func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != bc.CurrentBlock().Hash() {
-			if err := bc.reorg(nil, bc.CurrentBlock(), block); err != nil {
+			if err := bc.reorg(bc.CurrentBlock(), block); err != nil {
 				return NonStatTy, err
 			}
 		}
@@ -1444,7 +1454,6 @@ func (bc *BlockChain) writeHeadBlock(tx kv.RwTx, block block2.IBlock) error {
 	//	log.Errorf("failed to save last block, err: %v", err)
 	//	return err
 	//}
-	rawdb.WriteHeadBlockHash(tx, block.Hash())
 	rawdb.WriteHeadBlockHash(tx, block.Hash())
 	rawdb.WriteTxLookupEntries(tx, block.(*block2.Block))
 
@@ -1495,13 +1504,119 @@ func (bc *BlockChain) ReorgNeeded(current block2.IBlock, header block2.IBlock) b
 
 // SetHead set new head
 func (bc *BlockChain) SetHead(head uint64) error {
+	if !bc.lock.TryLock() {
+		return errChainStopped
+	}
+	defer bc.lock.Unlock()
+
+	current := bc.CurrentBlock()
 	newHeadBlock, err := bc.GetBlockByNumber(uint256.NewInt(head))
 	if err != nil {
+		return err
+	}
+	if current.Number64().Cmp(newHeadBlock.Number64()) == 0 {
 		return nil
 	}
-	return bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-		return rawdb.WriteHeadHeaderHash(tx, newHeadBlock.Hash())
-	})
+
+	if current.Number64().Cmp(newHeadBlock.Number64()) < 0 {
+		return errors.New("unbelievable chain")
+	}
+	// 1. collect txs for delete
+	// 2. send remove log event
+	// 3. rewind auth reward
+	// 4. rewind  state, changeSet
+	// 5. delete block, canonical header, receipts, td, transaction
+	// 6. send event remove logs, blocks
+	// pure cache
+
+	var (
+		deletedLogs []*block2.Log
+		deleteTxs   []types.Hash
+		rmBlocks    []block2.IBlock
+	)
+	recoverMap := make(map[types.Address]*uint256.Int)
+	for point := current; point.Hash() != newHeadBlock.Hash(); point = bc.GetBlock(point.ParentHash(), point.Number64().Uint64()-1) {
+		rmBlocks = append(rmBlocks, point)
+		for _, tx := range point.Transactions() {
+			deleteTxs = append(deleteTxs, tx.Hash())
+		}
+		if logs := bc.collectLogs(point.(*block2.Block), true); len(logs) > 0 {
+			deletedLogs = append(deletedLogs, logs...)
+		}
+		if bc.chainConfig.IsBeijing(point.Number64().Uint64()) {
+			beijing, _ := uint256.FromBig(bc.chainConfig.BeijingBlock)
+			if new(uint256.Int).Mod(new(uint256.Int).Sub(point.Number64(), beijing), uint256.NewInt(bc.engineConf.APos.RewardEpoch)).
+				Cmp(uint256.NewInt(0)) == 0 {
+				last := new(uint256.Int).Sub(point.Number64(), uint256.NewInt(bc.engineConf.APos.RewardEpoch))
+				rewardMap, err := bc.RewardsOfEpoch(point.Number64(), last)
+				if nil != err {
+					return err
+				}
+
+				for _, r := range point.Body().Reward() {
+					if _, ok := recoverMap[r.Address]; !ok {
+						recoverMap[r.Address], err = bc.GetAccountRewardUnpaid(r.Address)
+						if nil != err {
+							return err
+						}
+					}
+
+					high := new(uint256.Int).Add(recoverMap[r.Address], r.Amount)
+					if _, ok := rewardMap[r.Address]; ok {
+						recoverMap[r.Address] = high.Sub(high, rewardMap[r.Address])
+					}
+				}
+			}
+		}
+	}
+
+	if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
+		if err := state.UnwindState(context.Background(), tx, current.Number64().Uint64(), newHeadBlock.Number64().Uint64()); nil != err {
+			return fmt.Errorf("uwind state failed, start: %d, end: %d,  %v", current.Number64().Uint64(), newHeadBlock.Number64().Uint64(), err)
+		}
+		if err := bc.writeHeadBlock(tx, newHeadBlock); nil != err {
+			return err
+		}
+
+		for _, t := range deleteTxs {
+			if err := rawdb.DeleteTxLookupEntry(tx, t); nil != err {
+				return err
+			}
+		}
+
+		for i := newHeadBlock.Number64().Uint64() + 1; ; i++ {
+			hash, _ := rawdb.ReadCanonicalHash(tx, i)
+			if hash == (types.Hash{}) {
+				break
+			}
+			rawdb.TruncateCanonicalHash(tx, i, false)
+			rawdb.TruncateTd(tx, i)
+		}
+		for k, v := range recoverMap {
+			if err := rawdb.PutAccountReward(tx, k, v); nil != err {
+				return err
+			}
+		}
+		return nil
+	}); nil != err {
+		return err
+	}
+
+	bc.blockCache.Purge()
+	bc.numberCache.Purge()
+	bc.headerCache.Purge()
+	bc.futureBlocks.Purge()
+	bc.tdCache.Purge()
+	bc.receiptCache.Purge()
+
+	for i := len(rmBlocks) - 1; i >= 0; i-- {
+		// Also send event for blocks removed from the canon chain.
+		event.GlobalEvent.Send(&common.ChainSideEvent{Block: rmBlocks[i].(*block2.Block)})
+	}
+	if len(deletedLogs) > 0 {
+		event.GlobalEvent.Send(&common.RemovedLogsEvent{Logs: deletedLogs})
+	}
+	return nil
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
@@ -1527,33 +1642,20 @@ func (bc *BlockChain) addFutureBlock(block block2.IBlock) error {
 
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
-func (bc *BlockChain) writeKnownBlock(tx kv.RwTx, block block2.IBlock) error {
-	var notExternalTx bool
+func (bc *BlockChain) writeKnownBlock(block block2.IBlock) error {
 	var err error
-	if nil == tx {
-		tx, err = bc.ChainDB.BeginRw(bc.ctx)
-		if nil != err {
-			return err
-		}
-		defer tx.Rollback()
-		notExternalTx = true
-	}
 
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
-		if err := bc.reorg(tx, current, block); err != nil {
+		if err := bc.reorg(current, block); err != nil {
 			return err
 		}
 	}
-	if err = bc.writeHeadBlock(tx, block); nil != err {
-		return err
-	}
-	if notExternalTx {
-		if err = tx.Commit(); nil != err {
-			return err
-		}
-	}
-	return nil
+	bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+		err = bc.writeHeadBlock(tx, block)
+		return nil
+	})
+	return err
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
@@ -1561,7 +1663,7 @@ func (bc *BlockChain) writeKnownBlock(tx kv.RwTx, block block2.IBlock) error {
 // potential missing transactions and post an event about them.
 // Note the new head block won't be processed here, callers need to handle it
 // externally.
-func (bc *BlockChain) reorg(tx kv.RwTx, oldBlock, newBlock block2.IBlock) error {
+func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	var (
 		newChain    block2.Blocks
 		oldChain    block2.Blocks
@@ -1593,17 +1695,7 @@ func (bc *BlockChain) reorg(tx kv.RwTx, oldBlock, newBlock block2.IBlock) error 
 		return fmt.Errorf("invalid new chain")
 	}
 
-	var useExternalTx bool
 	var err error
-	if tx == nil {
-		tx, err = bc.ChainDB.BeginRw(bc.ctx)
-		if nil != err {
-			return err
-		}
-		defer tx.Rollback()
-		useExternalTx = false
-	}
-
 	// Both sides of the reorg are at the same number, reduce both until the common
 	// ancestor is found
 	for {
@@ -1622,12 +1714,12 @@ func (bc *BlockChain) reorg(tx kv.RwTx, oldBlock, newBlock block2.IBlock) error 
 
 		// Step back with both chains
 		//oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.Number64().Uint64()-1)
-		oldBlock = rawdb.ReadBlock(tx, oldBlock.ParentHash(), oldBlock.Number64().Uint64()-1)
+		oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.Number64().Uint64()-1)
 		if oldBlock == nil {
 			return fmt.Errorf("invalid old chain")
 		}
 		//newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.Number64().Uint64()-1)
-		newBlock = rawdb.ReadBlock(tx, newBlock.ParentHash(), newBlock.Number64().Uint64()-1)
+		newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.Number64().Uint64()-1)
 		if newBlock == nil {
 			return fmt.Errorf("invalid new chain")
 		}
@@ -1654,45 +1746,104 @@ func (bc *BlockChain) reorg(tx kv.RwTx, oldBlock, newBlock block2.IBlock) error 
 	}
 	// Insert the new chain(except the head block(reverse order)),
 	// taking care of the proper incremental order.
-	for i := len(newChain) - 1; i >= 1; i-- {
-		// Insert the block in the canonical way, re-writing history
-		bc.writeHeadBlock(tx, newChain[i])
 
-		// Collect the new added transactions.
-		for _, t := range newChain[i].Transactions() {
-			h := t.Hash()
-			addedTxs = append(addedTxs, h)
+	// collect oldblock event
+	// Deleted logs + blocks:
+	var deletedLogs []*block2.Log
+	recoverMap := make(map[types.Address]*uint256.Int)
+	for i := len(oldChain) - 1; i >= 0; i-- {
+		// Collect deleted logs for notification
+		if logs := bc.collectLogs(oldChain[i].(*block2.Block), true); len(logs) > 0 {
+			deletedLogs = append(deletedLogs, logs...)
+		}
+
+		if bc.chainConfig.IsBeijing(oldChain[i].Number64().Uint64()) {
+			beijing, _ := uint256.FromBig(bc.chainConfig.BeijingBlock)
+			if new(uint256.Int).Mod(new(uint256.Int).Sub(oldChain[i].Number64(), beijing), uint256.NewInt(bc.engineConf.APos.RewardEpoch)).
+				Cmp(uint256.NewInt(0)) == 0 {
+				last := new(uint256.Int).Sub(oldChain[i].Number64(), uint256.NewInt(bc.engineConf.APos.RewardEpoch))
+				rewardMap, err := bc.RewardsOfEpoch(oldChain[i].Number64(), last)
+				if nil != err {
+					return err
+				}
+
+				for _, r := range oldChain[i].Body().Reward() {
+					if _, ok := recoverMap[r.Address]; !ok {
+						recoverMap[r.Address], err = bc.GetAccountRewardUnpaid(r.Address)
+						if nil != err {
+							return err
+						}
+					}
+
+					high := new(uint256.Int).Add(recoverMap[r.Address], r.Amount)
+					if _, ok := rewardMap[r.Address]; ok {
+						recoverMap[r.Address] = high.Sub(high, rewardMap[r.Address])
+					}
+				}
+			}
 		}
 	}
-
-	//return bc.ChainDB.Update(bc.ctx, func(txw kv.RwTx) error {
-	// Delete useless indexes right now which includes the non-canonical
-	// transaction indexes, canonical chain indexes which above the head.
-	for _, t := range types.HashDifference(deletedTxs, addedTxs) {
-		rawdb.DeleteTxLookupEntry(tx, t)
-	}
-
-	// Delete all hash markers that are not part of the new canonical chain.
-	// Because the reorg function does not handle new chain head, all hash
-	// markers greater than or equal to new chain head should be deleted.
-	number := commonBlock.Number64().Uint64()
-	if len(newChain) > 1 {
-		number = newChain[1].Number64().Uint64()
-	}
-	for i := number + 1; ; i++ {
-		hash, _ := rawdb.ReadCanonicalHash(tx, i)
-		if hash == (types.Hash{}) {
-			break
+	reInsert := make([]block2.IBlock, 0, len(newChain))
+	err = bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+		if err := state.UnwindState(context.Background(), tx, bc.CurrentBlock().Number64().Uint64(), newChain[len(newChain)-1].Number64().Uint64()); nil != err {
+			return fmt.Errorf("uwind state failed, start: %d, end: %d,  %v", newChain[len(newChain)-1].Number64().Uint64(), bc.CurrentBlock().Number64().Uint64(), err)
 		}
-		rawdb.TruncateCanonicalHash(tx, i, false)
-	}
-
-	if !useExternalTx {
-		if err = tx.Commit(); nil != err {
+		if err := bc.writeHeadBlock(tx, commonBlock); nil != err {
 			return err
 		}
+
+		for i := len(newChain) - 1; i >= 1; i-- {
+			// Collect the new added transactions.
+			for _, t := range newChain[i].Transactions() {
+				h := t.Hash()
+				addedTxs = append(addedTxs, h)
+			}
+			reInsert = append(reInsert, newChain[i])
+		}
+
+		//return bc.ChainDB.Update(bc.ctx, func(txw kv.RwTx) error {
+		// Delete useless indexes right now which includes the non-canonical
+		// transaction indexes, canonical chain indexes which above the head.
+		for _, t := range types.HashDifference(deletedTxs, addedTxs) {
+			rawdb.DeleteTxLookupEntry(tx, t)
+		}
+
+		// Delete all hash markers that are not part of the new canonical chain.
+		// Because the reorg function does not handle new chain head, all hash
+		// markers greater than or equal to new chain head should be deleted.
+		number := commonBlock.Number64().Uint64()
+		if len(newChain) > 1 {
+			number = newChain[1].Number64().Uint64()
+		}
+		for i := number + 1; ; i++ {
+			hash, _ := rawdb.ReadCanonicalHash(tx, i)
+			if hash == (types.Hash{}) {
+				break
+			}
+			rawdb.TruncateCanonicalHash(tx, i, false)
+			rawdb.TruncateTd(tx, i)
+		}
+
+		// unwind reward
+		for k, v := range recoverMap {
+			rawdb.PutAccountReward(tx, k, v)
+		}
+		return nil
+	})
+	if nil != err {
+		return err
+	}
+	for i := len(oldChain) - 1; i >= 0; i-- {
+		// Also send event for blocks removed from the canon chain.
+		event.GlobalEvent.Send(&common.ChainSideEvent{Block: oldChain[i].(*block2.Block)})
+	}
+	if len(deletedLogs) > 0 {
+		event.GlobalEvent.Send(&common.RemovedLogsEvent{Logs: deletedLogs})
 	}
 
+	if _, err := bc.insertChain(reInsert); nil != err {
+		return err
+	}
 	return nil
 }
 func (bc *BlockChain) Quit() <-chan struct{} {
@@ -1728,4 +1879,74 @@ func (bc *BlockChain) GetAccountRewardUnpaid(account types.Address) (*uint256.In
 		return nil
 	})
 	return value, err
+}
+
+func (bc *BlockChain) RewardsOfEpoch(number *uint256.Int, lastEpoch *uint256.Int) (map[types.Address]*uint256.Int, error) {
+	// total reword for address this epoch
+	rewardMap := make(map[types.Address]*uint256.Int, 0)
+	depositeMap := map[types.Address]struct {
+		reward    *uint256.Int
+		maxReward *uint256.Int
+	}{}
+
+	currentNr := number.Clone()
+	currentNr = currentNr.Sub(currentNr, uint256.NewInt(1))
+	endNumber := lastEpoch.Clone()
+	for currentNr.Cmp(endNumber) >= 0 {
+		block, err := bc.GetBlockByNumber(currentNr)
+		if nil != err {
+			return nil, err
+		}
+
+		verifiers := block.Body().Verifier()
+		for _, verifier := range verifiers {
+			_, ok := depositeMap[verifier.Address]
+			if !ok {
+				low, max := bc.GetDepositInfo(verifier.Address)
+				if low == nil || max == nil {
+					continue
+				}
+				depositeMap[verifier.Address] = struct {
+					reward    *uint256.Int
+					maxReward *uint256.Int
+				}{reward: low, maxReward: max}
+
+				log.Debug("account deposite infos", "addr", verifier.Address, "perblock", low, "perepoch", max)
+			}
+
+			addrReward, ok := rewardMap[verifier.Address]
+			if !ok {
+				addrReward = uint256.NewInt(0)
+			}
+
+			rewardMap[verifier.Address] = math.Min256(addrReward.Add(addrReward, depositeMap[verifier.Address].reward), depositeMap[verifier.Address].maxReward.Clone())
+		}
+
+		currentNr.SubUint64(currentNr, 1)
+	}
+	return rewardMap, nil
+}
+
+// collectLogs collects the logs that were generated or removed during
+// the processing of a block. These logs are later announced as deleted or reborn.
+func (bc *BlockChain) collectLogs(b *block2.Block, removed bool) []*block2.Log {
+	var receipts block2.Receipts
+	bc.DB().View(context.Background(), func(tx kv.Tx) error {
+		receipts = rawdb.ReadRawReceipts(tx, b.Number64().Uint64())
+		return nil
+	})
+
+	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.Number64().Uint64(), b.Transactions())
+
+	var logs []*block2.Log
+	for _, receipt := range receipts {
+		for _, log := range receipt.Logs {
+			l := *log
+			if removed {
+				l.Removed = true
+			}
+			logs = append(logs, &l)
+		}
+	}
+	return logs
 }

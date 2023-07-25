@@ -215,6 +215,38 @@ var (
 
 	TestRules = TestChainConfig.Rules(0)
 
+	TestAposChainConfig = &ChainConfig{
+		ChainID:               big.NewInt(100100100),
+		HomesteadBlock:        big.NewInt(0),
+		DAOForkBlock:          nil,
+		DAOForkSupport:        false,
+		TangerineWhistleBlock: big.NewInt(0),
+		TangerineWhistleHash:  types.Hash{},
+		SpuriousDragonBlock:   big.NewInt(0),
+		ByzantiumBlock:        big.NewInt(0),
+		ConstantinopleBlock:   big.NewInt(0),
+		PetersburgBlock:       big.NewInt(0),
+		IstanbulBlock:         big.NewInt(0),
+		MuirGlacierBlock:      big.NewInt(0),
+		BerlinBlock:           big.NewInt(0),
+		LondonBlock:           big.NewInt(0),
+		ArrowGlacierBlock:     big.NewInt(0),
+		GrayGlacierBlock:      big.NewInt(0),
+		BeijingBlock:          big.NewInt(0),
+		Engine: &ConsensusConfig{
+			EngineName: "APosEngine",
+			Period:     8,
+			GasFloor:   0,
+			GasCeil:    30000000,
+			APos: &APosConfig{
+				Epoch:              3000,
+				RewardEpoch:        10800,
+				RewardLimit:        big.NewInt(500000000000000000),
+				CheckpointInterval: 0,
+			},
+		},
+	}
+
 	AmazeChainConfig = &ChainConfig{
 		ChainID:               big.NewInt(100100100),
 		HomesteadBlock:        big.NewInt(0),
@@ -317,11 +349,12 @@ type ChainConfig struct {
 	Eip1559FeeCollectorTransition *big.Int       `json:"eip1559FeeCollectorTransition,omitempty"` // (Optional) Block from which burnt EIP-1559 fees go to the Eip1559FeeCollector
 
 	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
-	Aura   *AuRaConfig   `json:"aura,omitempty"`
-	Parlia *ParliaConfig `json:"parlia,omitempty" toml:",omitempty"`
-	Bor    *BorConfig    `json:"bor,omitempty"`
+	Ethash *EthashConfig    `json:"ethash,omitempty"`
+	Clique *CliqueConfig    `json:"clique,omitempty"`
+	Aura   *AuRaConfig      `json:"aura,omitempty"`
+	Parlia *ParliaConfig    `json:"parlia,omitempty" toml:",omitempty"`
+	Bor    *BorConfig       `json:"bor,omitempty"`
+	Engine *ConsensusConfig `json:"engine"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -825,6 +858,11 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		}
 	}
 	return nil
+}
+
+// ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
+func (c *ChainConfig) ElasticityMultiplier() uint64 {
+	return ElasticityMultiplier
 }
 
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head uint64) *ConfigCompatError {

@@ -152,6 +152,7 @@ message Log {
   H256 BlockHash = 7;
   uint64 Index = 8;
   bool Removed = 9;
+  H160 Sender= 10;
 }
 
 message Logs {

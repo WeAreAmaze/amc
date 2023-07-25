@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/aggsign"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/api/filters"
@@ -991,14 +992,14 @@ func (s *BlockChainAPI) MinedBlock(ctx context.Context, address types.Address) (
 	return rpcSub, nil
 }
 
-func (s *BlockChainAPI) SubmitSign(sign AggSign) error {
+func (s *BlockChainAPI) SubmitSign(sign aggsign.AggSign) error {
 	info := DepositInfo(s.api.db, sign.Address)
 	if nil == info {
 		return fmt.Errorf("unauthed address: %s", sign.Address)
 	}
 	sign.PublicKey.SetBytes(info.PublicKey.Bytes())
 	go func() {
-		sigChannel <- sign
+		aggsign.SigChannel <- sign
 	}()
 	return nil
 }

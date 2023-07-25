@@ -169,6 +169,8 @@ var AmcTableCfg = kv.TableCfg{
 		DupFromLen:                54,
 		DupToLen:                  34,
 	},
+	//
+	Deposit: {Flags: kv.DupSort},
 }
 
 func AmcInit() {

@@ -21,13 +21,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/amazechain/amc/common"
-	"github.com/amazechain/amc/common/block"
+	"github.com/amazechain/amc/common/aggsign"
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/crypto/bls"
-	"github.com/amazechain/amc/common/crypto/bls/blst"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/contracts/deposit"
-	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rawdb"
@@ -35,8 +33,6 @@ import (
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"golang.org/x/crypto/sha3"
 )
-
-var sigChannel = make(chan AggSign, 10)
 
 var validVerifers = map[string]string{
 	"AMC4541Fc1CCB4e042a3BaDFE46904F9D22d127B682": "157aee59b889a8a9e3ecec11e4f79f6c065e3d21c6da2222b916c54f8c820d9c",
@@ -163,30 +159,6 @@ var validVerifers = map[string]string{
 //	return result, err
 //}
 
-type AggSign struct {
-	Number    uint64          `json:"number"`
-	StateRoot types.Hash      `json:"stateRoot"`
-	Sign      types.Signature `json:"sign"`
-	Address   types.Address   `json:"address"`
-	PublicKey types.PublicKey `json:"-"`
-}
-
-func (s *AggSign) Check(root types.Hash) bool {
-	if s.StateRoot != root {
-		return false
-	}
-	sig, err := bls.SignatureFromBytes(s.Sign[:])
-	if nil != err {
-		return false
-	}
-
-	pub, err := bls.PublicKeyFromBytes(s.PublicKey[:])
-	if nil != err {
-		return false
-	}
-	return sig.Verify(pub, s.StateRoot[:])
-}
-
 func DepositInfo(db kv.RwDB, key types.Address) *deposit.Info {
 	var info *deposit.Info
 	_ = db.View(context.Background(), func(tx kv.Tx) error {
@@ -204,58 +176,6 @@ func IsDeposit(db kv.RwDB, addr types.Address) (bool, error) {
 	defer tx.Rollback()
 
 	return rawdb.IsDeposit(tx, addr), nil
-}
-
-func SignMerge(ctx context.Context, header *block.Header, depositNum uint64) (types.Signature, []*block.Verify, error) {
-	aggrSigns := make([]bls.Signature, 0)
-	verifiers := make([]*block.Verify, 0)
-	uniq := make(map[types.Address]struct{})
-
-LOOP:
-	for {
-		select {
-		case s := <-sigChannel:
-			log.Tracef("accept sign, %+v", s)
-			if s.Number != header.Number.Uint64() {
-				log.Tracef("discard sign: need block number %d, get %d", header.Number.Uint64(), s.Number)
-				continue
-			}
-
-			if _, ok := uniq[s.Address]; ok {
-				continue
-			}
-
-			if !s.Check(header.Root) {
-				log.Tracef("discard sign: sign check failed! %v", s)
-				continue
-			}
-			sig, err := bls.SignatureFromBytes(s.Sign[:])
-			if nil != err {
-				return types.Signature{}, nil, err
-			}
-
-			aggrSigns = append(aggrSigns, sig)
-			verifiers = append(verifiers, &block.Verify{
-				Address:   s.Address,
-				PublicKey: s.PublicKey,
-			})
-			uniq[s.Address] = struct{}{}
-		case <-ctx.Done():
-			break LOOP
-		}
-	}
-	// todo enough sigs check
-	// 1
-	// uint64(len(aggrSigns)) < depositNum/2
-	// uint64(len(aggrSigns)) < 7
-	if uint64(len(aggrSigns)) < 3 {
-		return types.Signature{}, nil, consensus.ErrNotEnoughSign
-	}
-
-	aggS := blst.AggregateSignatures(aggrSigns)
-	var aggSign types.Signature
-	copy(aggSign[:], aggS.Marshal())
-	return aggSign, verifiers, nil
 }
 
 func MachineVerify(ctx context.Context) error {
@@ -305,13 +225,13 @@ func MachineVerify(ctx context.Context) error {
 
 					// Signature
 					sign := pri.Sign(b.Entire.Entire.Header.Root[:])
-					tmp := AggSign{Number: b.Entire.Entire.Header.Number.Uint64()}
+					tmp := aggsign.AggSign{Number: b.Entire.Entire.Header.Number.Uint64()}
 					copy(tmp.StateRoot[:], b.Entire.Entire.Header.Root[:])
 					copy(tmp.Sign[:], sign.Marshal())
 					copy(tmp.PublicKey[:], pri.PublicKey().Marshal())
 					tmp.Address = addr
 					// send res
-					sigChannel <- tmp
+					aggsign.SigChannel <- tmp
 					//log.Tracef("send verify sign, %+v", tmp)
 				}(s, k)
 			}

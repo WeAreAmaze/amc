@@ -144,7 +144,7 @@ var consensusFlag = []cli.Flag{
 		Name:        "engine.type",
 		Usage:       "consensus engine",
 		Value:       "APosEngine", //APoaEngine,APosEngine
-		Destination: &DefaultConfig.GenesisBlockCfg.Engine.EngineName,
+		Destination: &DefaultConfig.GenesisBlockCfg.Config.Engine.EngineName,
 	},
 	&cli.BoolFlag{
 		Name:        "engine.miner",
@@ -156,7 +156,7 @@ var consensusFlag = []cli.Flag{
 		Name:        "engine.etherbase",
 		Usage:       "consensus etherbase",
 		Value:       "",
-		Destination: &DefaultConfig.GenesisBlockCfg.Engine.Etherbase,
+		Destination: &DefaultConfig.GenesisBlockCfg.Config.Engine.Etherbase,
 	},
 }
 

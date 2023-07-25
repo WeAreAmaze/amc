@@ -384,14 +384,16 @@ func ReadBodyByNumber(db kv.Tx, number uint64) (*block.Body, uint64, uint32, err
 }
 
 func ReadBodyWithTransactions(db kv.Getter, hash types.Hash, number uint64) (*block.Body, error) {
-	canonicalHash, err := ReadCanonicalHash(db, number)
+	body, baseTxId, txAmount := ReadBody(db, hash, number)
+	if body == nil {
+		return nil, nil
+	}
+	var err error
+	body.Txs, err = CanonicalTransactions(db, baseTxId, txAmount)
 	if err != nil {
-		return nil, fmt.Errorf("read canonical hash failed: %d, %w", number, err)
+		return nil, err
 	}
-	if canonicalHash == hash {
-		return ReadCanonicalBodyWithTransactions(db, hash, number), nil
-	}
-	return nil, fmt.Errorf("mismatch hash: %v", hash)
+	return body, err
 }
 
 func ReadCanonicalBodyWithTransactions(db kv.Getter, hash types.Hash, number uint64) *block.Body {

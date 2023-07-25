@@ -15,25 +15,20 @@ func (h *HeadersByRangeRequest) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the HeadersByRangeRequest object to a target array
 func (h *HeadersByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(20)
 
-	// Offset (0) 'StartBlockNumber'
-	dst = ssz.WriteOffset(dst, offset)
+	// Field (0) 'StartBlockNumber'
 	if h.StartBlockNumber == nil {
 		h.StartBlockNumber = new(types_pb.H256)
 	}
-	offset += h.StartBlockNumber.SizeSSZ()
+	if dst, err = h.StartBlockNumber.MarshalSSZTo(dst); err != nil {
+		return
+	}
 
 	// Field (1) 'Count'
 	dst = ssz.MarshalUint64(dst, h.Count)
 
 	// Field (2) 'Step'
 	dst = ssz.MarshalUint64(dst, h.Step)
-
-	// Field (0) 'StartBlockNumber'
-	if dst, err = h.StartBlockNumber.MarshalSSZTo(dst); err != nil {
-		return
-	}
 
 	return
 }
@@ -42,51 +37,30 @@ func (h *HeadersByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err error)
 func (h *HeadersByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 20 {
+	if size != 48 {
 		return ssz.ErrSize
 	}
-
-	tail := buf
-	var o0 uint64
-
-	// Offset (0) 'StartBlockNumber'
-	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
-		return ssz.ErrOffset
-	}
-
-	if o0 < 20 {
-		return ssz.ErrInvalidVariableOffset
-	}
-
-	// Field (1) 'Count'
-	h.Count = ssz.UnmarshallUint64(buf[4:12])
-
-	// Field (2) 'Step'
-	h.Step = ssz.UnmarshallUint64(buf[12:20])
-
-	// Field (0) 'StartBlockNumber'
-	{
-		buf = tail[o0:]
-		if h.StartBlockNumber == nil {
-			h.StartBlockNumber = new(types_pb.H256)
-		}
-		if err = h.StartBlockNumber.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the HeadersByRangeRequest object
-func (h *HeadersByRangeRequest) SizeSSZ() (size int) {
-	size = 20
 
 	// Field (0) 'StartBlockNumber'
 	if h.StartBlockNumber == nil {
 		h.StartBlockNumber = new(types_pb.H256)
 	}
-	size += h.StartBlockNumber.SizeSSZ()
+	if err = h.StartBlockNumber.UnmarshalSSZ(buf[0:32]); err != nil {
+		return err
+	}
 
+	// Field (1) 'Count'
+	h.Count = ssz.UnmarshallUint64(buf[32:40])
+
+	// Field (2) 'Step'
+	h.Step = ssz.UnmarshallUint64(buf[40:48])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the HeadersByRangeRequest object
+func (h *HeadersByRangeRequest) SizeSSZ() (size int) {
+	size = 48
 	return
 }
 
@@ -181,28 +155,19 @@ func (s *Status) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the Status object to a target array
 func (s *Status) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(8)
 
-	// Offset (0) 'GenesisHash'
-	dst = ssz.WriteOffset(dst, offset)
+	// Field (0) 'GenesisHash'
 	if s.GenesisHash == nil {
 		s.GenesisHash = new(types_pb.H256)
 	}
-	offset += s.GenesisHash.SizeSSZ()
-
-	// Offset (1) 'CurrentHeight'
-	dst = ssz.WriteOffset(dst, offset)
-	if s.CurrentHeight == nil {
-		s.CurrentHeight = new(types_pb.H256)
-	}
-	offset += s.CurrentHeight.SizeSSZ()
-
-	// Field (0) 'GenesisHash'
 	if dst, err = s.GenesisHash.MarshalSSZTo(dst); err != nil {
 		return
 	}
 
 	// Field (1) 'CurrentHeight'
+	if s.CurrentHeight == nil {
+		s.CurrentHeight = new(types_pb.H256)
+	}
 	if dst, err = s.CurrentHeight.MarshalSSZTo(dst); err != nil {
 		return
 	}
@@ -214,67 +179,32 @@ func (s *Status) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (s *Status) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 8 {
+	if size != 64 {
 		return ssz.ErrSize
 	}
-
-	tail := buf
-	var o0, o1 uint64
-
-	// Offset (0) 'GenesisHash'
-	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
-		return ssz.ErrOffset
-	}
-
-	if o0 < 8 {
-		return ssz.ErrInvalidVariableOffset
-	}
-
-	// Offset (1) 'CurrentHeight'
-	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
-		return ssz.ErrOffset
-	}
-
-	// Field (0) 'GenesisHash'
-	{
-		buf = tail[o0:o1]
-		if s.GenesisHash == nil {
-			s.GenesisHash = new(types_pb.H256)
-		}
-		if err = s.GenesisHash.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-
-	// Field (1) 'CurrentHeight'
-	{
-		buf = tail[o1:]
-		if s.CurrentHeight == nil {
-			s.CurrentHeight = new(types_pb.H256)
-		}
-		if err = s.CurrentHeight.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the Status object
-func (s *Status) SizeSSZ() (size int) {
-	size = 8
 
 	// Field (0) 'GenesisHash'
 	if s.GenesisHash == nil {
 		s.GenesisHash = new(types_pb.H256)
 	}
-	size += s.GenesisHash.SizeSSZ()
+	if err = s.GenesisHash.UnmarshalSSZ(buf[0:32]); err != nil {
+		return err
+	}
 
 	// Field (1) 'CurrentHeight'
 	if s.CurrentHeight == nil {
 		s.CurrentHeight = new(types_pb.H256)
 	}
-	size += s.CurrentHeight.SizeSSZ()
+	if err = s.CurrentHeight.UnmarshalSSZ(buf[32:64]); err != nil {
+		return err
+	}
 
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the Status object
+func (s *Status) SizeSSZ() (size int) {
+	size = 64
 	return
 }
 
@@ -313,28 +243,19 @@ func (f *ForkData) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the ForkData object to a target array
 func (f *ForkData) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(8)
 
-	// Offset (0) 'CurrentVersion'
-	dst = ssz.WriteOffset(dst, offset)
+	// Field (0) 'CurrentVersion'
 	if f.CurrentVersion == nil {
 		f.CurrentVersion = new(types_pb.H256)
 	}
-	offset += f.CurrentVersion.SizeSSZ()
-
-	// Offset (1) 'GenesisValidatorsRoot'
-	dst = ssz.WriteOffset(dst, offset)
-	if f.GenesisValidatorsRoot == nil {
-		f.GenesisValidatorsRoot = new(types_pb.H256)
-	}
-	offset += f.GenesisValidatorsRoot.SizeSSZ()
-
-	// Field (0) 'CurrentVersion'
 	if dst, err = f.CurrentVersion.MarshalSSZTo(dst); err != nil {
 		return
 	}
 
 	// Field (1) 'GenesisValidatorsRoot'
+	if f.GenesisValidatorsRoot == nil {
+		f.GenesisValidatorsRoot = new(types_pb.H256)
+	}
 	if dst, err = f.GenesisValidatorsRoot.MarshalSSZTo(dst); err != nil {
 		return
 	}
@@ -346,67 +267,32 @@ func (f *ForkData) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (f *ForkData) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 8 {
+	if size != 64 {
 		return ssz.ErrSize
 	}
-
-	tail := buf
-	var o0, o1 uint64
-
-	// Offset (0) 'CurrentVersion'
-	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
-		return ssz.ErrOffset
-	}
-
-	if o0 < 8 {
-		return ssz.ErrInvalidVariableOffset
-	}
-
-	// Offset (1) 'GenesisValidatorsRoot'
-	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
-		return ssz.ErrOffset
-	}
-
-	// Field (0) 'CurrentVersion'
-	{
-		buf = tail[o0:o1]
-		if f.CurrentVersion == nil {
-			f.CurrentVersion = new(types_pb.H256)
-		}
-		if err = f.CurrentVersion.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-
-	// Field (1) 'GenesisValidatorsRoot'
-	{
-		buf = tail[o1:]
-		if f.GenesisValidatorsRoot == nil {
-			f.GenesisValidatorsRoot = new(types_pb.H256)
-		}
-		if err = f.GenesisValidatorsRoot.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the ForkData object
-func (f *ForkData) SizeSSZ() (size int) {
-	size = 8
 
 	// Field (0) 'CurrentVersion'
 	if f.CurrentVersion == nil {
 		f.CurrentVersion = new(types_pb.H256)
 	}
-	size += f.CurrentVersion.SizeSSZ()
+	if err = f.CurrentVersion.UnmarshalSSZ(buf[0:32]); err != nil {
+		return err
+	}
 
 	// Field (1) 'GenesisValidatorsRoot'
 	if f.GenesisValidatorsRoot == nil {
 		f.GenesisValidatorsRoot = new(types_pb.H256)
 	}
-	size += f.GenesisValidatorsRoot.SizeSSZ()
+	if err = f.GenesisValidatorsRoot.UnmarshalSSZ(buf[32:64]); err != nil {
+		return err
+	}
 
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ForkData object
+func (f *ForkData) SizeSSZ() (size int) {
+	size = 64
 	return
 }
 
@@ -445,25 +331,20 @@ func (b *BodiesByRangeRequest) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BodiesByRangeRequest object to a target array
 func (b *BodiesByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(20)
 
-	// Offset (0) 'StartBlockNumber'
-	dst = ssz.WriteOffset(dst, offset)
+	// Field (0) 'StartBlockNumber'
 	if b.StartBlockNumber == nil {
 		b.StartBlockNumber = new(types_pb.H256)
 	}
-	offset += b.StartBlockNumber.SizeSSZ()
+	if dst, err = b.StartBlockNumber.MarshalSSZTo(dst); err != nil {
+		return
+	}
 
 	// Field (1) 'Count'
 	dst = ssz.MarshalUint64(dst, b.Count)
 
 	// Field (2) 'Step'
 	dst = ssz.MarshalUint64(dst, b.Step)
-
-	// Field (0) 'StartBlockNumber'
-	if dst, err = b.StartBlockNumber.MarshalSSZTo(dst); err != nil {
-		return
-	}
 
 	return
 }
@@ -472,51 +353,30 @@ func (b *BodiesByRangeRequest) MarshalSSZTo(buf []byte) (dst []byte, err error) 
 func (b *BodiesByRangeRequest) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 20 {
+	if size != 48 {
 		return ssz.ErrSize
 	}
-
-	tail := buf
-	var o0 uint64
-
-	// Offset (0) 'StartBlockNumber'
-	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
-		return ssz.ErrOffset
-	}
-
-	if o0 < 20 {
-		return ssz.ErrInvalidVariableOffset
-	}
-
-	// Field (1) 'Count'
-	b.Count = ssz.UnmarshallUint64(buf[4:12])
-
-	// Field (2) 'Step'
-	b.Step = ssz.UnmarshallUint64(buf[12:20])
-
-	// Field (0) 'StartBlockNumber'
-	{
-		buf = tail[o0:]
-		if b.StartBlockNumber == nil {
-			b.StartBlockNumber = new(types_pb.H256)
-		}
-		if err = b.StartBlockNumber.UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-	}
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the BodiesByRangeRequest object
-func (b *BodiesByRangeRequest) SizeSSZ() (size int) {
-	size = 20
 
 	// Field (0) 'StartBlockNumber'
 	if b.StartBlockNumber == nil {
 		b.StartBlockNumber = new(types_pb.H256)
 	}
-	size += b.StartBlockNumber.SizeSSZ()
+	if err = b.StartBlockNumber.UnmarshalSSZ(buf[0:32]); err != nil {
+		return err
+	}
 
+	// Field (1) 'Count'
+	b.Count = ssz.UnmarshallUint64(buf[32:40])
+
+	// Field (2) 'Step'
+	b.Step = ssz.UnmarshallUint64(buf[40:48])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BodiesByRangeRequest object
+func (b *BodiesByRangeRequest) SizeSSZ() (size int) {
+	size = 48
 	return
 }
 

@@ -23,11 +23,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/aggsign"
+	"github.com/amazechain/amc/common/crypto/bls/blst"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/holiman/uint256"
 
 	"github.com/amazechain/amc/common/crypto/bls"
-	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/modules/rawdb"
 
 	"github.com/amazechain/amc/accounts"
@@ -37,7 +38,6 @@ import (
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/internal/avm/rlp"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
@@ -186,7 +186,7 @@ func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, er
 // APos is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type APos struct {
-	config      *conf.ConsensusConfig // Consensus engine configuration parameters
+	config      *params.ConsensusConfig // Consensus engine configuration parameters
 	chainConfig *params.ChainConfig
 	db          kv.RwDB // Database to store and retrieve snapshot checkpoints
 
@@ -207,7 +207,7 @@ type APos struct {
 
 // New creates a APos proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *conf.ConsensusConfig, db kv.RwDB, chainConfig *params.ChainConfig) consensus.Engine {
+func New(config *params.ConsensusConfig, db kv.RwDB, chainConfig *params.ChainConfig) consensus.Engine {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.APos.Epoch == 0 {
@@ -747,7 +747,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		ctx, cancle := context.WithTimeout(context.Background(), delay)
 		defer cancle()
 		member := c.CountDepositor()
-		aggSign, verifiers, err := api.SignMerge(ctx, header, member)
+		aggSign, verifiers, err := SignMerge(ctx, header, member)
 		if nil != err {
 			return err
 		}
@@ -904,4 +904,56 @@ func (c *APos) CountDepositor() uint64 {
 
 func (c *APos) IsServiceTransaction(sender types.Address, syscall consensus.SystemCall) bool {
 	return false
+}
+
+func SignMerge(ctx context.Context, header *block.Header, depositNum uint64) (types.Signature, []*block.Verify, error) {
+	aggrSigns := make([]bls.Signature, 0)
+	verifiers := make([]*block.Verify, 0)
+	uniq := make(map[types.Address]struct{})
+
+LOOP:
+	for {
+		select {
+		case s := <-aggsign.SigChannel:
+			log.Tracef("accept sign, %+v", s)
+			if s.Number != header.Number.Uint64() {
+				log.Tracef("discard sign: need block number %d, get %d", header.Number.Uint64(), s.Number)
+				continue
+			}
+
+			if _, ok := uniq[s.Address]; ok {
+				continue
+			}
+
+			if !s.Check(header.Root) {
+				log.Tracef("discard sign: sign check failed! %v", s)
+				continue
+			}
+			sig, err := bls.SignatureFromBytes(s.Sign[:])
+			if nil != err {
+				return types.Signature{}, nil, err
+			}
+
+			aggrSigns = append(aggrSigns, sig)
+			verifiers = append(verifiers, &block.Verify{
+				Address:   s.Address,
+				PublicKey: s.PublicKey,
+			})
+			uniq[s.Address] = struct{}{}
+		case <-ctx.Done():
+			break LOOP
+		}
+	}
+	// todo enough sigs check
+	// 1
+	// uint64(len(aggrSigns)) < depositNum/2
+	// uint64(len(aggrSigns)) < 7
+	if uint64(len(aggrSigns)) < 3 {
+		return types.Signature{}, nil, consensus.ErrNotEnoughSign
+	}
+
+	aggS := blst.AggregateSignatures(aggrSigns)
+	var aggSign types.Signature
+	copy(aggSign[:], aggS.Marshal())
+	return aggSign, verifiers, nil
 }

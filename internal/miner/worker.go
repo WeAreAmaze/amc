@@ -148,7 +148,7 @@ type worker struct {
 	txsPool   txs_pool.ITxsPool
 
 	coinbase    types.Address
-	conf        *conf.ConsensusConfig
+	conf        *params.ConsensusConfig
 	chainConfig *params.ChainConfig
 
 	isLocalBlock func(header *block.Header) bool
@@ -178,7 +178,7 @@ type worker struct {
 	snapshotReceipts block.Receipts
 }
 
-func newWorker(ctx context.Context, group *errgroup.Group, conf *conf.ConsensusConfig, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
+func newWorker(ctx context.Context, group *errgroup.Group, conf *params.ConsensusConfig, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
 	c, cancel := context.WithCancel(ctx)
 	worker := &worker{
 		engine:           engine,
@@ -599,7 +599,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs
 	header := env.header
 	noop := state.NewNoopWriter()
 	var miningCommitTx = func(txn *transaction.Transaction, coinbase types.Address, vmConfig *vm2.Config, chainConfig *params.ChainConfig, ibs *state.IntraBlockState, current *environment) ([]*block.Log, error) {
-		ibs.Prepare(txn.Hash(), types.Hash{}, env.tcount)
+		ibs.Prepare(txn.Hash(), types.Hash{}, env.tcount, *txn.From())
 		gasSnap := current.gasPool.Gas()
 		snap := ibs.Snapshot()
 		log.Debug("addTransactionsToMiningBlock", "txn hash", txn.Hash())
@@ -672,7 +672,7 @@ func (w *worker) prepareWork(param *generateParams) (*environment, error) {
 		ParentHash: parent.Hash(),
 		Coinbase:   param.coinbase,
 		Number:     uint256.NewInt(0).Add(parent.Number64(), uint256.NewInt(1)),
-		GasLimit:   CalcGasLimit(parent.GasLimit, w.conf.GasCeil),
+		GasLimit:   internal.CalcGasLimit(parent.GasLimit, w.conf.GasCeil),
 		Time:       uint64(timestamp),
 		Difficulty: uint256.NewInt(0),
 		// just for now
@@ -684,7 +684,7 @@ func (w *worker) prepareWork(param *generateParams) (*environment, error) {
 		header.BaseFee, _ = uint256.FromBig(misc.CalcBaseFee(w.chainConfig, parent))
 		if !w.chainConfig.IsLondon(parent.Number64().Uint64()) {
 			parentGasLimit := parent.GasLimit * params.ElasticityMultiplier
-			header.GasLimit = CalcGasLimit(parentGasLimit, w.minerConf.GasCeil)
+			header.GasLimit = internal.CalcGasLimit(parentGasLimit, w.minerConf.GasCeil)
 		}
 	}
 

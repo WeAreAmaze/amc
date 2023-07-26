@@ -30,15 +30,9 @@ const (
 	peerLocksPollingInterval = 5 * time.Minute
 	// peerLockMaxAge is maximum time before stale lock is purged.
 	peerLockMaxAge = 60 * time.Minute
-	// nonSkippedSlotsFullSearchEpochs how many epochs to check in full, before resorting to random
-	// sampling of slots once per epoch
-	nonSkippedSlotsFullSearchEpochs = 10
 	// peerFilterCapacityWeight defines how peer's capacity affects peer's score. Provided as
 	// percentage, i.e. 0.3 means capacity will determine 30% of peer's score.
 	peerFilterCapacityWeight = 0.2
-	// backtrackingMaxHops how many hops (during search for common ancestor in backtracking) to do
-	// before giving up.
-	backtrackingMaxHops = 128
 )
 
 var (
@@ -49,9 +43,6 @@ var (
 	errParentDoesNotExist    = errors.New("beacon node doesn't have a parent in db with root")
 	errNoPeersWithAltBlocks  = errors.New("no peers with alternative blocks found")
 )
-
-// Period to calculate expected limit for a single peer.
-var blockLimiterPeriod = 30 * time.Second
 
 // blocksFetcherConfig is a config to setup the block fetcher.
 type blocksFetcherConfig struct {
@@ -111,7 +102,10 @@ func newBlocksFetcher(ctx context.Context, cfg *blocksFetcherConfig) *blocksFetc
 	allowedBlocksPerSecond := float64(cfg.p2p.GetConfig().P2PLimit.BlockBatchLimit)
 	allowedBlocksBurst := int64(cfg.p2p.GetConfig().P2PLimit.BlockBatchLimitBurstFactor * cfg.p2p.GetConfig().P2PLimit.BlockBatchLimit)
 
+	blockLimiterPeriod := time.Duration(cfg.p2p.GetConfig().P2PLimit.BlockBatchLimiterPeriod) * time.Second
+
 	// Allow fetcher to go almost to the full burst capacity (less a single batch).
+	//rateLimiter := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst-allowedBlocksBurst, blockLimiterPeriod, false /* deleteEmptyBuckets */)
 	rateLimiter := leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockLimiterPeriod, false /* deleteEmptyBuckets */)
 
 	capacityWeight := cfg.peerFilterCapacityWeight
@@ -261,11 +255,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start *uint256.Int, c
 }
 
 // fetchBlocksFromPeer fetches blocks from a single randomly selected peer.
-func (f *blocksFetcher) fetchBlocksFromPeer(
-	ctx context.Context,
-	start *uint256.Int, count uint64,
-	peers []peer.ID,
-) ([]*types_pb.Block, peer.ID, error) {
+func (f *blocksFetcher) fetchBlocksFromPeer(ctx context.Context, start *uint256.Int, count uint64, peers []peer.ID) ([]*types_pb.Block, peer.ID, error) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlocksFromPeer")
 	defer span.End()
 
@@ -288,11 +278,7 @@ func (f *blocksFetcher) fetchBlocksFromPeer(
 }
 
 // requestBlocks is a wrapper for handling BeaconBlocksByRangeRequest requests/streams.
-func (f *blocksFetcher) requestBlocks(
-	ctx context.Context,
-	req *sync_pb.BodiesByRangeRequest,
-	pid peer.ID,
-) ([]*types_pb.Block, error) {
+func (f *blocksFetcher) requestBlocks(ctx context.Context, req *sync_pb.BodiesByRangeRequest, pid peer.ID) ([]*types_pb.Block, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -300,7 +286,7 @@ func (f *blocksFetcher) requestBlocks(
 	l.Lock()
 	log.Debug("Requesting blocks",
 		"peer", pid,
-		"start", req.StartBlockNumber,
+		"start", utils.ConvertH256ToUint256Int(req.StartBlockNumber).Uint64(),
 		"count", req.Count,
 		"step", req.Step,
 		"capacity", f.rateLimiter.Remaining(pid.String()),
@@ -320,7 +306,7 @@ func (f *blocksFetcher) requestBlocks(
 
 // waitForBandwidth blocks up until peer's bandwidth is restored.
 func (f *blocksFetcher) waitForBandwidth(pid peer.ID, count uint64) error {
-	log.Debug("Slowing down for rate limit", "peer", pid)
+
 	rem := f.rateLimiter.Remaining(pid.String())
 	if uint64(rem) >= count {
 		// Exit early if we have sufficient capacity
@@ -333,6 +319,8 @@ func (f *blocksFetcher) waitForBandwidth(pid peer.ID, count uint64) error {
 	//}
 	toWait := timeToWait(int64(count), rem, f.rateLimiter.Capacity(), f.rateLimiter.TillEmpty(pid.String()))
 	timer := time.NewTimer(toWait)
+
+	log.Debug("Slowing down for rate limit", "peer", pid, "timeToWait", common.PrettyDuration(toWait))
 	defer timer.Stop()
 	select {
 	case <-f.ctx.Done():

@@ -19,9 +19,6 @@ const defaultBurstLimit = 5
 
 const leakyBucketPeriod = 1 * time.Second
 
-// Only allow in 2 batches per minute.
-const blockBucketPeriod = 30 * time.Second
-
 // Dummy topic to validate all incoming rpc requests.
 const rpcLimiterTopic = "rpc-limiter-topic"
 
@@ -43,6 +40,8 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	allowedBlocksPerSecond := float64(p2pProvider.GetConfig().P2PLimit.BlockBatchLimit)
 	allowedBlocksBurst := int64(p2pProvider.GetConfig().P2PLimit.BlockBatchLimitBurstFactor * p2pProvider.GetConfig().P2PLimit.BlockBatchLimit)
 
+	blockLimiterPeriod := time.Duration(p2pProvider.GetConfig().P2PLimit.BlockBatchLimiterPeriod) * time.Second
+
 	// Set topic map for all rpc topics.
 	topicMap := make(map[string]*leakybucket.Collector, len(p2p.RPCTopicMappings))
 	// Goodbye Message
@@ -53,10 +52,10 @@ func newRateLimiter(p2pProvider p2p.P2P) *limiter {
 	topicMap[addEncoding(p2p.RPCStatusTopicV1)] = leakybucket.NewCollector(1, defaultBurstLimit, leakyBucketPeriod, false /* deleteEmptyBuckets */)
 
 	// Bodies Message
-	topicMap[addEncoding(p2p.RPCBodiesDataTopicV1)] = leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCBodiesDataTopicV1)] = leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockLimiterPeriod, false /* deleteEmptyBuckets */)
 
 	// Headers Message
-	topicMap[addEncoding(p2p.RPCHeadersDataTopicV1)] = leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, leakyBucketPeriod, false /* deleteEmptyBuckets */)
+	topicMap[addEncoding(p2p.RPCHeadersDataTopicV1)] = leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksBurst, blockLimiterPeriod, false /* deleteEmptyBuckets */)
 
 	// General topic for all rpc requests.
 	topicMap[rpcLimiterTopic] = leakybucket.NewCollector(5, defaultBurstLimit*2, leakyBucketPeriod, false /* deleteEmptyBuckets */)
@@ -89,6 +88,13 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 		amt = 1
 	}
 	if amt > uint64(remaining) {
+		log.Warn("validate Request failure",
+			"key", key,
+			"topic", topic,
+			"count", amt,
+			"remaining", remaining,
+		)
+
 		l.p2p.Peers().Scorers().BadResponsesScorer().Increment(stream.Conn().RemotePeer())
 		writeErrorResponseToStream(responseCodeInvalidRequest, p2ptypes.ErrRateLimited.Error(), stream, l.p2p)
 		return p2ptypes.ErrRateLimited

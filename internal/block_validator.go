@@ -107,6 +107,13 @@ func (v *BlockValidator) ValidateState(iBlock block.IBlock, statedb *state.Intra
 
 	receiptSha := DeriveSha(receipts)
 	if receiptSha != iBlock.Header().(*block.Header).ReceiptHash {
+		//for i, tx := range iBlock.Body().Transactions() {
+		//	log.Error("tx", "index", i, "from", tx.From(), "GasUsed", receipts[i].GasUsed, "Bloom", receipts[i].Bloom)
+		//	for l2, l := range receipts[i].Logs {
+		//		log.Error("tx logs", "index", l2, "address", l.Address, "topic", l.Topics[0], "data", hexutil.Encode(l.Data))
+		//	}
+		//
+		//}
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", iBlock.Header().(*block.Header).ReceiptHash, receiptSha)
 	}
 	// Validate the state root against the received state root and throw

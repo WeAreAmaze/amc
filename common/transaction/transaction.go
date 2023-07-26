@@ -32,6 +32,7 @@ import (
 
 var (
 	ErrGasFeeCapTooLow = fmt.Errorf("fee cap less than base fee")
+	ErrUnmarshalHash   = fmt.Errorf("hash verify falied")
 )
 
 // Transaction types.
@@ -195,6 +196,13 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 		inner = &dftt
 	}
 
+	// todo
+	protoHash := utils.ConvertH256ToHash(pbTx.Hash)
+	innerHash := inner.hash()
+	if bytes.Compare(protoHash[:], innerHash[:]) != 0 {
+		//return nil, ErrUnmarshalHash
+	}
+
 	return inner, nil
 }
 
@@ -245,6 +253,9 @@ func (tx *Transaction) ToProtoMessage() proto.Message {
 	if tx.To() != nil {
 		pbTx.To = utils.ConvertAddressToH160(*tx.To())
 	}
+
+	pbTx.Hash = utils.ConvertHashToH256(tx.Hash())
+
 	v, r, s := tx.RawSignatureValues()
 	if nil != v {
 		pbTx.V = utils.ConvertUint256IntToH256(v)

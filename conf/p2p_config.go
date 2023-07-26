@@ -49,4 +49,5 @@ type P2PConfig struct {
 type P2PLimit struct {
 	BlockBatchLimit            int `json:"block_batch_limit" yaml:"block_batch_limit"`
 	BlockBatchLimitBurstFactor int `json:"block_batch_limit_burst_factor" yaml:"block_batch_limit_burst_factor"`
+	BlockBatchLimiterPeriod    int `json:"block_batch_limiter_period" yaml:"block_batch_limiter_period"`
 }

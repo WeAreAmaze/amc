@@ -83,7 +83,7 @@ func RlpHash(x interface{}) (h types.Hash) {
 	defer HasherPool.Put(sha)
 	sha.Reset()
 	rlp.Encode(sha, x)
-	sha.Sum(h[:])
+	sha.Read(h[:])
 	return h
 }
 
@@ -95,7 +95,7 @@ func PrefixedRlpHash(prefix byte, x interface{}) (h types.Hash) {
 	sha.Reset()
 	sha.Write([]byte{prefix})
 	rlp.Encode(sha, x)
-	sha.Sum(h[:])
+	sha.Read(h[:])
 	return h
 }
 
@@ -114,7 +114,7 @@ func Hash(data []byte) [32]byte {
 
 	// #nosec G104
 	h.Write(data)
-	h.Sum(b[:0])
+	h.Read(b[:])
 
 	return b
 }

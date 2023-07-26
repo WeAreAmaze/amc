@@ -365,6 +365,13 @@ var (
 		Value:       2,
 		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimitBurstFactor,
 	}
+	// P2PBlockBatchLimiterPeriod Period to calculate expected limit for a single peer.
+	P2PBlockBatchLimiterPeriod = &cli.IntFlag{
+		Name:        "p2p.limit.block-limiter-period",
+		Usage:       "Period to calculate expected limit for a single peer.",
+		Value:       5,
+		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimiterPeriod,
+	}
 )
 
 var (
@@ -526,5 +533,6 @@ var (
 	p2pLimitFlags = []cli.Flag{
 		P2PBlockBatchLimit,
 		P2PBlockBatchLimitBurstFactor,
+		P2PBlockBatchLimiterPeriod,
 	}
 )

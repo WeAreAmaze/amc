@@ -80,9 +80,10 @@ func (b *Body) FromProtoMessage(message proto.Message) error {
 	//
 	for _, v := range pBody.Txs {
 		tx, err := transaction.FromProtoMessage(v)
-		if err == nil {
-			txs = append(txs, tx)
+		if err != nil {
+			return err
 		}
+		txs = append(txs, tx)
 	}
 	//
 	b.Txs = txs

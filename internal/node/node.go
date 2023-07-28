@@ -164,7 +164,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 			return nil, err
 		}
 	}
-	log.Info("new node", "address", types.PrivateToAddress(privateKey))
 
 	//
 	chainKv, err := OpenDatabase(cfg, nil, name)
@@ -278,6 +277,8 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/amc)
 	// are required to add the backends later on.
 	accman := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.NodeCfg.InsecureUnlockAllowed})
+
+	log.Info("new node", "GenesisHash", genesisBlock.Hash(), "CurrentBlockNr", bc.CurrentBlock().Number64().Uint64())
 
 	node = Node{
 		ctx:             c,

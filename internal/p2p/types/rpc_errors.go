@@ -4,7 +4,7 @@ import "errors"
 
 var (
 	ErrWrongForkDigestVersion = errors.New("wrong fork digest version")
-	ErrInvalidEpoch           = errors.New("invalid epoch")
+	ErrInvalidBlockNr         = errors.New("invalid block number")
 	ErrInvalidFinalizedRoot   = errors.New("invalid finalized root")
 	ErrInvalidSequenceNum     = errors.New("invalid sequence number provided")
 	ErrGeneric                = errors.New("internal service error")

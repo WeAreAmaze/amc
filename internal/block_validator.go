@@ -20,8 +20,11 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/crypto/bls"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/consensus"
+	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/state"
 	"github.com/amazechain/amc/params"
 )
@@ -52,8 +55,10 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 func (v *BlockValidator) ValidateBody(b block.IBlock) error {
 	// Check Signature valid
 	vfs := b.Body().Verifier()
+	addrs := make([]types.Address, len(vfs))
 	ss := make([]bls.PublicKey, len(vfs))
 	for i, p := range vfs {
+		addrs[i] = p.Address
 		blsP, err := bls.PublicKeyFromBytes(p.PublicKey[:])
 		if nil != err {
 			return err
@@ -68,6 +73,10 @@ func (v *BlockValidator) ValidateBody(b block.IBlock) error {
 			return err
 		}
 		if !sig.FastAggregateVerify(ss, header.Root) {
+			log.Warn("AggSignature verify falied", "blockNr", b.Number64().Uint64(), "Signature", hexutil.Encode(header.Signature[:]), "Root", hexutil.Encode(header.Root[:]))
+			for i, addr := range addrs {
+				log.Warn("", "address", addr.String(), "publicKey", hexutil.Encode(ss[i].Marshal()))
+			}
 			return fmt.Errorf("AggSignature verify falied")
 		}
 	}
@@ -96,8 +105,8 @@ func (v *BlockValidator) ValidateBody(b block.IBlock) error {
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(iBlock block.IBlock, statedb *state.IntraBlockState, receipts block.Receipts, usedGas uint64) error {
 	header := iBlock.Header().(*block.Header)
-	if iBlock.GasUsed() != usedGas {
-		return fmt.Errorf("invalid gas used (remote: %d local: %d)", iBlock.GasUsed(), usedGas)
+	if header.GasUsed != usedGas {
+		return fmt.Errorf("invalid gas used (remote: %d local: %d)", header.GasUsed, usedGas)
 	}
 
 	rbloom := block.CreateBloom(receipts)
@@ -106,21 +115,21 @@ func (v *BlockValidator) ValidateState(iBlock block.IBlock, statedb *state.Intra
 	}
 
 	receiptSha := DeriveSha(receipts)
-	if receiptSha != iBlock.Header().(*block.Header).ReceiptHash {
-		//for i, tx := range iBlock.Body().Transactions() {
-		//	log.Error("tx", "index", i, "from", tx.From(), "GasUsed", receipts[i].GasUsed, "Bloom", receipts[i].Bloom)
-		//	for l2, l := range receipts[i].Logs {
-		//		log.Error("tx logs", "index", l2, "address", l.Address, "topic", l.Topics[0], "data", hexutil.Encode(l.Data))
-		//	}
-		//
-		//}
-		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", iBlock.Header().(*block.Header).ReceiptHash, receiptSha)
+	if receiptSha != header.ReceiptHash {
+		for i, tx := range iBlock.Body().Transactions() {
+			log.Warn("tx", "index", i, "from", tx.From(), "GasUsed", receipts[i].GasUsed)
+			for index2, l := range receipts[i].Logs {
+				log.Warn("tx logs", "index", index2, "address", l.Address, "topic", l.Topics[0], "data", hexutil.Encode(l.Data))
+			}
+
+		}
+		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	// TODO 替换 emptyroot
-	if root := statedb.IntermediateRoot(); iBlock.StateRoot() != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", iBlock.Header().(*block.Header).Root, root)
+	if root := statedb.IntermediateRoot(); header.StateRoot() != root {
+		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
 	}
 	return nil
 }

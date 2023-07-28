@@ -120,6 +120,7 @@ func doReward(chainConf *params.ChainConfig, consConf *params.ConsensusConfig, s
 					state.CreateAccount(addr, false)
 				}
 
+				log.Info("🔨 set account reward", "addr", addr, "amount", value.Uint64(), "blockNr", header.Number.Uint64())
 				state.AddBalance(addr, value)
 				rewards = append(rewards, &block.Reward{
 					Address: addr,
@@ -127,6 +128,7 @@ func doReward(chainConf *params.ChainConfig, consConf *params.ConsensusConfig, s
 				})
 			}
 		}
+		state.SoftFinalise()
 		sort.Sort(rewards)
 	}
 	return rewards, upayMap, nil

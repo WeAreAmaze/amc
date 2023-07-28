@@ -268,9 +268,12 @@ func (q *blocksQueue) onScheduleEvent(ctx context.Context) eventHandlerFn {
 		}
 		if m.start.Cmp(q.highestExpectedBlockNr) == 1 {
 			m.setState(stateSkipped)
-			return m.state, errSlotIsTooHigh
+			return m.state, errBlockNrIsTooHigh
 		}
 		blocksPerRequest := q.blocksFetcher.blocksPerPeriod
+		if q.highestExpectedBlockNr.Cmp(new(uint256.Int).AddUint64(m.start, blocksPerRequest)) < 0 {
+			blocksPerRequest = new(uint256.Int).Sub(q.highestExpectedBlockNr, m.start).Uint64() + 1
+		}
 		if err := q.blocksFetcher.scheduleRequest(ctx, m.start, blocksPerRequest); err != nil {
 			return m.state, err
 		}
@@ -294,7 +297,7 @@ func (q *blocksQueue) onDataReceivedEvent(ctx context.Context) eventHandlerFn {
 		if response.err != nil {
 			switch response.err {
 			//todo
-			case errSlotIsTooHigh:
+			case errBlockNrIsTooHigh:
 				// Current window is already too big, re-request previous epochs.
 				for _, fsm := range q.smm.machines {
 					if fsm.start.Cmp(response.start) == -1 && fsm.state == stateSkipped {

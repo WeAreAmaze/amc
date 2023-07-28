@@ -20,7 +20,6 @@ func (s *Service) blockSubscriber(ctx context.Context, msg proto.Message) error 
 	log.Info("Subscriber new Block", "hash", iBlock.Header().Hash(), "blockNr", iBlock.Header().Number64().Uint64())
 
 	if _, err := s.cfg.chain.InsertChain(blocks); err != nil {
-		log.Error("Subscribe block insert failed", "error", err)
 		// todo bad block
 		//if errors.Is(err, Badblock) {
 		s.setBadBlock(ctx, iBlock.Hash())

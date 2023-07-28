@@ -350,7 +350,7 @@ func (c *APos) verifyCascadingFields(chain consensus.ChainHeaderReader, iHeader 
 	} else {
 		parent = chain.GetHeader(header.ParentHash, uint256.NewInt(number-1))
 	}
-	if parent.(*block.Header) == nil || parent.Number64().Uint64() != number-1 || parent.Hash() != header.ParentHash {
+	if parent == nil || parent.(*block.Header) == nil || parent.Number64().Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return errUnknownBlock
 	}
 	// todo

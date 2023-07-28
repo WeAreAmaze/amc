@@ -231,16 +231,21 @@ func (s *Service) Start() {
 	utils.RunEvery(s.ctx, refreshRate, s.RefreshENR)
 	utils.RunEvery(s.ctx, 1*time.Minute, func() {
 		//utils.RunEvery(s.ctx, 5*time.Second, func() {
-		log.Info("Peer summary", "inbound", len(s.peers.InboundConnected()), "outbound", len(s.peers.OutboundConnected()), "activePeers", len(s.peers.Active()), "disconnectedPeers", len(s.peers.Disconnected()))
-		for _, p := range s.peers.All() {
+		log.Trace("Peer summary", "inbound", len(s.peers.InboundConnected()), "outbound", len(s.peers.OutboundConnected()), "activePeers", len(s.peers.Active()), "disconnectedPeers", len(s.peers.Disconnected()))
+		s.peers.Prune()
+		for _, p := range s.peers.Active() {
 			//addr, _ := s.peers.Address(p)
 			//IP, _ := s.peers.IP(p)
 			//ENR, _ := s.peers.ENR(p)
 			dialArgs, _ := s.peers.DialArgs(p)
 			direction, _ := s.peers.Direction(p)
 			connState, _ := s.peers.ConnState(p)
-			chainState, _ := s.peers.ChainState(p)
+			chainState, err := s.peers.ChainState(p)
+			if nil != err {
+				log.Error("chainState", "error", err)
+			}
 			// hexutil.Encode([]byte(p))
+
 			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
@@ -249,7 +254,7 @@ func (s *Service) Start() {
 		}
 
 		allNodes := s.dv5Listener.AllNodes()
-		log.Info("Nodes stored in the discovery table:")
+		log.Trace("Nodes stored in the discovery table:")
 		for i, n := range allNodes {
 			log.Trace(fmt.Sprintf("P2P details %d", i), "ENR", n.String(), "Node ID", n.ID(), "IP", n.IP(), "UDP", n.UDP(), "TCP", n.TCP())
 		}

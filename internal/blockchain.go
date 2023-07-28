@@ -911,8 +911,8 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
-			// todo
-			// event.GlobalEvent.Send(&common.ChainHighestBlock{Block: lastCanon, Inserted: true})
+
+			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *lastCanon.(*block2.Block), Inserted: true})
 		}
 	}()
 

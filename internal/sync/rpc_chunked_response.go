@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common"
 	types "github.com/amazechain/amc/common/block"
@@ -58,7 +59,7 @@ func readFirstChunkedBlock(stream libp2pcore.Stream, p2p p2p.EncodingProvider) (
 		return nil, err
 	}
 	if code != 0 {
-		return nil, errors.New(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
 	}
 	_, err = readContextFromStream(stream)
 	if err != nil {

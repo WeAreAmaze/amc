@@ -38,7 +38,7 @@ const (
 var (
 	errNoPeersAvailable      = errors.New("no peers available, waiting for reconnect")
 	errFetcherCtxIsDone      = errors.New("fetcher's context is done, reinitialize")
-	errSlotIsTooHigh         = errors.New("slot is higher than the finalized slot")
+	errBlockNrIsTooHigh      = errors.New("block number is higher than the target block number")
 	errBlockAlreadyProcessed = errors.New("block is already processed")
 	errParentDoesNotExist    = errors.New("beacon node doesn't have a parent in db with root")
 	errNoPeersWithAltBlocks  = errors.New("no peers with alternative blocks found")

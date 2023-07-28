@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
 	block2 "github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"time"
@@ -137,12 +136,9 @@ func (s *Service) logBatchSyncStatus(blks []*types_pb.Block) {
 	targetNumber, _ := s.cfg.P2P.Peers().BestPeers(1, s.cfg.Chain.CurrentBlock().Number64())
 	firstBlock := blks[0]
 	firstBlockNumber := utils.ConvertH256ToUint256Int(firstBlock.Header.Number)
-	var hash types.Hash
-	hash = utils.ConvertH256ToHash(firstBlock.Header.Root)
 	log.Info(
-		fmt.Sprintf("Processing block batch of size %d starting from  %s %d - estimated block remaining %d",
+		fmt.Sprintf("Processing block batch of size %d starting from  %d - estimated block remaining %d",
 			len(blks),
-			hash.String(),
 			firstBlockNumber.Uint64(),
 			new(uint256.Int).Sub(targetNumber, firstBlockNumber).Uint64(),
 		),

@@ -176,7 +176,6 @@ func (d Deposit) eventLoop() {
 		case logEvent := <-d.logsCh:
 			for _, l := range logEvent.Logs {
 				if nil != d.consensusConfig.APos && bytes.Compare(l.Address[:], depositContractByes[:]) == 0 {
-					log.Trace("log event topic[0]= ", "hash", l.Topics[0], "depositEventSignature", depositEventSignature, "withdrawnSignature", withdrawnSignature)
 					if l.Topics[0] == depositEventSignature {
 						d.handleDepositEvent(l.TxHash, l.Data)
 					} else if l.Topics[0] == withdrawnSignature {
@@ -234,7 +233,7 @@ func (d Deposit) handleDepositEvent(txHash types.Hash, data []byte) {
 		}
 
 		if tx != nil {
-			log.Trace("add Deposit info", "address", tx.From(), "amount", amount.String())
+			log.Info("add Deposit info", "address", tx.From(), "amount", amount.String())
 
 			var pub types.PublicKey
 			pub.SetBytes(publicKey.Marshal())

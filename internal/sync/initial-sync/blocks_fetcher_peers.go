@@ -57,12 +57,12 @@ func (f *blocksFetcher) selectFailOverPeer(excludedPID peer.ID, peers []peer.ID)
 
 // waitForMinimumPeers spins and waits up until enough peers are available.
 func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, error) {
-	required := minimumSyncPeers
+	required := f.p2p.GetConfig().MinSyncPeers
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		_, peers := f.p2p.Peers().BestPeers(minimumSyncPeers, f.chain.CurrentBlock().Number64())
+		_, peers := f.p2p.Peers().BestPeers(f.p2p.GetConfig().MinSyncPeers, f.chain.CurrentBlock().Number64())
 		if len(peers) >= required {
 			return peers, nil
 		}
@@ -99,14 +99,14 @@ func (f *blocksFetcher) filterPeers(ctx context.Context, peers []peer.ID, peersP
 		return math.Round(overallScore*scorers.ScoreRoundingFactor) / scorers.ScoreRoundingFactor
 	})
 
-	return trimPeers(peers, peersPercentage)
+	return trimPeers(peers, peersPercentage, f.p2p.GetConfig().MinSyncPeers)
 }
 
 // trimPeers limits peer list, returning only specified percentage of peers.
 // Takes system constraints into account (min/max peers to sync).
-func trimPeers(peers []peer.ID, peersPercentage float64) []peer.ID {
+func trimPeers(peers []peer.ID, peersPercentage float64, MinSyncPeers int) []peer.ID {
 	// todo
-	required := minimumSyncPeers
+	required := MinSyncPeers
 	// Weak/slow peers will be pushed down the list and trimmed since only percentage of peers is selected.
 	limit := math.Round(float64(len(peers)) * peersPercentage)
 	// Limit cannot be less that minimum peers required by sync mechanism.

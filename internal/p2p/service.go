@@ -249,7 +249,7 @@ func (s *Service) Start() {
 		}
 
 		allNodes := s.dv5Listener.AllNodes()
-		log.Info("Nodes stored in the discovery table:")
+		log.Trace("Nodes stored in the discovery table:")
 		for i, n := range allNodes {
 			log.Trace(fmt.Sprintf("P2P details %d", i), "ENR", n.String(), "Node ID", n.ID(), "IP", n.IP(), "UDP", n.UDP(), "TCP", n.TCP())
 		}

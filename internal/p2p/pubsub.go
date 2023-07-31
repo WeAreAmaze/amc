@@ -35,8 +35,6 @@ const (
 	rSubD = 8 // random gossip target
 
 	//todo
-	MinimumSyncPeers = 1
-	//todo
 	GossipMaxSize = 10000000
 )
 
@@ -88,7 +86,7 @@ func (s *Service) PublishToTopic(ctx context.Context, topic string, data []byte,
 
 	// Wait for at least 1 peer to be available to receive the published message.
 	for {
-		if len(topicHandle.ListPeers()) > 0 || MinimumSyncPeers == 0 {
+		if len(topicHandle.ListPeers()) > 0 || s.cfg.MinSyncPeers == 0 {
 			return topicHandle.Publish(ctx, data, opts...)
 		}
 		select {

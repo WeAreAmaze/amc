@@ -80,7 +80,7 @@ func (s *Service) resyncIfBehind() {
 			// actual resyncing).
 
 			//
-			highestBlockNr, _ := s.cfg.p2p.Peers().BestPeers(minimumSyncPeers*2, s.cfg.chain.CurrentBlock().Number64())
+			highestBlockNr, _ := s.cfg.p2p.Peers().BestPeers(s.cfg.p2p.GetConfig().MinSyncPeers*2, s.cfg.chain.CurrentBlock().Number64())
 			// Check if the current node is more than 1 epoch behind.
 			if highestBlockNr.Cmp(new(uint256.Int).AddUint64(s.cfg.chain.CurrentBlock().Number64(), 5)) >= 0 {
 				log.Info("Fallen behind peers; reverting to initial sync to catch up", "currentBlockNr", s.cfg.chain.CurrentBlock().Number64(), "peersBlockNr", highestBlockNr)

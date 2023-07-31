@@ -31,7 +31,7 @@ func (s *Service) roundRobinSync(highestExpectedBlockNr *uint256.Int) error {
 	defer cancel()
 
 	s.counter = ratecounter.NewRateCounter(counterSeconds * time.Second)
-
+	s.highestExpectedBlockNr = highestExpectedBlockNr.Clone()
 	// Step 1 - Sync to end of finalized BlockNr.
 	if err := s.syncToFinalizedBlockNr(ctx, highestExpectedBlockNr); err != nil {
 		return err
@@ -44,7 +44,7 @@ func (s *Service) syncToFinalizedBlockNr(ctx context.Context, highestExpectedBlo
 
 	if s.cfg.Chain.CurrentBlock().Number64().Cmp(highestExpectedBlockNr) >= 0 {
 		// No need to sync, already synced to the finalized slot.
-		log.Debug("Already synced to finalized epoch")
+		log.Debug("Already synced to finalized block number")
 		return nil
 	}
 	queue := newBlocksQueue(ctx, &blocksQueueConfig{
@@ -61,7 +61,7 @@ func (s *Service) syncToFinalizedBlockNr(ctx context.Context, highestExpectedBlo
 		s.processFetchedData(ctx, s.cfg.Chain.CurrentBlock().Number64(), data)
 	}
 
-	log.Info("Synced to finalized epoch - now syncing blocks up to current head", "syncedBlockNr", s.cfg.Chain.CurrentBlock().Number64().Uint64(), "highestExpectedBlockNr", highestExpectedBlockNr.Uint64())
+	log.Info("Synced to finalized block number - now syncing blocks up to current head", "syncedBlockNr", s.cfg.Chain.CurrentBlock().Number64().Uint64(), "highestExpectedBlockNr", highestExpectedBlockNr.Uint64())
 	if err := queue.stop(); err != nil {
 		log.Debug("Error stopping queue", "err", err)
 	}
@@ -143,5 +143,7 @@ func (s *Service) logBatchSyncStatus(blks []*types_pb.Block) {
 			new(uint256.Int).Sub(targetNumber, firstBlockNumber).Uint64(),
 		),
 		"peers", len(s.cfg.P2P.Peers().Connected()),
-		"blocksPerSecond", fmt.Sprintf("%.1f", rate))
+		"blocksPerSecond", fmt.Sprintf("%.1f", rate),
+		"highestExpectedBlockNr", s.highestExpectedBlockNr.Uint64(),
+	)
 }

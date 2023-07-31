@@ -244,7 +244,7 @@ func (f *blocksFetcher) handleRequest(ctx context.Context, start *uint256.Int, c
 		return response
 	}
 
-	_, peers := f.p2p.Peers().BestPeers(minimumSyncPeers, f.chain.CurrentBlock().Number64())
+	_, peers := f.p2p.Peers().BestPeers(f.p2p.GetConfig().MinSyncPeers, f.chain.CurrentBlock().Number64())
 	if len(peers) == 0 {
 		response.err = errNoPeersAvailable
 		return response

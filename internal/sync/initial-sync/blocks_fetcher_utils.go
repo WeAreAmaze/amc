@@ -54,6 +54,6 @@ func (f *blocksFetcher) findAncestor(ctx context.Context, pid peer.ID, b *types_
 
 // bestFinalizedSlot returns the highest finalized slot of the majority of connected peers.
 func (f *blocksFetcher) bestFinalizedBlockNr() *uint256.Int {
-	finalizedBlockNr, _ := f.p2p.Peers().BestPeers(minimumSyncPeers, f.chain.CurrentBlock().Number64())
+	finalizedBlockNr, _ := f.p2p.Peers().BestPeers(f.p2p.GetConfig().MinSyncPeers, f.chain.CurrentBlock().Number64())
 	return finalizedBlockNr
 }

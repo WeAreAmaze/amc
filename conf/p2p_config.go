@@ -42,6 +42,7 @@ type P2PConfig struct {
 	MaxPeers            int      `json:"max_peers" yaml:"max_peers"`
 	AllowListCIDR       string   `json:"allow_list_cidr" yaml:"allow_list_cidr"`
 	DenyListCIDR        []string `json:"deny_list_cidr" yaml:"deny_list_cidr"`
+	MinSyncPeers        int      `json:"min_sync_peers" yaml:"min_sync_peers"`
 
 	P2PLimit *P2PLimit
 }

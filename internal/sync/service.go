@@ -37,8 +37,6 @@ const maintainPeerStatusesInterval = 2 * time.Minute
 
 const resyncInterval = 1 * time.Minute
 
-const minimumSyncPeers = 1
-
 const enableFullSSZDataLogging = false
 
 var (

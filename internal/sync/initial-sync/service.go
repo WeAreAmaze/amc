@@ -5,8 +5,10 @@ package initialsync
 
 import (
 	"context"
+	"fmt"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/internal/p2p"
+	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/holiman/uint256"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/paulbellamy/ratecounter"
@@ -16,9 +18,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// todo
-const minimumSyncPeers = 1
-
 // Config to set up the initial sync service.
 type Config struct {
 	P2P   p2p.P2P
@@ -27,12 +26,13 @@ type Config struct {
 
 // Service service.
 type Service struct {
-	cfg     *Config
-	ctx     context.Context
-	cancel  context.CancelFunc
-	synced  atomic.Bool
-	syncing atomic.Bool
-	counter *ratecounter.RateCounter
+	cfg                    *Config
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	synced                 atomic.Bool
+	syncing                atomic.Bool
+	counter                *ratecounter.RateCounter
+	highestExpectedBlockNr *uint256.Int
 }
 
 // NewService configures the initial sync service responsible for bringing the node up to the
@@ -51,6 +51,10 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 
 // Start the initial sync service.
 func (s *Service) Start() {
+
+	event.GlobalEvent.Send(&common.DownloaderStartEvent{})
+	defer event.GlobalEvent.Send(&common.DownloaderFinishEvent{})
+
 	log.Info("Starting initial chain sync...")
 	highestExpectedBlockNr := s.waitForMinimumPeers()
 	if err := s.roundRobinSync(highestExpectedBlockNr); err != nil {
@@ -59,7 +63,7 @@ func (s *Service) Start() {
 		}
 		panic(err)
 	}
-	log.Info("Synced up to blockNr: %d", s.cfg.Chain.CurrentBlock().Number64().Uint64())
+	log.Info(fmt.Sprintf("Synced up to blockNr: %d", s.cfg.Chain.CurrentBlock().Number64().Uint64()))
 	s.markSynced()
 }
 
@@ -92,8 +96,10 @@ func (s *Service) Synced() bool {
 func (s *Service) Resync() error {
 	// Set it to false since we are syncing again.
 	s.markSyncing()
+	event.GlobalEvent.Send(&common.DownloaderStartEvent{})
 	defer func() {
 		s.markSynced()
+		event.GlobalEvent.Send(&common.DownloaderFinishEvent{})
 	}() // Reset it at the end of the method.
 	//
 	beforeBlockNr := s.cfg.Chain.CurrentBlock().Number64()
@@ -108,11 +114,11 @@ func (s *Service) Resync() error {
 }
 
 func (s *Service) waitForMinimumPeers() (highestExpectedBlockNr *uint256.Int) {
-	required := minimumSyncPeers
+	required := s.cfg.P2P.GetConfig().MinSyncPeers
 	var peers []peer.ID
 	for {
 		//todo
-		highestExpectedBlockNr, peers = s.cfg.P2P.Peers().BestPeers(minimumSyncPeers, s.cfg.Chain.CurrentBlock().Number64())
+		highestExpectedBlockNr, peers = s.cfg.P2P.Peers().BestPeers(s.cfg.P2P.GetConfig().MinSyncPeers, s.cfg.Chain.CurrentBlock().Number64())
 		if len(peers) >= required {
 			break
 		}

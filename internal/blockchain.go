@@ -443,7 +443,7 @@ func (bc *BlockChain) newBlockLoop() {
 					// if future block
 					if block.Number64().Uint64() > bc.CurrentBlock().Number64().Uint64()+1 {
 						inserted = false
-						bc.addFutureBlock(&block)
+						bc.AddFutureBlock(&block)
 					} else {
 						if _, err := bc.InsertChain([]block2.IBlock{&block}); err != nil {
 							inserted = false
@@ -983,7 +983,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	case errors.Is(err, ErrFutureBlock) || (errors.Is(err, ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
 		for block != nil && (it.index == 0 || errors.Is(err, ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number64(), "hash", block.Hash())
-			if err := bc.addFutureBlock(block); err != nil {
+			if err := bc.AddFutureBlock(block); err != nil {
 				return it.index, err
 			}
 			block, err = it.next()
@@ -1164,13 +1164,13 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, ErrFutureBlock) {
-		if err := bc.addFutureBlock(block); err != nil {
+		if err := bc.AddFutureBlock(block); err != nil {
 			return it.index, err
 		}
 		block, err = it.next()
 
 		for ; block != nil && errors.Is(err, ErrUnknownAncestor); block, err = it.next() {
-			if err := bc.addFutureBlock(block); err != nil {
+			if err := bc.AddFutureBlock(block); err != nil {
 				return it.index, err
 			}
 			stats.queued++
@@ -1619,13 +1619,13 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	return nil
 }
 
-// addFutureBlock checks if the block is within the max allowed window to get
+// AddFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
 //
 // TODO after the transition, the future block shouldn't be kept. Because
 // it's not checked in the Geth side anymore.
-func (bc *BlockChain) addFutureBlock(block block2.IBlock) error {
+func (bc *BlockChain) AddFutureBlock(block block2.IBlock) error {
 	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)

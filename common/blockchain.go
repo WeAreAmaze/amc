@@ -52,6 +52,7 @@ type IBlockChain interface {
 	GetReceipts(blockHash types.Hash) (block.Receipts, error)
 	GetLogs(blockHash types.Hash) ([][]*block.Log, error)
 	SetHead(head uint64) error
+	AddFutureBlock(block block.IBlock) error
 
 	GetHeader(types.Hash, *uint256.Int) block.IHeader
 	// alias for GetBlocksFromHash?

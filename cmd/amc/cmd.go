@@ -351,6 +351,15 @@ var (
 		Destination: p2pDenyList,
 	}
 
+	// P2PMinSyncPeers specifies the required number of successful peer handshakes in order
+	// to start syncing with external peers.
+	P2PMinSyncPeers = &cli.IntFlag{
+		Name:        "p2p.min-sync-peers",
+		Usage:       "The required number of valid peers to connect with before syncing.",
+		Value:       1,
+		Destination: &DefaultConfig.P2PCfg.MinSyncPeers,
+	}
+
 	// P2PBlockBatchLimit specifies the requested block batch size.
 	P2PBlockBatchLimit = &cli.IntFlag{
 		Name:        "p2p.limit.block-batch",
@@ -528,6 +537,7 @@ var (
 		P2PStaticPeers,
 		P2PUDPPort,
 		P2PTCPPort,
+		P2PMinSyncPeers,
 	}
 
 	p2pLimitFlags = []cli.Flag{

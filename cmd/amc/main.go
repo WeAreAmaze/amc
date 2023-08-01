@@ -34,6 +34,7 @@ func main() {
 	flags = append(flags, pprofCfg...)
 	flags = append(flags, nodeFlg...)
 	flags = append(flags, rpcFlags...)
+	flags = append(flags, authRPCFlag...)
 	flags = append(flags, configFlag...)
 	flags = append(flags, settingFlag...)
 	flags = append(flags, accountFlag...)

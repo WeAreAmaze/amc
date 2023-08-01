@@ -172,16 +172,32 @@ func FromECDSA(priv *ecdsa.PrivateKey) []byte {
 	return math.PaddedBigBytes(priv.D, priv.Params().BitSize/8)
 }
 
+// UnmarshalPubkey converts bytes to a secp256k1 public key.
+func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
+	x, y := elliptic.Unmarshal(S256(), pub)
+	if x == nil {
+		return nil, errInvalidPubkey
+	}
+	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
+}
+
+func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
+	if pub == nil || pub.X == nil || pub.Y == nil {
+		return nil
+	}
+	return elliptic.Marshal(S256(), pub.X, pub.Y)
+}
+
 // UnmarshalPubkeyStd parses a public key from the given bytes in the standard "uncompressed" format.
 // The input slice must be 65 bytes long and have this format: [4, X..., Y...]
 // See MarshalPubkeyStd.
-//func UnmarshalPubkeyStd(pub []byte) (*ecdsa.PublicKey, error) {
-//	x, y := elliptic.Unmarshal(S256(), pub)
-//	if x == nil {
-//		return nil, errInvalidPubkey
-//	}
-//	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
-//}
+func UnmarshalPubkeyStd(pub []byte) (*ecdsa.PublicKey, error) {
+	x, y := elliptic.Unmarshal(S256(), pub)
+	if x == nil {
+		return nil, errInvalidPubkey
+	}
+	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
+}
 
 // MarshalPubkeyStd converts a public key into the standard "uncompressed" format.
 // It returns a 65 bytes long slice that contains: [4, X..., Y...]

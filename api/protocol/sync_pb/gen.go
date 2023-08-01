@@ -1,4 +1,4 @@
-// Copyright 2023 The AmazeChain Authors
+// Copyright 2022 The AmazeChain Authors
 // This file is part of the AmazeChain library.
 //
 // The AmazeChain library is free software: you can redistribute it and/or modify
@@ -14,21 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
+package sync_pb
 
-import (
-	"github.com/amazechain/amc/common/crypto"
-	"github.com/amazechain/amc/common/types"
-	"testing"
-)
-
-func TestNilHash(t *testing.T) {
-	sha := HasherPool.Get().(crypto.KeccakState)
-	defer HasherPool.Put(sha)
-	sha.Reset()
-
-	t.Logf("nil hash: %s", types.BytesToHash(sha.Sum(nil)).String())
-
-	//t.Logf("EmptyUncleHash : %s", RlpHash([]*block.Header(nil)).String())
-
-}
+////go:generate protoc --plugin=/Users/mac/go/bin/protoc-gen-go-cast -I=../ -I=. -I=../include --go-cast_out=plugins=protoc-gen-go-cast,paths=source_relative:. types.proto
+//go:generate protoc  -I=../ -I=. -I=../include --go-cast_out=paths=source_relative:. sync_pb.proto
+//go:generate sszgen -path=. -objs=BodiesByRangeRequest,HeadersByRangeRequest,Ping,ForkData,Status --include=../types_pb -output=generated.ssz.go

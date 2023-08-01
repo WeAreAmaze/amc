@@ -351,7 +351,11 @@ func (w *worker) resultLoop() error {
 				"rewardCount", len(blk.Body().Reward()),
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)),
 				"txs", len(blk.Transactions()))
-			//w.chain.SealedBlock(blk)
+
+			if err = w.chain.SealedBlock(blk); err != nil {
+				log.Error("Failed Broadcast block to p2p network", "err", err)
+				continue
+			}
 			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
 		}
 	}

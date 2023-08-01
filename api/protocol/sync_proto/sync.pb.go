@@ -18,7 +18,7 @@
 // versions:
 // 	protoc-gen-go v1.28.0
 // 	protoc        v3.20.0
-// source: sync.proto
+// source: sync_pb.proto
 
 package sync_proto
 

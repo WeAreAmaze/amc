@@ -27,7 +27,7 @@ import (
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/holiman/uint256"
 	"math"

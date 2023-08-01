@@ -117,7 +117,7 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
-	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
+	// {{.Type}}MetaData contains all metadata data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = &bind.MetaData{
 		ABI: "{{.InputABI}}",
 		{{if $contract.FuncSigs -}}

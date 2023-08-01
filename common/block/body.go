@@ -22,7 +22,7 @@ import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type Body struct {
@@ -80,9 +80,10 @@ func (b *Body) FromProtoMessage(message proto.Message) error {
 	//
 	for _, v := range pBody.Txs {
 		tx, err := transaction.FromProtoMessage(v)
-		if err == nil {
-			txs = append(txs, tx)
+		if err != nil {
+			return err
 		}
+		txs = append(txs, tx)
 	}
 	//
 	b.Txs = txs

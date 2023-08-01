@@ -19,12 +19,12 @@ package block
 import (
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
-	"github.com/amazechain/amc/common/hashing"
+	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -161,8 +161,8 @@ func NewBlockFromReceipt(h IHeader, txs []*transaction.Transaction, uncles []IHe
 	//}
 
 	block.header.Bloom = CreateBloom(receipts)
-	block.header.TxHash = hashing.DeriveSha(transaction.Transactions(txs))
-	block.header.ReceiptHash = hashing.DeriveSha(Receipts(receipts))
+	block.header.TxHash = hash.DeriveSha(transaction.Transactions(txs))
+	block.header.ReceiptHash = hash.DeriveSha(Receipts(receipts))
 
 	return block
 }

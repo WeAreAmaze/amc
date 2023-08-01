@@ -84,6 +84,9 @@ clean:
 devtools:
 	env GOBIN= go install github.com/fjl/gencodec@latest
 	env GOBIN= go install github.com/golang/protobuf/protoc-gen-go@latest
+	env GOBIN= go install github.com/prysmaticlabs/fastssz/sszgen@latest
+	env GOBIN= go install github.com/prysmaticlabs/protoc-gen-go-cast@latest
+
 devimg:
 	@echo "docker dev images build ..."
 	DOCKER_BUILDKIT=1 docker build -f Dockerfile.dev -t amazechain/amc:devbase .

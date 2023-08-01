@@ -539,7 +539,7 @@ func (l *txsList) Add(tx *transaction.Transaction, priceBump uint64) (bool, *tra
 
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
-		if old.Gas() >= tx.Gas() || old.GasPrice().Cmp(tx.GasPrice()) >= 0 {
+		if old.GasFeeCapCmp(tx) >= 1 || old.GasTipCapCmp(tx) >= 1 {
 			return false, nil
 		}
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100

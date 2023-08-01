@@ -259,7 +259,7 @@ func validatePrefix(what, path string) error {
 		// This is just to avoid confusion. While these would match correctly (i.e. they'd
 		// match if URL-escaped into path), it's not easy to understand for users when
 		// setting that on the command line.
-		return fmt.Errorf("%s RPC path prefix %q contains URL meta-characters", what, path)
+		return fmt.Errorf("%s RPC path prefix %q contains URL metadata-characters", what, path)
 	}
 	return nil
 }

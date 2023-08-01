@@ -21,8 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/contracts/deposit"
-	"github.com/golang/protobuf/proto"
+	"github.com/amazechain/amc/internal/p2p"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -101,6 +102,7 @@ type BlockChain struct {
 	chBlocks chan block2.IBlock
 
 	pubsub common.IPubSub
+	p2p    p2p.P2P
 
 	errorCh chan error
 
@@ -136,7 +138,7 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, pubsub common.IPubSub, config *params.ChainConfig) (common.IBlockChain, error) {
+func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, p2p p2p.P2P, config *params.ChainConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	var current *block2.Block
 	_ = db.View(c, func(tx kv.Tx) error {
@@ -165,7 +167,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		peers:         make(map[peer.ID]bool),
 		chBlocks:      make(chan block2.IBlock, 100),
 		errorCh:       make(chan error),
-		pubsub:        pubsub,
+		p2p:           p2p,
 		downloader:    downloader,
 		latestBlockCh: make(chan block2.IBlock, 50),
 		engine:        engine,
@@ -225,13 +227,13 @@ func (bc *BlockChain) GenesisBlock() block2.IBlock {
 }
 
 func (bc *BlockChain) Start() error {
-	if bc.pubsub == nil {
-		return ErrInvalidPubSub
-	}
+	//if bc.pubsub == nil {
+	//	return ErrInvalidPubSub
+	//}
 
 	bc.wg.Add(3)
 	go bc.runLoop()
-	go bc.newBlockLoop()
+	//go bc.newBlockLoop()
 	go bc.updateFutureBlocksLoop()
 
 	return nil
@@ -400,10 +402,10 @@ func (bc *BlockChain) LatestBlockCh() (block2.IBlock, error) {
 
 func (bc *BlockChain) newBlockLoop() {
 	bc.wg.Done()
-	if bc.pubsub == nil {
-		bc.errorCh <- ErrInvalidPubSub
-		return
-	}
+	//if bc.pubsub == nil {
+	//	bc.errorCh <- ErrInvalidPubSub
+	//	return
+	//}
 
 	topic, err := bc.pubsub.JoinTopic(message.GossipBlockMessage)
 	if err != nil {
@@ -438,7 +440,7 @@ func (bc *BlockChain) newBlockLoop() {
 					// if future block
 					if block.Number64().Uint64() > bc.CurrentBlock().Number64().Uint64()+1 {
 						inserted = false
-						bc.addFutureBlock(&block)
+						bc.AddFutureBlock(&block)
 					} else {
 						if _, err := bc.InsertChain([]block2.IBlock{&block}); err != nil {
 							inserted = false
@@ -784,10 +786,10 @@ func (bc *BlockChain) GetBlock(hash types.Hash, number uint64) block2.IBlock {
 	//return block2.NewBlock(header, body.Transactions())
 }
 
-func (bc *BlockChain) SealedBlock(b block2.IBlock) {
+func (bc *BlockChain) SealedBlock(b block2.IBlock) error {
 	pbBlock := b.ToProtoMessage()
-
-	_ = bc.pubsub.Publish(message.GossipBlockMessage, pbBlock)
+	//_ = bc.pubsub.Publish(message.GossipBlockMessage, pbBlock)
+	return bc.p2p.Broadcast(context.TODO(), pbBlock)
 }
 
 // StopInsert stop insert
@@ -975,7 +977,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	case errors.Is(err, ErrFutureBlock) || (errors.Is(err, ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
 		for block != nil && (it.index == 0 || errors.Is(err, ErrUnknownAncestor)) {
 			log.Debug("Future block, postponing import", "number", block.Number64(), "hash", block.Hash())
-			if err := bc.addFutureBlock(block); err != nil {
+			if err := bc.AddFutureBlock(block); err != nil {
 				return it.index, err
 			}
 			block, err = it.next()
@@ -1156,13 +1158,13 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, ErrFutureBlock) {
-		if err := bc.addFutureBlock(block); err != nil {
+		if err := bc.AddFutureBlock(block); err != nil {
 			return it.index, err
 		}
 		block, err = it.next()
 
 		for ; block != nil && errors.Is(err, ErrUnknownAncestor); block, err = it.next() {
-			if err := bc.addFutureBlock(block); err != nil {
+			if err := bc.AddFutureBlock(block); err != nil {
 				return it.index, err
 			}
 			stats.queued++
@@ -1502,13 +1504,13 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	})
 }
 
-// addFutureBlock checks if the block is within the max allowed window to get
+// AddFutureBlock checks if the block is within the max allowed window to get
 // accepted for future processing, and returns an error if the block is too far
 // ahead and was not added.
 //
 // TODO after the transition, the future block shouldn't be kept. Because
 // it's not checked in the Geth side anymore.
-func (bc *BlockChain) addFutureBlock(block block2.IBlock) error {
+func (bc *BlockChain) AddFutureBlock(block block2.IBlock) error {
 	max := uint64(time.Now().Unix() + maxTimeFutureBlocks)
 	if block.Time() > max {
 		return fmt.Errorf("future block timestamp %v > allowed %v", block.Time(), max)

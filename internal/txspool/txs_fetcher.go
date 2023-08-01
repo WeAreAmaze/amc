@@ -19,8 +19,7 @@ package txspool
 import (
 	"context"
 	"fmt"
-	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"math/rand"
 	"time"
 
@@ -231,20 +230,20 @@ func (f TxsFetcher) ConnHandler(data []byte, ID peer.ID) error {
 		}
 
 	case sync_proto.SyncType_TransactionRes:
-		response := syncTask.Payload.(*sync_proto.SyncTask_SyncTransactionResponse).SyncTransactionResponse
-		var txs []*transaction.Transaction
-		for _, tranPb := range response.Transactions {
-			if _, ok := f.fetched[utils.ConvertH256ToHash(tranPb.Hash)]; ok == false {
-				f.fetched[utils.ConvertH256ToHash(tranPb.Hash)] = true
-				tx, err := transaction.FromProtoMessage(tranPb)
-				if err == nil {
-					txs = append(txs, tx)
-				}
-			}
-		}
-		if len(txs) > 0 {
-			f.addTxs(txs)
-		}
+		//response := syncTask.Payload.(*sync_proto.SyncTask_SyncTransactionResponse).SyncTransactionResponse
+		//var txs []*transaction.Transaction
+		//for _, tranPb := range response.Transactions {
+		//if _, ok := f.fetched[utils.ConvertH256ToHash(tranPb.Hash)]; ok == false {
+		//	f.fetched[utils.ConvertH256ToHash(tranPb.Hash)] = true
+		//	tx, err := transaction.FromProtoMessage(tranPb)
+		//	if err == nil {
+		//		txs = append(txs, tx)
+		//	}
+		//}
+		//}
+		//if len(txs) > 0 {
+		//	f.addTxs(txs)
+		//}
 	}
 	return nil
 }

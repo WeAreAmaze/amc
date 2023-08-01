@@ -33,6 +33,7 @@ type Config struct {
 	GenesisBlockCfg *GenesisBlockConfig `json:"genesis" yaml:"genesis"`
 	AccountCfg      AccountConfig       `json:"account" yaml:"account"`
 	MetricsCfg      MetricsConfig       `json:"metrics" yaml:"metrics"`
+	P2PCfg          *P2PConfig          `json:"p2p" yaml:"p2p"`
 	// Gas Price Oracle options
 	GPO   GpoConfig   `json:"gpo" yaml:"gpo"`
 	Miner MinerConfig `json:"miner"`

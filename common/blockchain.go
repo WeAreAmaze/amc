@@ -47,11 +47,12 @@ type IBlockChain interface {
 	InsertBlock(blocks []block.IBlock, isSync bool) (int, error)
 	SetEngine(engine consensus.Engine)
 	GetBlocksFromHash(hash types.Hash, n int) (blocks []block.IBlock)
-	SealedBlock(b block.IBlock)
+	SealedBlock(b block.IBlock) error
 	Engine() consensus.Engine
 	GetReceipts(blockHash types.Hash) (block.Receipts, error)
 	GetLogs(blockHash types.Hash) ([][]*block.Log, error)
 	SetHead(head uint64) error
+	AddFutureBlock(block block.IBlock) error
 
 	GetHeader(types.Hash, *uint256.Int) block.IHeader
 	// alias for GetBlocksFromHash?

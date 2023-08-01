@@ -39,6 +39,8 @@ func main() {
 	flags = append(flags, settingFlag...)
 	flags = append(flags, accountFlag...)
 	flags = append(flags, metricsFlags...)
+	flags = append(flags, p2pFlags...)
+	flags = append(flags, p2pLimitFlags...)
 
 	rootCmd = append(rootCmd, walletCommand, accountCommand, exportCommand)
 	commands := rootCmd

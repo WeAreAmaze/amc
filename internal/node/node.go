@@ -23,11 +23,14 @@ import (
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/internal/debug"
+	"github.com/amazechain/amc/internal/p2p"
+	amcsync "github.com/amazechain/amc/internal/sync"
+	initialsync "github.com/amazechain/amc/internal/sync/initial-sync"
 	"github.com/amazechain/amc/internal/tracers"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/common/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 	"hash/crc32"
 	"path"
 	"runtime"
@@ -132,11 +135,17 @@ type Node struct {
 	accman     *accounts.Manager
 	keyDir     string // key store directory
 	keyDirTemp bool   // If true, key directory will be removed by Stop
+
+	p2p  p2p.P2P
+	sync *amcsync.Service
+	is   *initialsync.Service
 }
 
 func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	//1. init db
 	var name = kv.ChainDB.String()
+	c, cancel := context.WithCancel(ctx)
+
 	var (
 		genesisBlock block.IBlock
 		privateKey   crypto.PrivKey
@@ -163,7 +172,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 			return nil, err
 		}
 	}
-	log.Info("new node", "address", types.PrivateToAddress(privateKey))
 
 	//
 	chainKv, err := OpenDatabase(cfg, nil, name)
@@ -215,6 +223,11 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
+	p2p, err := p2p.NewService(c, genesisBlock.Hash(), cfg.P2PCfg)
+	if err != nil {
+		return nil, err
+	}
+
 	switch cfg.GenesisBlockCfg.Engine.EngineName {
 	case "APoaEngine":
 		engine = apoa.New(cfg.GenesisBlockCfg.Engine, chainKv)
@@ -224,8 +237,20 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Engine.EngineName)
 	}
 
-	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, pubsubServer, cfg.GenesisBlockCfg.Config)
+	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisBlockCfg.Config)
 	pool, _ := txspool.NewTxsPool(ctx, bc)
+
+	is := initialsync.NewService(c, &initialsync.Config{
+		Chain: bc,
+		P2P:   p2p,
+	})
+
+	syncServer := amcsync.NewService(
+		ctx,
+		amcsync.WithP2P(p2p),
+		amcsync.WithChainService(bc),
+		amcsync.WithInitialSync(is),
+	)
 
 	//todo
 	var txs []*transaction.Transaction
@@ -246,8 +271,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 	//bc.SetEngine(engine)
 
-	c, cancel := context.WithCancel(ctx)
-
 	downloader = download.NewDownloader(ctx, bc, s, pubsubServer, peers)
 
 	_ = s.SetHandler(message.MsgDownloader, downloader.ConnHandler)
@@ -262,6 +285,8 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/amc)
 	// are required to add the backends later on.
 	accman := accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: cfg.NodeCfg.InsecureUnlockAllowed})
+
+	log.Info("new node", "GenesisHash", genesisBlock.Hash(), "CurrentBlockNr", bc.CurrentBlock().Number64().Uint64())
 
 	node = Node{
 		ctx:             c,
@@ -293,6 +318,10 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		accman:     accman,
 		keyDir:     keyDir,
 		keyDirTemp: isEphem,
+
+		p2p:  p2p,
+		sync: syncServer,
+		is:   is,
 	}
 
 	// Apply flags.
@@ -322,15 +351,15 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 }
 
 func (n *Node) Start() error {
-	if err := n.service.Start(); err != nil {
-		log.Errorf("failed setup p2p service, err: %v", err)
-		return err
-	}
-
-	if err := n.pubsubServer.Start(); err != nil {
-		log.Errorf("failed setup amc pubsub service, err: %v", err)
-		return err
-	}
+	//if err := n.service.Start(); err != nil {
+	//	log.Errorf("failed setup p2p service, err: %v", err)
+	//	return err
+	//}
+	//
+	//if err := n.pubsubServer.Start(); err != nil {
+	//	log.Errorf("failed setup amc pubsub service, err: %v", err)
+	//	return err
+	//}
 
 	if err := n.blocks.Start(); err != nil {
 		log.Errorf("failed setup blocks service, err: %v", err)
@@ -385,6 +414,10 @@ func (n *Node) Start() error {
 		return err
 	}
 
+	//n.p2p.AddConnectionHandler()
+	n.p2p.Start()
+	n.sync.Start()
+
 	n.SetupMetrics(n.config.MetricsCfg)
 
 	if err := n.txsFetcher.Start(); err != nil {
@@ -392,10 +425,12 @@ func (n *Node) Start() error {
 		return err
 	}
 
-	go n.txsBroadcastLoop()
-	go n.txsMessageFetcherLoop()
+	//go n.txsBroadcastLoop()
+	//go n.txsMessageFetcherLoop()
 
 	n.depositContract.Start()
+
+	n.is.Start()
 
 	//rwTx, _ := n.db.BeginRw(n.ctx)
 	//defer rwTx.Rollback()

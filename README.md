@@ -23,7 +23,6 @@ And the repository should be cloned to a local repository. Then, the command mak
 ```sh
 git clone https://github.com/amazechain/amc.git
 cd amc
-git checkout alpha
 make amc
 ./build/bin/amc
 ```
@@ -60,12 +59,14 @@ directory.
 
 ## AMC ports
 
-| Port  | Protocol  |               Purpose               |  Expose |
-|:-----:|:---------:|:-----------------------------------:|:-------:|
-| 61016 | TCP & UDP | amc/msg/ && amc/discover && amc/app |  Public |
-| 20012 |    TCP    |            Json rpc/HTTP            |  Public |
-| 20013 |    TCP    |         Json rpc/Websocket          |  Public |
-| 4000  |    TCP    |         BlockChain Explorer         |  Public |
+| Port  | Protocol |         Purpose          |       Expose       |
+|:-----:|:--------:|:------------------------:|:------------------:|
+| 61015 |   UDP    | The port used by discv5. |       Public       |
+| 61016 |   TCP    | The port used by libp2p. |       Public       |
+| 20012 |   TCP    |      Json rpc/HTTP       |       Public       |
+| 20013 |   TCP    |    Json rpc/Websocket    |       Public       |
+| 20014 |   TCP    | Json rpc/HTTP/Websocket  | JWT Authentication |
+| 4000  |   TCP    |   BlockChain Explorer    |       Public       |
 
 ## License
 The AmazeChain library is licensed under the

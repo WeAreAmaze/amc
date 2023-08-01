@@ -29,6 +29,10 @@ var (
 	listenAddress = cli.NewStringSlice()
 	bootstraps    = cli.NewStringSlice()
 	cfgFile       string
+
+	p2pStaticPeers   = cli.NewStringSlice()
+	p2pBootstrapNode = cli.NewStringSlice()
+	p2pDenyList      = cli.NewStringSlice()
 )
 
 var rootCmd = []*cli.Command{
@@ -238,6 +242,146 @@ var loggerFlag = []cli.Flag{
 		Destination: &DefaultConfig.LoggerCfg.Compress,
 	},
 }
+var (
+	// P2PNoDiscovery specifies whether we are running a local network and have no need for connecting
+	// to the bootstrap nodes in the cloud
+	P2PNoDiscovery = &cli.BoolFlag{
+		Name:        "p2p.no-discovery",
+		Usage:       "Enable only local network p2p and do not connect to cloud bootstrap nodes.",
+		Destination: &DefaultConfig.P2PCfg.NoDiscovery,
+	}
+	// P2PStaticPeers specifies a set of peers to connect to explicitly.
+	P2PStaticPeers = &cli.StringSliceFlag{
+		Name:        "p2p.peer",
+		Usage:       "Connect with this peer. This flag may be used multiple times.",
+		Destination: p2pStaticPeers,
+	}
+	// P2PBootstrapNode tells the beacon node which bootstrap node to connect to
+	P2PBootstrapNode = &cli.StringSliceFlag{
+		Name:        "p2p.bootstrap-node",
+		Usage:       "The address of bootstrap node. Beacon node will connect for peer discovery via DHT.  Multiple nodes can be passed by using the flag multiple times but not comma-separated. You can also pass YAML files containing multiple nodes.",
+		Destination: p2pBootstrapNode,
+	}
+	// P2PRelayNode tells the beacon node which relay node to connect to.
+	P2PRelayNode = &cli.StringFlag{
+		Name: "p2p.relay-node",
+		Usage: "The address of relay node. The beacon node will connect to the " +
+			"relay node and advertise their address via the relay node to other peers",
+		Value:       "",
+		Destination: &DefaultConfig.P2PCfg.RelayNodeAddr,
+	}
+	// P2PUDPPort defines the port to be used by discv5.
+	P2PUDPPort = &cli.IntFlag{
+		Name:        "p2p.udp-port",
+		Usage:       "The port used by discv5.",
+		Value:       61015,
+		Destination: &DefaultConfig.P2PCfg.UDPPort,
+	}
+	// P2PTCPPort defines the port to be used by libp2p.
+	P2PTCPPort = &cli.IntFlag{
+		Name:        "p2p.tcp-port",
+		Usage:       "The port used by libp2p.",
+		Value:       61016,
+		Destination: &DefaultConfig.P2PCfg.TCPPort,
+	}
+	// P2PIP defines the local IP to be used by libp2p.
+	P2PIP = &cli.StringFlag{
+		Name:        "p2p.local-ip",
+		Usage:       "The local ip address to listen for incoming data.",
+		Value:       "",
+		Destination: &DefaultConfig.P2PCfg.LocalIP,
+	}
+	// P2PHost defines the host IP to be used by libp2p.
+	P2PHost = &cli.StringFlag{
+		Name:        "p2p.host-ip",
+		Usage:       "The IP address advertised by libp2p. This may be used to advertise an external IP.",
+		Value:       "",
+		Destination: &DefaultConfig.P2PCfg.HostAddress,
+	}
+	// P2PHostDNS defines the host DNS to be used by libp2p.
+	P2PHostDNS = &cli.StringFlag{
+		Name:        "p2p.host-dns",
+		Usage:       "The DNS address advertised by libp2p. This may be used to advertise an external DNS.",
+		Value:       "",
+		Destination: &DefaultConfig.P2PCfg.HostDNS,
+	}
+	// P2PPrivKey defines a flag to specify the location of the private key file for libp2p.
+	P2PPrivKey = &cli.StringFlag{
+		Name:        "p2p.priv-key",
+		Usage:       "The file containing the private key to use in communications with other peers.",
+		Value:       "",
+		Destination: &DefaultConfig.P2PCfg.PrivateKey,
+	}
+	P2PStaticID = &cli.BoolFlag{
+		Name:        "p2p.static-id",
+		Usage:       "Enables the peer id of the node to be fixed by saving the generated network key to the default key path.",
+		Value:       true,
+		Destination: &DefaultConfig.P2PCfg.StaticPeerID,
+	}
+	// P2PMetadata defines a flag to specify the location of the peer metadata file.
+	P2PMetadata = &cli.StringFlag{
+		Name:        "p2p.metadata",
+		Usage:       "The file containing the metadata to communicate with other peers.",
+		Value:       "",
+		Destination: &DefaultConfig.P2PCfg.MetaDataDir,
+	}
+	// P2PMaxPeers defines a flag to specify the max number of peers in libp2p.
+	P2PMaxPeers = &cli.IntFlag{
+		Name:        "p2p.max-peers",
+		Usage:       "The max number of p2p peers to maintain.",
+		Value:       20,
+		Destination: &DefaultConfig.P2PCfg.MaxPeers,
+	}
+	// P2PAllowList defines a CIDR subnet to exclusively allow connections.
+	P2PAllowList = &cli.StringFlag{
+		Name: "p2p.allowlist",
+		Usage: "The CIDR subnet for allowing only certain peer connections. " +
+			"Using \"public\" would allow only public subnets. Example: " +
+			"192.168.0.0/16 would permit connections to peers on your local network only. The " +
+			"default is to accept all connections.",
+		Destination: &DefaultConfig.P2PCfg.AllowListCIDR,
+	}
+	// P2PDenyList defines a list of CIDR subnets to disallow connections from them.
+	P2PDenyList = &cli.StringSliceFlag{
+		Name: "p2p.denylist",
+		Usage: "The CIDR subnets for denying certainty peer connections. " +
+			"Using \"private\" would deny all private subnets. Example: " +
+			"192.168.0.0/16 would deny connections from peers on your local network only. The " +
+			"default is to accept all connections.",
+		Destination: p2pDenyList,
+	}
+
+	// P2PMinSyncPeers specifies the required number of successful peer handshakes in order
+	// to start syncing with external peers.
+	P2PMinSyncPeers = &cli.IntFlag{
+		Name:        "p2p.min-sync-peers",
+		Usage:       "The required number of valid peers to connect with before syncing.",
+		Value:       1,
+		Destination: &DefaultConfig.P2PCfg.MinSyncPeers,
+	}
+
+	// P2PBlockBatchLimit specifies the requested block batch size.
+	P2PBlockBatchLimit = &cli.IntFlag{
+		Name:        "p2p.limit.block-batch",
+		Usage:       "The amount of blocks the local peer is bounded to request and respond to in a batch.",
+		Value:       64,
+		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimit,
+	}
+	// P2PBlockBatchLimitBurstFactor specifies the factor by which block batch size may increase.
+	P2PBlockBatchLimitBurstFactor = &cli.IntFlag{
+		Name:        "p2p.limit.block-burst-factor",
+		Usage:       "The factor by which block batch limit may increase on burst.",
+		Value:       2,
+		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimitBurstFactor,
+	}
+	// P2PBlockBatchLimiterPeriod Period to calculate expected limit for a single peer.
+	P2PBlockBatchLimiterPeriod = &cli.IntFlag{
+		Name:        "p2p.limit.block-limiter-period",
+		Usage:       "Period to calculate expected limit for a single peer.",
+		Value:       5,
+		Destination: &DefaultConfig.P2PCfg.P2PLimit.BlockBatchLimiterPeriod,
+	}
+)
 
 var (
 	DataDirFlag = &cli.StringFlag{
@@ -408,5 +552,30 @@ var (
 		MetricsInfluxDBPasswordFlag,
 		MetricsInfluxDBUsernameFlag,
 		MetricsInfluxDBDatabaseFlag,
+	}
+
+	p2pFlags = []cli.Flag{
+		P2PNoDiscovery,
+		P2PAllowList,
+		P2PBootstrapNode,
+		P2PDenyList,
+		P2PIP,
+		P2PHost,
+		P2PMaxPeers,
+		P2PMetadata,
+		P2PStaticID,
+		P2PPrivKey,
+		P2PHostDNS,
+		P2PRelayNode,
+		P2PStaticPeers,
+		P2PUDPPort,
+		P2PTCPPort,
+		P2PMinSyncPeers,
+	}
+
+	p2pLimitFlags = []cli.Flag{
+		P2PBlockBatchLimit,
+		P2PBlockBatchLimitBurstFactor,
+		P2PBlockBatchLimiterPeriod,
 	}
 )

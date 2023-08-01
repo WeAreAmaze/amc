@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/amazechain/amc/utils"
-	"github.com/golang/protobuf/proto"
 	"github.com/holiman/uint256"
+	"google.golang.org/protobuf/proto"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -32,6 +32,7 @@ import (
 
 var (
 	ErrGasFeeCapTooLow = fmt.Errorf("fee cap less than base fee")
+	ErrUnmarshalHash   = fmt.Errorf("hash verify falied")
 )
 
 // Transaction types.
@@ -116,6 +117,9 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 		var itx LegacyTx
 		if nil != pbTx.To {
 			itx.To = utils.ConvertH160ToPAddress(pbTx.To)
+			if *itx.To == (types.Address{}) {
+				itx.To = nil
+			}
 		}
 		itx.From = utils.ConvertH160ToPAddress(pbTx.From)
 		itx.Sign = pbTx.Sign
@@ -153,6 +157,9 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 		altt.Data = pbTx.Data
 		if nil != pbTx.To {
 			altt.To = utils.ConvertH160ToPAddress(pbTx.To)
+			if *altt.To == (types.Address{}) {
+				altt.To = nil
+			}
 		}
 		//altt.To = utils.ConvertH160ToPAddress(pbTx.To)
 		altt.From = utils.ConvertH160ToPAddress(pbTx.From)
@@ -178,11 +185,22 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 		dftt.Data = pbTx.Data
 		if nil != pbTx.To {
 			dftt.To = utils.ConvertH160ToPAddress(pbTx.To)
+			if *dftt.To == (types.Address{}) {
+				dftt.To = nil
+			}
 		}
+
 		//dftt.To = utils.ConvertH160ToPAddress(pbTx.To)
 		dftt.From = utils.ConvertH160ToPAddress(pbTx.From)
 		dftt.Sign = pbTx.Sign
 		inner = &dftt
+	}
+
+	// todo
+	protoHash := utils.ConvertH256ToHash(pbTx.Hash)
+	innerHash := inner.hash()
+	if bytes.Compare(protoHash[:], innerHash[:]) != 0 {
+		//return nil, ErrUnmarshalHash
 	}
 
 	return inner, nil
@@ -235,6 +253,9 @@ func (tx *Transaction) ToProtoMessage() proto.Message {
 	if tx.To() != nil {
 		pbTx.To = utils.ConvertAddressToH160(*tx.To())
 	}
+
+	pbTx.Hash = utils.ConvertHashToH256(tx.Hash())
+
 	v, r, s := tx.RawSignatureValues()
 	if nil != v {
 		pbTx.V = utils.ConvertUint256IntToH256(v)
@@ -437,6 +458,11 @@ func (tx *Transaction) Hash() types.Hash {
 	h := tx.inner.hash()
 	tx.hash.Store(h)
 	return h
+}
+
+// GasFeeCapCmp compares the fee cap of two transactions.
+func (tx *Transaction) GasFeeCapCmp(other *Transaction) int {
+	return tx.inner.gasFeeCap().Cmp(other.inner.gasFeeCap())
 }
 
 // EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.

@@ -17,9 +17,9 @@
 package transaction
 
 import (
+	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
-	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -101,7 +101,7 @@ func (tx *DynamicFeeTx) sign() []byte            { return tx.Sign }
 
 // Hash computes the hash (but not for signatures!)
 func (tx *DynamicFeeTx) hash() types.Hash {
-	hash := utils.PrefixedRlpHash(DynamicFeeTxType, []interface{}{
+	hash := hash.PrefixedRlpHash(DynamicFeeTxType, []interface{}{
 		tx.ChainID,
 		tx.Nonce,
 		tx.GasTipCap,

@@ -17,8 +17,8 @@
 package transaction
 
 import (
+	"github.com/amazechain/amc/common/hash"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -124,7 +124,7 @@ func (tx *LegacyTx) setSignatureValues(chainID, v, r, s *uint256.Int) {
 }
 
 func (tx *LegacyTx) hash() types.Hash {
-	hash := utils.RlpHash([]interface{}{
+	hash := hash.RlpHash([]interface{}{
 		tx.Nonce,
 		tx.GasPrice,
 		tx.Gas,

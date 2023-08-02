@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/contracts/deposit"
+	"github.com/amazechain/amc/contracts/deposit/AMT"
+	nftdeposit "github.com/amazechain/amc/contracts/deposit/NFT"
 	"github.com/amazechain/amc/internal/debug"
 	"github.com/amazechain/amc/internal/p2p"
 	amcsync "github.com/amazechain/amc/internal/sync"
@@ -289,23 +291,22 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	log.Info("new node", "GenesisHash", genesisBlock.Hash(), "CurrentBlockNr", bc.CurrentBlock().Number64().Uint64())
 
 	node = Node{
-		ctx:             c,
-		cancel:          cancel,
-		config:          cfg,
-		miner:           miner,
-		genesisBlock:    genesisBlock,
-		service:         s,
-		nodeKey:         privateKey,
-		blocks:          bc,
-		db:              chainKv,
-		shutDown:        make(chan struct{}),
-		pubsubServer:    pubsubServer,
-		peers:           peers,
-		downloader:      downloader,
-		txspool:         pool,
-		txsFetcher:      txsFetcher,
-		engine:          engine,
-		depositContract: deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Engine, bc, chainKv),
+		ctx:          c,
+		cancel:       cancel,
+		config:       cfg,
+		miner:        miner,
+		genesisBlock: genesisBlock,
+		service:      s,
+		nodeKey:      privateKey,
+		blocks:       bc,
+		db:           chainKv,
+		shutDown:     make(chan struct{}),
+		pubsubServer: pubsubServer,
+		peers:        peers,
+		downloader:   downloader,
+		txspool:      pool,
+		txsFetcher:   txsFetcher,
+		engine:       engine,
 
 		inprocHandler: jsonrpc.NewServer(),
 		http:          newHTTPServer(),
@@ -322,6 +323,25 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		p2p:  p2p,
 		sync: syncServer,
 		is:   is,
+	}
+
+	if cfg.GenesisBlockCfg.Engine.APos != nil {
+		depositContracts := make(map[types.Address]deposit.DepositContract, 0)
+		if cfg.GenesisBlockCfg.Engine.APos.DepositContract != "" {
+			var addr types.Address
+			if !addr.DecodeString(cfg.GenesisBlockCfg.Engine.APos.DepositContract) {
+				panic("cannot decode DepositContract")
+			}
+			depositContracts[addr] = new(amtdeposit.Contract)
+		}
+		if cfg.GenesisBlockCfg.Engine.APos.DepositNFTContract != "" {
+			var addr types.Address
+			if !addr.DecodeString(cfg.GenesisBlockCfg.Engine.APos.DepositNFTContract) {
+				panic("cannot decode DepositContract")
+			}
+			depositContracts[addr] = new(nftdeposit.Contract)
+		}
+		node.depositContract = deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Engine, bc, chainKv, depositContracts)
 	}
 
 	// Apply flags.
@@ -428,7 +448,9 @@ func (n *Node) Start() error {
 	//go n.txsBroadcastLoop()
 	//go n.txsMessageFetcherLoop()
 
-	n.depositContract.Start()
+	if n.depositContract != nil {
+		n.depositContract.Start()
+	}
 
 	n.is.Start()
 

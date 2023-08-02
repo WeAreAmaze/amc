@@ -94,13 +94,13 @@ func (s *Service) processBatchedBlocks(ctx context.Context, blks []*types_pb.Blo
 	}
 
 	firstBlock := blocks[0]
-	for s.cfg.Chain.CurrentBlock().Number64().Uint64() >= firstBlock.Number64().Uint64() {
-		if len(blocks) == 1 {
-			return 0, fmt.Errorf("ourCurrentBlockNumber:%d, blockNumber:%d , root %s:%w", s.cfg.Chain.CurrentBlock().Number64().Uint64(), firstBlock.Number64().Uint64(), firstBlock.Hash(), errBlockAlreadyProcessed)
-		}
-		blocks = blocks[1:]
-		firstBlock = blocks[0]
-	}
+	//for s.cfg.Chain.CurrentBlock().Number64().Uint64() >= firstBlock.Number64().Uint64() {
+	//	if len(blocks) == 1 {
+	//		return 0, fmt.Errorf("ourCurrentBlockNumber:%d, blockNumber:%d , root %s:%w", s.cfg.Chain.CurrentBlock().Number64().Uint64(), firstBlock.Number64().Uint64(), firstBlock.Hash(), errBlockAlreadyProcessed)
+	//	}
+	//	blocks = blocks[1:]
+	//	firstBlock = blocks[0]
+	//}
 
 	if !s.cfg.Chain.HasBlock(firstBlock.ParentHash(), firstBlock.Number64().Uint64()-1) {
 		return 0, fmt.Errorf("%w: %s (in processBatchedBlocks, Number=%d)", errParentDoesNotExist, firstBlock.ParentHash(), firstBlock.Number64().Uint64())

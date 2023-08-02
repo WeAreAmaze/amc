@@ -162,7 +162,12 @@ func (q *blocksQueue) loop() {
 	}
 
 	// Define initial state machines.
-	startBlockNr := new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
+	var startBlockNr *uint256.Int
+	if q.chain.CurrentBlock().Number64().Cmp(uint256.NewInt(0)) == 0 {
+		startBlockNr = new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
+	} else {
+		startBlockNr = q.chain.CurrentBlock().Number64()
+	}
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
 	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {
 		q.smm.addStateMachine(i)
@@ -175,7 +180,7 @@ func (q *blocksQueue) loop() {
 			continue
 		}
 
-		log.Trace("tick",
+		log.Debug("tick",
 			"highestExpectedBlockNr", q.highestExpectedBlockNr,
 			"ourBlockNr", q.chain.CurrentBlock().Number64(),
 			"state", q.smm.String(),
@@ -204,6 +209,12 @@ func (q *blocksQueue) loop() {
 						}
 						continue
 					}
+				}
+				if fsm.start.Cmp(q.highestExpectedBlockNr) == 1 {
+					if err := q.smm.removeStateMachine(fsm.start); err != nil {
+						log.Debug("Can not remove state machine", "err", err)
+					}
+					continue
 				}
 				// Do garbage collection, and advance sliding window forward.
 				if q.chain.CurrentBlock().Number64().Cmp(new(uint256.Int).AddUint64(fsm.start, blocksPerRequest-1)) >= 0 {

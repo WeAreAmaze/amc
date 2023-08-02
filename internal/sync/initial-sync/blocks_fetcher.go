@@ -25,7 +25,7 @@ const (
 	// peersPercentagePerRequest caps percentage of peers to be used in a request.
 	peersPercentagePerRequest = 0.75
 	// handshakePollingInterval is a polling interval for checking the number of received handshakes.
-	handshakePollingInterval = 5 * time.Second
+	handshakePollingInterval = 2 * 8 * time.Second
 	// peerLocksPollingInterval is a polling interval for checking if there are stale peer locks.
 	peerLocksPollingInterval = 5 * time.Minute
 	// peerLockMaxAge is maximum time before stale lock is purged.

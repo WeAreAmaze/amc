@@ -1664,6 +1664,7 @@ func (bc *BlockChain) writeKnownBlock(block block2.IBlock) error {
 // Note the new head block won't be processed here, callers need to handle it
 // externally.
 func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
+	log.Debug("reorg", "oldBlock", oldBlock.Number64(), "newBlock", newBlock.Number64())
 	var (
 		newChain    block2.Blocks
 		oldChain    block2.Blocks
@@ -1694,7 +1695,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	if newBlock == nil {
 		return fmt.Errorf("invalid new chain")
 	}
-
+	log.Debug("reorg to the same height", "height", oldBlock.Number64())
 	var err error
 	// Both sides of the reorg are at the same number, reduce both until the common
 	// ancestor is found
@@ -1713,18 +1714,16 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 		newChain = append(newChain, newBlock)
 
 		// Step back with both chains
-		//oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.Number64().Uint64()-1)
 		oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.Number64().Uint64()-1)
 		if oldBlock == nil {
 			return fmt.Errorf("invalid old chain")
 		}
-		//newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.Number64().Uint64()-1)
 		newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.Number64().Uint64()-1)
 		if newBlock == nil {
 			return fmt.Errorf("invalid new chain")
 		}
 	}
-
+	log.Debug("reorg find common ancestor", "height", oldBlock.Number64())
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
 		logFn := log.Info

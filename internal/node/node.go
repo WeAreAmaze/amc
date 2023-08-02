@@ -389,10 +389,10 @@ func (n *Node) Start() error {
 		pos.SetBlockChain(n.blocks)
 	}
 
-	if err := n.downloader.Start(); err != nil {
-		log.Errorf("failed setup downloader service, err: %v", err)
-		return err
-	}
+	//if err := n.downloader.Start(); err != nil {
+	//	log.Errorf("failed setup downloader service, err: %v", err)
+	//	return err
+	//}
 
 	if n.config.NodeCfg.HTTP {
 

@@ -728,7 +728,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
 				///limit 1  seen 9999 number 9999- 8919
-				return errors.New(fmt.Sprintf("signed recently, must wait for others %d %d %d %s", limit, seen, number, signer.String()))
+				return errors.New(fmt.Sprintf("signed recently, must wait for others, limit=%d last=%d  current=%d signer=%s", limit, seen, number, signer.String()))
 			}
 		}
 	}

@@ -81,8 +81,8 @@ message Header {
   uint64 Time = 10;
   uint64 Nonce = 11;
   H256 BaseFee = 12 ;
-  // 65+32 byte (clique)
-  bytes Extra = 13  [(ext.ssz_max) = "117"];
+  // 65+32 + 20*20 byte (clique)
+  bytes Extra = 13  [(ext.ssz_max) = "497"];
   H768 Signature = 14;
   H2048 Bloom = 15;
   H256 MixDigest = 16;

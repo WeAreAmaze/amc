@@ -330,19 +330,21 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		if cfg.GenesisBlockCfg.Engine.APos.DepositContract != "" {
 			var addr types.Address
 			if !addr.DecodeString(cfg.GenesisBlockCfg.Engine.APos.DepositContract) {
-				panic("cannot decode DepositContract")
+				panic(fmt.Sprintf("cannot decode DepositContract address: %s", cfg.GenesisBlockCfg.Engine.APos.DepositContract))
 			}
 			depositContracts[addr] = new(amtdeposit.Contract)
 		}
 		if cfg.GenesisBlockCfg.Engine.APos.DepositNFTContract != "" {
 			var addr types.Address
 			if !addr.DecodeString(cfg.GenesisBlockCfg.Engine.APos.DepositNFTContract) {
-				panic("cannot decode DepositContract")
+				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", cfg.GenesisBlockCfg.Engine.APos.DepositContract))
 			}
 			depositContracts[addr] = new(nftdeposit.Contract)
 		}
 		node.depositContract = deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Engine, bc, chainKv, depositContracts)
 	}
+
+	pool.SetDeposit(node.depositContract)
 
 	// Apply flags.
 	//SetNodeConfig(ctx, &cfg)

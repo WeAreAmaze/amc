@@ -52,6 +52,21 @@ func init() {
 type Contract struct {
 }
 
+func (c Contract) IsDepositAction(sigdata [4]byte) bool {
+	var (
+		method *abi.Method
+		err    error
+	)
+	if method, err = contractAbi.MethodById(sigdata[:]); err != nil {
+		return false
+	}
+
+	if !bytes.Equal(method.ID, contractAbi.Methods["deposit"].ID) {
+		return false
+	}
+	return true
+}
+
 func (Contract) WithdrawnSignature() types.Hash {
 	return withdrawnSignature
 }
@@ -60,7 +75,7 @@ func (Contract) DepositSignature() types.Hash {
 	return depositSignature
 }
 
-func (Contract) UnpackLogData(data []byte) (publicKey []byte, signature []byte, depositAmount *uint256.Int, err error) {
+func (Contract) UnpackDepositLogData(data []byte) (publicKey []byte, signature []byte, depositAmount *uint256.Int, err error) {
 	var (
 		unpackedLogs []interface{}
 		overflow     bool

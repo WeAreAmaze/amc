@@ -53,7 +53,8 @@ const (
 type DepositContract interface {
 	WithdrawnSignature() types.Hash
 	DepositSignature() types.Hash
-	UnpackLogData(data []byte) (publicKey []byte, signature []byte, message *uint256.Int, err error)
+	UnpackDepositLogData(data []byte) (publicKey []byte, signature []byte, depositAmount *uint256.Int, err error)
+	IsDepositAction(sig [4]byte) bool
 }
 
 func GetDepositInfo(tx kv.Tx, addr types.Address) *Info {
@@ -147,15 +148,41 @@ func NewDeposit(ctx context.Context, config *conf.ConsensusConfig, bc common.IBl
 	return d
 }
 
-func (d Deposit) Start() {
+func (d *Deposit) Start() {
 	go d.eventLoop()
 }
 
-func (d Deposit) Stop() {
+func (d *Deposit) Stop() {
 	d.cancel()
 }
 
-func (d Deposit) eventLoop() {
+func (d *Deposit) IsDepositAction(txs *transaction.Transaction) bool {
+	var (
+		depositContract      DepositContract
+		foundDepositContract bool
+	)
+	to := txs.To()
+	if to == nil {
+		return false
+	}
+	if depositContract, foundDepositContract = d.depositContracts[*to]; !foundDepositContract {
+		return false
+	}
+
+	if len(txs.Data()) < 4 {
+		return false
+	}
+
+	var sig [4]byte
+	copy(sig[:], txs.Data()[:4])
+	if !depositContract.IsDepositAction(sig) {
+		return false
+	}
+
+	return true
+}
+
+func (d *Deposit) eventLoop() {
 	// Ensure all subscriptions get cleaned up
 	defer func() {
 		d.logsSub.Unsubscribe()
@@ -188,11 +215,11 @@ func (d Deposit) eventLoop() {
 	}
 }
 
-func (d Deposit) handleDepositEvent(txHash types.Hash, data []byte, depositContract DepositContract) {
+func (d *Deposit) handleDepositEvent(txHash types.Hash, data []byte, depositContract DepositContract) {
 	// 1
-	pb, sig, amount, err := depositContract.UnpackLogData(data)
+	pb, sig, amount, err := depositContract.UnpackDepositLogData(data)
 	if err != nil {
-		log.Warn("cannot unpack deposit log data")
+		log.Warn("cannot unpack deposit log data", "err", err)
 		return
 	}
 	// 2
@@ -237,7 +264,7 @@ func (d Deposit) handleDepositEvent(txHash types.Hash, data []byte, depositContr
 	}
 }
 
-func (d Deposit) handleWithdrawnEvent(txHash types.Hash, data []byte) {
+func (d *Deposit) handleWithdrawnEvent(txHash types.Hash, data []byte) {
 	var tx *transaction.Transaction
 
 	rwTx, err := d.db.BeginRw(d.ctx)

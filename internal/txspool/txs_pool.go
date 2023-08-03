@@ -19,10 +19,12 @@ package txspool
 import (
 	"context"
 	"fmt"
+	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"math"
 	"math/big"
 	"sort"
@@ -150,6 +152,8 @@ type TxsPool struct {
 	changesSinceReorg int
 
 	isRun uint32
+
+	deposit *deposit.Deposit
 }
 
 func NewTxsPool(ctx context.Context, bc common.IBlockChain) (txs_pool.ITxsPool, error) {
@@ -588,6 +592,20 @@ func (pool *TxsPool) validateTx(tx *transaction.Transaction, local bool) error {
 	}
 	if tx.Gas() < intrGas {
 		return internal.ErrIntrinsicGas
+	}
+
+	if pool.deposit != nil {
+		var depositInfo *deposit.Info
+		_ = pool.bc.DB().View(pool.ctx, func(tx kv.Tx) error {
+			depositInfo = deposit.GetDepositInfo(tx, addr)
+			return nil
+		})
+
+		if depositInfo != nil {
+			if pool.deposit.IsDepositAction(tx) {
+				return internal.ErrAlreadyDeposited
+			}
+		}
 	}
 	return nil
 }
@@ -1297,4 +1315,8 @@ func (pool *TxsPool) ResetState(blockHash types.Hash) error {
 	stateReader := state.NewStateHistoryReader(tx, tx, *blockNr)
 	pool.currentState = state.New(stateReader)
 	return nil
+}
+
+func (pool *TxsPool) SetDeposit(deposit *deposit.Deposit) {
+	pool.deposit = deposit
 }

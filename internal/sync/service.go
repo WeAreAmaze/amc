@@ -10,6 +10,7 @@ import (
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/p2p"
+	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"sync"
@@ -116,8 +117,10 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 // Start the regular sync service.
 func (s *Service) Start() {
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
-	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
+	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
 		// no-op
+		s.cfg.p2p.Peers()
+		log.Error("disconnect peer", "peer", id)
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)

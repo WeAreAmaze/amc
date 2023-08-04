@@ -9,24 +9,45 @@ import (
 
 // ensurePeerConnections will attempt to reestablish connection to the peers
 // if there are currently no connections to that peer.
-func ensurePeerConnections(ctx context.Context, h host.Host, peers ...string) {
-	if len(peers) == 0 {
-		return
-	}
-	for _, p := range peers {
-		if p == "" {
+func ensurePeerConnections(ctx context.Context, h host.Host, relayNodes ...string) {
+	// every time reset peersToWatch, add RelayNodes and trust peers
+	var peersToWatch []*peer.AddrInfo
+
+	// add RelayNodes
+	for _, node := range relayNodes {
+		if node == "" {
 			continue
 		}
-		peerInfo, err := MakePeer(p)
+		peerInfo, err := MakePeer(node)
 		if err != nil {
 			log.Error("Could not make peer", "err", err)
 			continue
 		}
+		peersToWatch = append(peersToWatch, peerInfo)
+	}
 
-		c := h.Network().ConnsToPeer(peerInfo.ID)
+	// add trusted peers
+	//trustedPeers := peers.GetTrustedPeers()
+	//for _, trustedPeer := range trustedPeers {
+	//	maddr, err := peers.Address(trustedPeer)
+	//
+	//	// avoid invalid trusted peers
+	//	if err != nil || maddr == nil {
+	//		log.WithField("peer", trustedPeers).WithError(err).Error("Could not get peer address")
+	//		continue
+	//	}
+	//	peerInfo := &peer.AddrInfo{ID: trustedPeer}
+	//	peerInfo.Addrs = []ma.Multiaddr{maddr}
+	//	peersToWatch = append(peersToWatch, peerInfo)
+	//}
+	if len(peersToWatch) == 0 {
+		return
+	}
+	for _, p := range peersToWatch {
+		c := h.Network().ConnsToPeer(p.ID)
 		if len(c) == 0 {
-			if err := connectWithTimeout(ctx, h, peerInfo); err != nil {
-				log.Error("Failed to reconnect to peer", "peer", peerInfo.ID, "addrs", peerInfo.Addrs, "err", err)
+			if err := connectWithTimeout(ctx, h, p); err != nil {
+				log.Error("Failed to reconnect to peer", "peer", p.ID, "addrs", p.Addrs, "err", err)
 				continue
 			}
 		}

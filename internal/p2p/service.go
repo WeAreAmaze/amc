@@ -42,7 +42,7 @@ import (
 var pollingPeriod = 6 * time.Second
 
 // Refresh rate of ENR set at twice per block.
-var refreshRate = 16 * time.Second
+var refreshRate = 4 * time.Second
 
 // maxBadResponses is the maximum number of bad responses from a peer before we stop talking to it.
 const maxBadResponses = 5
@@ -177,9 +177,9 @@ func (s *Service) Start() {
 
 	s.isPreGenesis = false
 
-	var peersToWatch []string
+	var relayNodes []string
 	if s.cfg.RelayNodeAddr != "" {
-		peersToWatch = append(peersToWatch, s.cfg.RelayNodeAddr)
+		relayNodes = append(relayNodes, s.cfg.RelayNodeAddr)
 		if err := dialRelayNode(s.ctx, s.host, s.cfg.RelayNodeAddr); err != nil {
 			log.Error("Could not dial relay node", "err", err)
 		}
@@ -220,9 +220,9 @@ func (s *Service) Start() {
 	s.RefreshENR()
 
 	// Periodic functions.
-	if len(peersToWatch) > 0 {
+	if len(relayNodes) > 0 {
 		utils.RunEvery(s.ctx, ttfbTimeout, func() {
-			ensurePeerConnections(s.ctx, s.host, peersToWatch...)
+			ensurePeerConnections(s.ctx, s.host, relayNodes...)
 		})
 	}
 
@@ -246,7 +246,7 @@ func (s *Service) Start() {
 			}
 			// hexutil.Encode([]byte(p))
 
-			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
+			log.Debug("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
 				log.Trace("Protocol details:", "ProtocolID", id)

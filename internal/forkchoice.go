@@ -79,10 +79,11 @@ func (f *ForkChoice) ReorgNeeded(current block2.IHeader, header block2.IHeader) 
 		localTD  = f.chain.GetTd(current.Hash(), current.Number64())
 		externTd = f.chain.GetTd(header.Hash(), header.Number64())
 	)
-	log.Tracef("ForkChoice.ReorgNeeded: localID = %d, externTd = %d", localTD.Uint64(), externTd.Uint64())
+
 	if localTD == nil || externTd == nil {
 		return false, errors.New("missing td")
 	}
+	log.Tracef("ForkChoice.ReorgNeeded: localID = %d, externTd = %d", localTD.Uint64(), externTd.Uint64())
 	// Accept the new header as the chain head if the transition
 	// is already triggered. We assume all the headers after the
 	// transition come from the trusted consensus layer.

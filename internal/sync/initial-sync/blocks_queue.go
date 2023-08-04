@@ -37,7 +37,7 @@ const (
 	// startBackSlots defines number of slots before the current head, which defines a start position
 	// of the initial machine. This allows more robustness in case of normal sync sets head to some
 	// orphaned block: in that case starting earlier and re-fetching blocks allows to reorganize chain.
-	//startBackSlots = 32
+	startBackBlock = 7
 )
 
 var (
@@ -164,12 +164,15 @@ func (q *blocksQueue) loop() {
 	// Define initial state machines.
 	var startBlockNr *uint256.Int
 	if q.chain.CurrentBlock().Number64().Cmp(uint256.NewInt(0)) == 0 {
-		startBlockNr = new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
+		startBlockNr = uint256.NewInt(1)
 	} else {
-		startBlockNr = q.chain.CurrentBlock().Number64()
+		startBlockNr = q.chain.CurrentBlock().Number64().Clone()
+		if startBlockNr.Cmp(uint256.NewInt(startBackBlock)) == 1 {
+			startBlockNr.SubUint64(startBlockNr, startBackBlock)
+		}
 	}
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
-	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {
+	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i.AddUint64(i, blocksPerRequest) {
 		q.smm.addStateMachine(i)
 	}
 
@@ -180,7 +183,7 @@ func (q *blocksQueue) loop() {
 			continue
 		}
 
-		log.Debug("tick",
+		log.Trace("tick",
 			"highestExpectedBlockNr", q.highestExpectedBlockNr,
 			"ourBlockNr", q.chain.CurrentBlock().Number64(),
 			"state", q.smm.String(),
@@ -210,12 +213,12 @@ func (q *blocksQueue) loop() {
 						continue
 					}
 				}
-				if fsm.start.Cmp(q.highestExpectedBlockNr) == 1 {
-					if err := q.smm.removeStateMachine(fsm.start); err != nil {
-						log.Debug("Can not remove state machine", "err", err)
-					}
-					continue
-				}
+				//if fsm.start.Cmp(q.highestExpectedBlockNr) == 1 {
+				//	if err := q.smm.removeStateMachine(fsm.start); err != nil {
+				//		log.Debug("Can not remove state machine", "err", err)
+				//	}
+				//	continue
+				//}
 				// Do garbage collection, and advance sliding window forward.
 				if q.chain.CurrentBlock().Number64().Cmp(new(uint256.Int).AddUint64(fsm.start, blocksPerRequest-1)) >= 0 {
 					highestStartSlot, err := q.smm.highestStartSlot()
@@ -282,9 +285,9 @@ func (q *blocksQueue) onScheduleEvent(ctx context.Context) eventHandlerFn {
 			return m.state, errBlockNrIsTooHigh
 		}
 		blocksPerRequest := q.blocksFetcher.blocksPerPeriod
-		if q.highestExpectedBlockNr.Cmp(new(uint256.Int).AddUint64(m.start, blocksPerRequest)) < 0 {
-			blocksPerRequest = new(uint256.Int).Sub(q.highestExpectedBlockNr, m.start).Uint64() + 1
-		}
+		//if q.highestExpectedBlockNr.Cmp(new(uint256.Int).AddUint64(m.start, blocksPerRequest)) < 0 {
+		//	blocksPerRequest = new(uint256.Int).Sub(q.highestExpectedBlockNr, m.start).Uint64() + 1
+		//}
 		if err := q.blocksFetcher.scheduleRequest(ctx, m.start, blocksPerRequest); err != nil {
 			return m.state, err
 		}
@@ -404,7 +407,7 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 
 		// Check if we have enough peers to progress, or sync needs to halt (due to no peers available).
 		//bestFinalizedSlot := q.blocksFetcher.bestFinalizedBlockNr()
-		if q.blocksFetcher.bestFinalizedBlockNr().Cmp(q.chain.CurrentBlock().Number64()) >= 0 {
+		if q.blocksFetcher.bestFinalizedBlockNr().Cmp(q.chain.CurrentBlock().Number64()) <= 0 {
 			return stateSkipped, errNoRequiredPeers
 		}
 

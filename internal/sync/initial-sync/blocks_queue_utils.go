@@ -53,5 +53,8 @@ func (q *blocksQueue) resetFromBlockNr(ctx context.Context, startBlockNr *uint25
 		q.smm.addStateMachine(i)
 	}
 
+	if q.highestExpectedBlockNr.Cmp(q.blocksFetcher.bestFinalizedBlockNr()) == -1 {
+		q.highestExpectedBlockNr = q.blocksFetcher.bestFinalizedBlockNr()
+	}
 	return nil
 }

@@ -850,7 +850,7 @@ func (bc *BlockChain) GetTd(hash types.Hash, number *uint256.Int) *uint256.Int {
 	}
 
 	var td *uint256.Int
-	_ = bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
+	if err := bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
 
 		ptd, err := rawdb.ReadTd(tx, hash, number.Uint64())
 		if nil != err {
@@ -858,9 +858,13 @@ func (bc *BlockChain) GetTd(hash types.Hash, number *uint256.Int) *uint256.Int {
 		}
 		td = ptd
 		return nil
-	})
+	}); nil != err {
+		log.Error("get total difficulty failed", "err", err, "hash", hash, "number", number)
+	}
 
-	bc.tdCache.Add(hash, td)
+	if td != nil {
+		bc.tdCache.Add(hash, td)
+	}
 	return td
 }
 
@@ -911,7 +915,6 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
-
 			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *lastCanon.(*block2.Block), Inserted: true})
 		}
 	}()
@@ -922,7 +925,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 	for i, block := range chain {
 		headers[i] = block.Header()
-		seals[i] = true
+		//seals[i] = true
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
@@ -1135,7 +1138,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 		switch status {
 		case CanonStatTy:
-			log.Debug("Inserted new block ", "number ", block.Number64(), "hash", block.Hash(),
+			log.Trace("Inserted new block ", "number ", block.Number64(), "hash", block.Hash(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", time.Since(start).Seconds(),
 				"root", block.StateRoot())
@@ -1357,6 +1360,9 @@ func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block
 
 // writeBlockWithState
 func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) (status WriteStatus, err error) {
+	if block.Number64().Uint64() == 20775 {
+		fmt.Println("start")
+	}
 	if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
 		//ptd := bc.GetTd(block.ParentHash(), block.Number64().Sub(uint256.NewInt(1)))
 		ptd, err := rawdb.ReadTd(tx, block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)).Uint64())
@@ -1407,15 +1413,15 @@ func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block
 	}); nil != err {
 		return NonStatTy, err
 	}
-
-	reorg, err := bc.forker.ReorgNeeded(bc.CurrentBlock().Header(), block.Header())
+	currentBlock := bc.CurrentBlock()
+	reorg, err := bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
 	if nil != err {
 		return NonStatTy, err
 	}
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
-		if block.ParentHash() != bc.CurrentBlock().Hash() {
-			if err := bc.reorg(bc.CurrentBlock(), block); err != nil {
+		if block.ParentHash() != currentBlock.Hash() {
+			if err := bc.reorg(currentBlock, block); err != nil {
 				return NonStatTy, err
 			}
 		}
@@ -1685,7 +1691,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 		}
 	} else {
 		// New chain is longer, stash all blocks away for subsequent insertion
-		for ; newBlock != nil && newBlock.Number64() != oldBlock.Number64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.Number64().Uint64()-1) {
+		for ; newBlock != nil && newBlock.Number64().Uint64() != oldBlock.Number64().Uint64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.Number64().Uint64()-1) {
 			newChain = append(newChain, newBlock)
 		}
 	}
@@ -1791,7 +1797,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 			return err
 		}
 
-		for i := len(newChain) - 1; i >= 1; i-- {
+		for i := len(newChain) - 1; i >= 0; i-- {
 			// Collect the new added transactions.
 			for _, t := range newChain[i].Transactions() {
 				h := t.Hash()
@@ -1811,9 +1817,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 		// Because the reorg function does not handle new chain head, all hash
 		// markers greater than or equal to new chain head should be deleted.
 		number := commonBlock.Number64().Uint64()
-		if len(newChain) > 1 {
-			number = newChain[1].Number64().Uint64()
-		}
+		//if len(newChain) > 1 {
+		//	number = newChain[1].Number64().Uint64()
+		//}
 		for i := number + 1; ; i++ {
 			hash, _ := rawdb.ReadCanonicalHash(tx, i)
 			if hash == (types.Hash{}) {
@@ -1827,6 +1833,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 		for k, v := range recoverMap {
 			rawdb.PutAccountReward(tx, k, v)
 		}
+		bc.tdCache.Purge()
+		bc.blockCache.Purge()
+		bc.headerCache.Purge()
+		bc.numberCache.Purge()
 		return nil
 	})
 	if nil != err {

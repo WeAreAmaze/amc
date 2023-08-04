@@ -143,6 +143,7 @@ func (s *Service) logBatchSyncStatus(blks []*types_pb.Block) {
 			new(uint256.Int).Sub(targetNumber, firstBlockNumber).Uint64(),
 		),
 		"peers", len(s.cfg.P2P.Peers().Connected()),
+		"current", s.cfg.Chain.CurrentBlock().Number64(),
 		"blocksPerSecond", fmt.Sprintf("%.1f", rate),
 		"highestExpectedBlockNr", s.highestExpectedBlockNr.Uint64(),
 	)

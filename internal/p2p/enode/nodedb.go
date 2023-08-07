@@ -18,22 +18,32 @@ package enode
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/amazechain/amc/internal/avm/rlp"
+	"github.com/c2h5oh/datasize"
+	libcommon "github.com/ledgerwatch/erigon-lib/common"
+	"github.com/ledgerwatch/erigon-lib/kv"
+	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
+	"github.com/ledgerwatch/log/v3"
 	"net"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
-)
+	mdbx1 "github.com/torquem-ch/mdbx-go/mdbx"
+	/*
+		"github.com/syndtr/goleveldb/leveldb"
+		"github.com/syndtr/goleveldb/leveldb/errors"
+		"github.com/syndtr/goleveldb/leveldb/iterator"
+		"github.com/syndtr/goleveldb/leveldb/opt"
+		"github.com/syndtr/goleveldb/leveldb/storage"
+		"github.com/syndtr/goleveldb/leveldb/util"
+
+	*/)
 
 // Keys in the node database.
 const (
@@ -70,37 +80,53 @@ var zeroIP = make(net.IP, 16)
 // DB is the node database, storing previously seen nodes and any collected metadata about
 // them for QoS purposes.
 type DB struct {
-	lvl    *leveldb.DB   // Interface to the database itself
+	kv     kv.RwDB       // Interface to the database itself
 	runner sync.Once     // Ensures we can start at most one expirer
 	quit   chan struct{} // Channel to signal the expiring thread to stop
 }
 
 // OpenDB opens a node database for storing and retrieving infos about known peers in the
 // network. If no path is given an in-memory, temporary database is constructed.
-func OpenDB(path string) (*DB, error) {
+func OpenDB(path string, tmpDir string) (*DB, error) {
+	logger := log.New() //TODO: move higher
 	if path == "" {
-		return newMemoryDB()
+		return newMemoryDB(logger, tmpDir)
 	}
-	return newPersistentDB(path)
+	return newPersistentDB(logger, path)
+}
+
+func bucketsConfig(_ kv.TableCfg) kv.TableCfg {
+	return kv.TableCfg{
+		kv.Inodes:      {},
+		kv.NodeRecords: {},
+	}
 }
 
 // newMemoryNodeDB creates a new in-memory node database without a persistent backend.
-func newMemoryDB() (*DB, error) {
-	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+func newMemoryDB(logger log.Logger, tmpDir string) (*DB, error) {
+	db := &DB{quit: make(chan struct{})}
+	var err error
+	db.kv, err = mdbx.NewMDBX(logger).InMem(tmpDir).Label(kv.SentryDB).WithTableCfg(bucketsConfig).MapSize(1 * datasize.GB).Open()
 	if err != nil {
 		return nil, err
 	}
-	return &DB{lvl: db, quit: make(chan struct{})}, nil
+	return db, nil
 }
 
-// newPersistentNodeDB creates/opens a leveldb backed persistent node database,
+// newPersistentNodeDB creates/opens a persistent node database,
 // also flushing its contents in case of a version mismatch.
-func newPersistentDB(path string) (*DB, error) {
-	opts := &opt.Options{OpenFilesCacheCapacity: 5}
-	db, err := leveldb.OpenFile(path, opts)
-	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
-		db, err = leveldb.RecoverFile(path, nil)
-	}
+func newPersistentDB(logger log.Logger, path string) (*DB, error) {
+	var db kv.RwDB
+	var err error
+	db, err = mdbx.NewMDBX(logger).
+		Path(path).
+		Label(kv.SentryDB).
+		WithTableCfg(bucketsConfig).
+		MapSize(1024 * datasize.MB).
+		GrowthStep(16 * datasize.MB).
+		Flags(func(f uint) uint { return f ^ mdbx1.Durable | mdbx1.SafeNoSync }).
+		SyncPeriod(2 * time.Second).
+		Open()
 	if err != nil {
 		return nil, err
 	}
@@ -109,26 +135,34 @@ func newPersistentDB(path string) (*DB, error) {
 	currentVer := make([]byte, binary.MaxVarintLen64)
 	currentVer = currentVer[:binary.PutVarint(currentVer, int64(dbVersion))]
 
-	blob, err := db.Get([]byte(dbVersionKey), nil)
-	switch err {
-	case leveldb.ErrNotFound:
-		// Version not found (i.e. empty cache), insert it
-		if err := db.Put([]byte(dbVersionKey), currentVer, nil); err != nil {
-			db.Close()
+	var blob []byte
+	if err := db.Update(context.Background(), func(tx kv.RwTx) error {
+		c, err := tx.RwCursor(kv.Inodes)
+		if err != nil {
+			return err
+		}
+		_, v, errGet := c.SeekExact([]byte(dbVersionKey))
+		if errGet != nil {
+			return errGet
+		}
+		if v != nil {
+			// v only lives during transaction tx
+			blob = make([]byte, len(v))
+			copy(blob, v)
+			return nil
+		}
+		return c.Put([]byte(dbVersionKey), currentVer)
+	}); err != nil {
+		return nil, err
+	}
+	if blob != nil && !bytes.Equal(blob, currentVer) {
+		db.Close()
+		if err := os.RemoveAll(path); err != nil {
 			return nil, err
 		}
-
-	case nil:
-		// Version present, flush if different
-		if !bytes.Equal(blob, currentVer) {
-			db.Close()
-			if err = os.RemoveAll(path); err != nil {
-				return nil, err
-			}
-			return newPersistentDB(path)
-		}
+		return newPersistentDB(logger, path)
 	}
-	return &DB{lvl: db, quit: make(chan struct{})}, nil
+	return &DB{kv: db, quit: make(chan struct{})}, nil
 }
 
 // nodeKey returns the database key for a node record.
@@ -195,16 +229,34 @@ func localItemKey(id ID, field string) []byte {
 	return key
 }
 
+func copyBytes(key []byte) (copiedBytes []byte) {
+	if key == nil {
+		return nil
+	}
+	copiedBytes = make([]byte, len(key))
+	copy(copiedBytes, key)
+
+	return
+}
+
 // fetchInt64 retrieves an integer associated with a particular key.
 func (db *DB) fetchInt64(key []byte) int64 {
-	blob, err := db.lvl.Get(key, nil)
-	if err != nil {
+	var val int64
+	if err := db.kv.View(context.Background(), func(tx kv.Tx) error {
+		blob, errGet := tx.GetOne(kv.Inodes, key)
+		if errGet != nil {
+			return errGet
+		}
+		if blob != nil {
+			if v, read := binary.Varint(blob); read > 0 {
+				val = v
+			}
+		}
+		return nil
+	}); err != nil {
 		return 0
 	}
-	val, read := binary.Varint(blob)
-	if read <= 0 {
-		return 0
-	}
+
 	return val
 }
 
@@ -212,16 +264,26 @@ func (db *DB) fetchInt64(key []byte) int64 {
 func (db *DB) storeInt64(key []byte, n int64) error {
 	blob := make([]byte, binary.MaxVarintLen64)
 	blob = blob[:binary.PutVarint(blob, n)]
-	return db.lvl.Put(key, blob, nil)
+	return db.kv.Update(context.Background(), func(tx kv.RwTx) error {
+		return tx.Put(kv.Inodes, copyBytes(key), blob)
+	})
 }
 
 // fetchUint64 retrieves an integer associated with a particular key.
 func (db *DB) fetchUint64(key []byte) uint64 {
-	blob, err := db.lvl.Get(key, nil)
-	if err != nil {
+	var val uint64
+	if err := db.kv.View(context.Background(), func(tx kv.Tx) error {
+		blob, errGet := tx.GetOne(kv.Inodes, key)
+		if errGet != nil {
+			return errGet
+		}
+		if blob != nil {
+			val, _ = binary.Uvarint(blob)
+		}
+		return nil
+	}); err != nil {
 		return 0
 	}
-	val, _ := binary.Uvarint(blob)
 	return val
 }
 
@@ -229,13 +291,28 @@ func (db *DB) fetchUint64(key []byte) uint64 {
 func (db *DB) storeUint64(key []byte, n uint64) error {
 	blob := make([]byte, binary.MaxVarintLen64)
 	blob = blob[:binary.PutUvarint(blob, n)]
-	return db.lvl.Put(key, blob, nil)
+	return db.kv.Update(context.Background(), func(tx kv.RwTx) error {
+		return tx.Put(kv.Inodes, copyBytes(key), blob)
+	})
 }
 
 // Node retrieves a node with a given id from the database.
 func (db *DB) Node(id ID) *Node {
-	blob, err := db.lvl.Get(nodeKey(id), nil)
-	if err != nil {
+	var blob []byte
+	if err := db.kv.View(context.Background(), func(tx kv.Tx) error {
+		v, errGet := tx.GetOne(kv.NodeRecords, nodeKey(id))
+		if errGet != nil {
+			return errGet
+		}
+		if v != nil {
+			blob = make([]byte, len(v))
+			copy(blob, v)
+		}
+		return nil
+	}); err != nil {
+		return nil
+	}
+	if blob == nil {
 		return nil
 	}
 	return mustDecodeNode(id[:], blob)
@@ -244,7 +321,7 @@ func (db *DB) Node(id ID) *Node {
 func mustDecodeNode(id, data []byte) *Node {
 	node := new(Node)
 	if err := rlp.DecodeBytes(data, &node.r); err != nil {
-		panic(fmt.Errorf("p2p/enode: can't decode node %x in DB: %v", id, err))
+		panic(fmt.Errorf("p2p/enode: can't decode node %x in DB: %w", id, err))
 	}
 	// Restore node id cache.
 	copy(node.id[:], id)
@@ -260,7 +337,9 @@ func (db *DB) UpdateNode(node *Node) error {
 	if err != nil {
 		return err
 	}
-	if err := db.lvl.Put(nodeKey(node.ID()), blob, nil); err != nil {
+	if err := db.kv.Update(context.Background(), func(tx kv.RwTx) error {
+		return tx.Put(kv.NodeRecords, nodeKey(node.ID()), blob)
+	}); err != nil {
 		return err
 	}
 	return db.storeUint64(nodeItemKey(node.ID(), zeroIP, dbNodeSeq), node.Seq())
@@ -282,15 +361,34 @@ func (db *DB) Resolve(n *Node) *Node {
 
 // DeleteNode deletes all information associated with a node.
 func (db *DB) DeleteNode(id ID) {
-	deleteRange(db.lvl, nodeKey(id))
+	deleteRange(db.kv, nodeKey(id))
 }
 
-func deleteRange(db *leveldb.DB, prefix []byte) {
-	it := db.NewIterator(util.BytesPrefix(prefix), nil)
-	defer it.Release()
-	for it.Next() {
-		db.Delete(it.Key(), nil)
+func deleteRange(db kv.RwDB, prefix []byte) {
+	if err := db.Update(context.Background(), func(tx kv.RwTx) error {
+		for bucket := range bucketsConfig(nil) {
+			if err := deleteRangeInBucket(tx, prefix, bucket); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		log.Warn("nodeDB.deleteRange failed", "err", err)
 	}
+}
+
+func deleteRangeInBucket(tx kv.RwTx, prefix []byte, bucket string) error {
+	c, err := tx.RwCursor(bucket)
+	if err != nil {
+		return err
+	}
+	var k []byte
+	for k, _, err = c.Seek(prefix); (err == nil) && (k != nil) && bytes.HasPrefix(k, prefix); k, _, err = c.Next() {
+		if err = c.DeleteCurrent(); err != nil {
+			break
+		}
+	}
+	return err
 }
 
 // ensureExpirer is a small helper method ensuring that the data expiration
@@ -324,39 +422,55 @@ func (db *DB) expirer() {
 // expireNodes iterates over the database and deletes all nodes that have not
 // been seen (i.e. received a pong from) for some time.
 func (db *DB) expireNodes() {
-	it := db.lvl.NewIterator(util.BytesPrefix([]byte(dbNodePrefix)), nil)
-	defer it.Release()
-	if !it.Next() {
-		return
-	}
-
 	var (
 		threshold    = time.Now().Add(-dbNodeExpiration).Unix()
 		youngestPong int64
-		atEnd        = false
 	)
-	for !atEnd {
-		id, ip, field := splitNodeItemKey(it.Key())
-		if field == dbNodePong {
-			time, _ := binary.Varint(it.Value())
-			if time > youngestPong {
-				youngestPong = time
-			}
-			if time < threshold {
-				// Last pong from this IP older than threshold, remove fields belonging to it.
-				deleteRange(db.lvl, nodeItemKey(id, ip, ""))
-			}
+	var toDelete [][]byte
+	if err := db.kv.View(context.Background(), func(tx kv.Tx) error {
+		c, err := tx.Cursor(kv.Inodes)
+		if err != nil {
+			return err
 		}
-		atEnd = !it.Next()
-		nextID, _ := splitNodeKey(it.Key())
-		if atEnd || nextID != id {
-			// We've moved beyond the last entry of the current ID.
-			// Remove everything if there was no recent enough pong.
+		p := []byte(dbNodePrefix)
+		var prevId ID
+		var empty = true
+		for k, v, err := c.Seek(p); bytes.HasPrefix(k, p); k, v, err = c.Next() {
+			if err != nil {
+				return err
+			}
+			id, ip, field := splitNodeItemKey(k)
+			if field == dbNodePong {
+				time, _ := binary.Varint(v)
+				if time > youngestPong {
+					youngestPong = time
+				}
+				if time < threshold {
+					// Last pong from this IP older than threshold, remove fields belonging to it.
+					toDelete = append(toDelete, nodeItemKey(id, ip, ""))
+				}
+			}
+			if id != prevId {
+				if youngestPong > 0 && youngestPong < threshold {
+					toDelete = append(toDelete, nodeKey(prevId))
+				}
+				youngestPong = 0
+			}
+			prevId = id
+			empty = false
+		}
+		if !empty {
 			if youngestPong > 0 && youngestPong < threshold {
-				deleteRange(db.lvl, nodeKey(id))
+				toDelete = append(toDelete, nodeKey(prevId))
 			}
 			youngestPong = 0
 		}
+		return nil
+	}); err != nil {
+		log.Warn("nodeDB.expireNodes failed", "err", err)
+	}
+	for _, td := range toDelete {
+		deleteRange(db.kv, td)
 	}
 }
 
@@ -427,14 +541,9 @@ func (db *DB) UpdateFindFailsV5(id ID, ip net.IP, fails int) error {
 	return db.storeInt64(v5Key(id, ip, dbNodeFindFails), int64(fails))
 }
 
-// localSeq retrieves the local record sequence counter, defaulting to the current
-// timestamp if no previous exists. This ensures that wiping all data associated
-// with a node (apart from its key) will not generate already used sequence nums.
+// LocalSeq retrieves the local record sequence counter.
 func (db *DB) localSeq(id ID) uint64 {
-	if seq := db.fetchUint64(localItemKey(id, dbLocalSeq)); seq > 0 {
-		return seq
-	}
-	return nowMilliseconds()
+	return db.fetchUint64(localItemKey(id, dbLocalSeq))
 }
 
 // storeLocalSeq stores the local record sequence counter.
@@ -448,54 +557,75 @@ func (db *DB) QuerySeeds(n int, maxAge time.Duration) []*Node {
 	var (
 		now   = time.Now()
 		nodes = make([]*Node, 0, n)
-		it    = db.lvl.NewIterator(nil, nil)
 		id    ID
 	)
-	defer it.Release()
 
-seek:
-	for seeks := 0; len(nodes) < n && seeks < n*5; seeks++ {
-		// Seek to a random entry. The first byte is incremented by a
-		// random amount each time in order to increase the likelihood
-		// of hitting all existing nodes in very small databases.
-		ctr := id[0]
-		rand.Read(id[:])
-		id[0] = ctr + id[0]%16
-		it.Seek(nodeKey(id))
-
-		n := nextNode(it)
-		if n == nil {
-			id[0] = 0
-			continue seek // iterator exhausted
+	if err := db.kv.View(context.Background(), func(tx kv.Tx) error {
+		c, err := tx.Cursor(kv.NodeRecords)
+		if err != nil {
+			return err
 		}
-		if now.Sub(db.LastPongReceived(n.ID(), n.IP())) > maxAge {
-			continue seek
-		}
-		for i := range nodes {
-			if nodes[i].ID() == n.ID() {
-				continue seek // duplicate
+	seek:
+		for seeks := 0; len(nodes) < n && seeks < n*5; seeks++ {
+			// Seek to a random entry. The first byte is incremented by a
+			// random amount each time in order to increase the likelihood
+			// of hitting all existing nodes in very small databases.
+			ctr := id[0]
+			rand.Read(id[:])
+			id[0] = ctr + id[0]%16
+			var n *Node
+			for k, v, err := c.Seek(nodeKey(id)); k != nil && n == nil; k, v, err = c.Next() {
+				if err != nil {
+					return err
+				}
+				id, rest := splitNodeKey(k)
+				if string(rest) == dbDiscoverRoot {
+					n = mustDecodeNode(id[:], v)
+				}
 			}
+			if n == nil {
+				id[0] = 0
+				continue // iterator exhausted
+			}
+			db.ensureExpirer()
+			pongKey := nodeItemKey(n.ID(), n.IP(), dbNodePong)
+			var lastPongReceived int64
+			blob, errGet := tx.GetOne(kv.Inodes, pongKey)
+			if errGet != nil {
+				return errGet
+			}
+			if blob != nil {
+				if v, read := binary.Varint(blob); read > 0 {
+					lastPongReceived = v
+				}
+			}
+			if now.Sub(time.Unix(lastPongReceived, 0)) > maxAge {
+				continue
+			}
+			for i := range nodes {
+				if nodes[i].ID() == n.ID() {
+					continue seek // duplicate
+				}
+			}
+			nodes = append(nodes, n)
 		}
-		nodes = append(nodes, n)
+		return nil
+	}); err != nil {
+		log.Warn("nodeDB.QuerySeeds failed", "err", err)
 	}
 	return nodes
 }
 
-// reads the next node record from the iterator, skipping over other
-// database entries.
-func nextNode(it iterator.Iterator) *Node {
-	for end := false; !end; end = !it.Next() {
-		id, rest := splitNodeKey(it.Key())
-		if string(rest) != dbDiscoverRoot {
-			continue
-		}
-		return mustDecodeNode(id[:], it.Value())
-	}
-	return nil
-}
-
-// Close flushes and closes the database files.
+// close flushes and closes the database files.
 func (db *DB) Close() {
-	close(db.quit)
-	db.lvl.Close()
+	select {
+	case <-db.quit:
+		return // means closed already
+	default:
+	}
+	if db.quit == nil {
+		return
+	}
+	libcommon.SafeClose(db.quit)
+	db.kv.Close()
 }

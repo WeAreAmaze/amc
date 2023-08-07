@@ -75,6 +75,7 @@ func NewForkChoice(chainReader ChainReader, preserve func(header block2.IHeader)
 // total difficulty is higher. In the extern mode, the trusted
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current block2.IHeader, header block2.IHeader) (bool, error) {
+	//fmt.Printf("local %#v \nextend %#v \n", current, header)
 	var (
 		localTD  = f.chain.GetTd(current.Hash(), current.Number64())
 		externTd = f.chain.GetTd(header.Hash(), header.Number64())

@@ -86,8 +86,8 @@ type BlockChain struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	genesisBlock block2.IBlock
-	blocks       []block2.IBlock
-	headers      []block2.IHeader
+	//blocks       []block2.IBlock
+	//headers      []block2.IHeader
 	currentBlock atomic.Pointer[block2.Block]
 	//state        *statedb.StateDB
 	ChainDB kv.RwDB
@@ -112,7 +112,7 @@ type BlockChain struct {
 
 	wg sync.WaitGroup //
 
-	procInterrupt int32 // insert chain
+	procInterrupt atomic.Bool // insert chain
 	futureBlocks  *lru.Cache[types.Hash, *block2.Block]
 	receiptCache  *lru.Cache[types.Hash, []*block2.Receipt]
 	blockCache    *lru.Cache[types.Hash, *block2.Block]
@@ -142,15 +142,6 @@ func (bc *BlockChain) Engine() consensus.Engine {
 
 func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, p2p p2p.P2P, pConf *params.ChainConfig, eConf *params.ConsensusConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
-	var current *block2.Block
-	_ = db.View(c, func(tx kv.Tx) error {
-		current = rawdb.ReadCurrentBlock(tx)
-		if current == nil {
-			current = genesisBlock.(*block2.Block)
-		}
-		return nil
-	})
-
 	blockCache, _ := lru.New[types.Hash, *block2.Block](blockCacheLimit)
 	futureBlocks, _ := lru.New[types.Hash, *block2.Block](maxFutureBlocks)
 	receiptsCache, _ := lru.New[types.Hash, []*block2.Receipt](receiptsCacheLimit)
@@ -161,7 +152,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		chainConfig:  pConf, // Chain & network configuration
 		engineConf:   eConf,
 		genesisBlock: genesisBlock,
-		blocks:       []block2.IBlock{},
+		//blocks:       []block2.IBlock{},
 		//currentBlock:  current,
 		ChainDB:       db,
 		ctx:           c,
@@ -182,14 +173,41 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		numberCache: numberCache,
 		headerCache: headerCache,
 	}
+	if err := bc.loadLastState(); nil != err {
+		return nil, err
+	}
 
-	bc.currentBlock.Store(current)
+	bc.engine.VerifyHeader(bc, bc.CurrentBlock().Header(), false)
 	bc.forker = NewForkChoice(bc, nil)
 	//bc.process = avm.NewVMProcessor(ctx, bc, engine)
 	bc.process = NewStateProcessor(pConf, bc, engine)
 	bc.validator = NewBlockValidator(pConf, bc, engine)
 
 	return bc, nil
+}
+
+func (bc *BlockChain) loadLastState() error {
+	// Restore the last known head block
+	var head types.Hash
+	bc.ChainDB.View(bc.ctx, func(tx kv.Tx) error {
+		head = rawdb.ReadHeadBlockHash(tx)
+		return nil
+	})
+	if head == (types.Hash{}) {
+		// Corrupt or empty database, init from scratch
+		log.Warn("Empty database, resetting chain")
+		return bc.Reset()
+	}
+	// Make sure the entire head block is available
+	headBlock, _ := bc.GetBlockByHash(head)
+	if headBlock == nil {
+		// Corrupt or empty database, init from scratch
+		log.Warn("Head block missing, resetting chain", "hash", head)
+		return bc.Reset()
+	}
+	// Everything seems to be fine, set as the head block
+	bc.currentBlock.Store(headBlock.(*block2.Block))
+	return nil
 }
 
 func (bc *BlockChain) Config() *params.ChainConfig {
@@ -217,7 +235,7 @@ func (bc *BlockChain) CurrentBlock() block2.IBlock {
 }
 
 func (bc *BlockChain) Blocks() []block2.IBlock {
-	return bc.blocks
+	return block2.Blocks{}
 }
 
 func (bc *BlockChain) InsertHeader(headers []block2.IHeader) (int, error) {
@@ -797,12 +815,12 @@ func (bc *BlockChain) SealedBlock(b block2.IBlock) error {
 
 // StopInsert stop insert
 func (bc *BlockChain) StopInsert() {
-	atomic.StoreInt32(&bc.procInterrupt, 1)
+	bc.procInterrupt.Store(true)
 }
 
 // insertStopped returns true after StopInsert has been called.
 func (bc *BlockChain) insertStopped() bool {
-	return atomic.LoadInt32(&bc.procInterrupt) == 1
+	return bc.procInterrupt.Load()
 }
 
 // HasBlockAndState
@@ -1206,8 +1224,7 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 				// Collect the TD of the block. Since we know it's a canon one,
 				// we can get it directly, and not (like further below) use
 				// the parent and then add the block on top
-				pt := bc.GetTd(block.Hash(), block.Number64())
-				externTd = pt
+				externTd = bc.GetTd(block.Hash(), block.Number64())
 				continue
 			}
 			if canonical != nil && canonical.StateRoot() == block.StateRoot() {
@@ -1360,9 +1377,6 @@ func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block
 
 // writeBlockWithState
 func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) (status WriteStatus, err error) {
-	if block.Number64().Uint64() == 20775 {
-		fmt.Println("start")
-	}
 	if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
 		//ptd := bc.GetTd(block.ParentHash(), block.Number64().Sub(uint256.NewInt(1)))
 		ptd, err := rawdb.ReadTd(tx, block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)).Uint64())
@@ -1799,10 +1813,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 
 		for i := len(newChain) - 1; i >= 0; i-- {
 			// Collect the new added transactions.
-			for _, t := range newChain[i].Transactions() {
-				h := t.Hash()
-				addedTxs = append(addedTxs, h)
-			}
+			//for _, t := range newChain[i].Transactions() {
+			//	h := t.Hash()
+			//	addedTxs = append(addedTxs, h)
+			//}
 			reInsert = append(reInsert, newChain[i])
 		}
 
@@ -1826,7 +1840,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 				break
 			}
 			rawdb.TruncateCanonicalHash(tx, i, false)
-			rawdb.TruncateTd(tx, i)
+			// rawdb.TruncateTd(tx, i)
 		}
 
 		// unwind reward
@@ -1958,4 +1972,42 @@ func (bc *BlockChain) collectLogs(b *block2.Block, removed bool) []*block2.Log {
 		}
 	}
 	return logs
+}
+
+func (bc *BlockChain) Reset() error {
+	return bc.ResetWithGenesisBlock(bc.genesisBlock.(*block2.Block))
+}
+
+func (bc *BlockChain) ResetWithGenesisBlock(genesis *block2.Block) error {
+	// Dump the entire block chain and purge the caches
+	if err := bc.SetHead(0); err != nil {
+		return err
+	}
+	if !bc.lock.TryLock() {
+		return errChainStopped
+	}
+	defer bc.lock.Unlock()
+
+	// Prepare the genesis block and reinitialise the chain
+	err := bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+		err := rawdb.WriteTd(tx, genesis.Hash(), genesis.Number64().Uint64(), genesis.Difficulty())
+		if nil != err {
+			return err
+		}
+		err = rawdb.WriteBlock(tx, genesis)
+		if nil != err {
+			return err
+		}
+		return nil
+	})
+	if nil != err {
+		log.Crit("Failed to write genesis block", "err", err)
+	}
+
+	bc.writeHeadBlock(nil, genesis)
+
+	// Last update all in-memory chain markers
+	bc.genesisBlock = genesis
+	bc.currentBlock.Store(genesis)
+	return nil
 }

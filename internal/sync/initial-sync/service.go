@@ -55,8 +55,10 @@ func (s *Service) Start() {
 	event.GlobalEvent.Send(&common.DownloaderStartEvent{})
 	defer event.GlobalEvent.Send(&common.DownloaderFinishEvent{})
 
-	log.Info("Starting initial chain sync...", "currentNr", s.cfg.Chain.CurrentBlock().Number64(), "hash", s.cfg.Chain.CurrentBlock().Hash())
+	log.Info("Waiting Minimum peers...")
 	highestExpectedBlockNr := s.waitForMinimumPeers()
+	log.Info("Starting initial chain sync...", "currentNr", s.cfg.Chain.CurrentBlock().Number64(), "hash", s.cfg.Chain.CurrentBlock().Hash(), "highestExceptBlock", highestExpectedBlockNr)
+
 	if err := s.roundRobinSync(highestExpectedBlockNr); err != nil {
 		if errors.Is(s.ctx.Err(), context.Canceled) {
 			return

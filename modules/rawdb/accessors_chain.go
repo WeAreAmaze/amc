@@ -87,14 +87,13 @@ func IsCanonicalHash(db kv.Getter, hash types.Hash) (bool, error) {
 func ReadHeaderNumber(db kv.Getter, hash types.Hash) *uint64 {
 	data, err := db.GetOne(modules.HeaderNumber, hash.Bytes())
 	if err != nil {
-		log.Error("ReadHeaderNumber failed", "err", err)
+		log.Crit("ReadHeaderNumber failed", "err", err)
 	}
 	if len(data) == 0 {
 		return nil
 	}
 	if len(data) != 8 {
-		log.Error("ReadHeaderNumber got wrong data len", "len", len(data))
-		return nil
+		log.Crit("ReadHeaderNumber got wrong data len", "len", len(data))
 	}
 	number := binary.BigEndian.Uint64(data)
 	return &number

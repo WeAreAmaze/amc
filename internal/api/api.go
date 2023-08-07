@@ -542,7 +542,6 @@ func (diff *BlockOverrides) Apply(blockCtx *evmtypes.BlockContext) {
 }
 
 func DoCall(ctx context.Context, api *API, args TransactionArgs, blockNrOrHash jsonrpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*internal.ExecutionResult, error) {
-	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	// header := api.BlockChain().CurrentBlock().Header()
 	//state := api.BlockChain().StateAt(header.Hash()).(*statedb.StateDB)

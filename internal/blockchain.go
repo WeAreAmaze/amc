@@ -829,7 +829,8 @@ func (bc *BlockChain) HasBlockAndState(hash types.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	return bc.HasState(block.Hash())
+	//return bc.HasState(block.Hash())
+	return nil != bc.GetTd(hash, uint256.NewInt(number))
 }
 
 // HasState
@@ -1025,21 +1026,6 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		return it.index, err
 	}
 
-	//wtx, err := bc.ChainDB.BeginRw(bc.ctx)
-	//if nil != err {
-	//	return it.index, err
-	//}
-	//defer wtx.Rollback()
-
-	//var batch ethdb.DbWithPendingMutations
-
-	// state is stored through ethdb batches
-	//batch = olddb.NewHashBatch(wtx, bc.Quit(), paths.DefaultDataDir())
-	//// avoids stacking defers within the loop
-	//defer func() {
-	//	batch.Rollback()
-	//}()
-
 	evmRecord := func(ctx context.Context, db kv.RwDB, blockNr uint64, f func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error)) (*state.IntraBlockState, map[types.Address]*uint256.Int, error) {
 		tx, err := db.BeginRo(ctx)
 		if nil != err {
@@ -1078,17 +1064,41 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 			break
 		}
 
+		if bc.skipBlock(err) {
+
+			log.Debug("Inserted known block", "number", block.Number64(), "hash", block.Hash(),
+				"txs", len(block.Transactions()), "gas", block.GasUsed(),
+				"root", block.StateRoot())
+
+			// Special case. Commit the empty receipt slice if we meet the known
+			// block in the middle. It can only happen in the clique chain. Whenever
+			// we insert blocks via `insertSideChain`, we only commit `td`, `header`
+			// and `body` if it's non-existent. Since we don't have receipts without
+			// reexecution, so nothing to commit. But if the sidechain will be adopted
+			// as the canonical chain eventually, it needs to be reexecuted for missing
+			// state, but if it's this special case here(skip reexecution) we will lose
+			// the empty receipt entry.
+			//if len(block.Transactions()) == 0 {
+			//	rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
+			//} else {
+			//	log.Error("Please file an issue, skip known block execution without receipt",
+			//		"hash", block.Hash(), "number", block.NumberU64())
+			//}
+			if err := bc.writeKnownBlock(block); err != nil {
+				return it.index, err
+			}
+			stats.processed++
+
+			// We can assume that logs are empty here, since the only way for consecutive
+			// Clique blocks to have the same state is if there are no transactions.
+			lastCanon = block
+			continue
+		}
+
 		log.Tracef("Current block: number=%v, hash=%v, difficult=%v | Insert block block: number=%v, hash=%v, difficult= %v",
 			bc.CurrentBlock().Number64(), bc.CurrentBlock().Hash(), bc.CurrentBlock().Difficulty(), block.Number64(), block.Hash(), block.Difficulty())
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
-		// TODO
-		//stateDB := statedb.NewStateDB(block.ParentHash(), bc.chainDB, bc.changeDB)
-		//stateReader, stateWriter, err := NewStateReaderWriter(batch, wtx, block.Number64().Uint64(), true)
-		//if nil != err {
-		//	return it.index, err
-		//}
-		//ibs := state.New(stateReader)
 
 		var receipts block2.Receipts
 		var logs []*block2.Log
@@ -1118,30 +1128,6 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		if nil != err {
 			return it.index, err
 		}
-		//var followupInterrupt uint32
-		//receipts, logs, usedGas, err := bc.process.Process(block.(*block2.Block), ibs, stateReader, stateWriter, blockHashFunc)
-		//if err != nil {
-		//	bc.reportBlock(block, receipts, err)
-		//	//atomic.StoreUint32(&followupInterrupt, 1)
-		//	return it.index, err
-		//}
-
-		//if err := bc.validator.ValidateState(block, ibs, receipts, usedGas); err != nil {
-		//	bc.reportBlock(block, receipts, err)
-		//	//atomic.StoreUint32(&followupInterrupt, 1)
-		//	return it.index, err
-		//}
-
-		// write state
-		//if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-		//	stateWrite := state.NewPlainStateWriter(batch, tx, block.Number64().Uint64())
-		//	if err := ibs.CommitBlock(params.AmazeChainConfig.Rules(block.Number64().Uint64()), stateWrite); nil != err {
-		//		return err
-		//	}
-		//	return nil
-		//}); nil != err {
-		//	return it.index, err
-		//}
 
 		var status WriteStatus
 		status, err = bc.writeBlockWithState(block, receipts, ibs, nopay)
@@ -1227,21 +1213,21 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 				externTd = bc.GetTd(block.Hash(), block.Number64())
 				continue
 			}
-			if canonical != nil && canonical.StateRoot() == block.StateRoot() {
-				// This is most likely a shadow-state attack. When a fork is imported into the
-				// database, and it eventually reaches a block height which is not pruned, we
-				// just found that the state already exist! This means that the sidechain block
-				// refers to a state which already exists in our canon chain.
-				//
-				// If left unchecked, we would now proceed importing the blocks, without actually
-				// having verified the state of the previous blocks.
-				log.Warn("Sidechain ghost-state attack detected", "number", block.Number64(), "sideroot", block.StateRoot(), "canonroot", canonical.StateRoot())
-
-				// If someone legitimately side-mines blocks, they would still be imported as usual. However,
-				// we cannot risk writing unverified blocks to disk when they obviously target the pruning
-				// mechanism.
-				return it.index, errors.New("sidechain ghost-state attack")
-			}
+			//if canonical != nil && canonical.StateRoot() == block.StateRoot() {
+			//	// This is most likely a shadow-state attack. When a fork is imported into the
+			//	// database, and it eventually reaches a block height which is not pruned, we
+			//	// just found that the state already exist! This means that the sidechain block
+			//	// refers to a state which already exists in our canon chain.
+			//	//
+			//	// If left unchecked, we would now proceed importing the blocks, without actually
+			//	// having verified the state of the previous blocks.
+			//	log.Warn("Sidechain ghost-state attack detected", "number", block.Number64(), "sideroot", block.StateRoot(), "canonroot", canonical.StateRoot())
+			//
+			//	// If someone legitimately side-mines blocks, they would still be imported as usual. However,
+			//	// we cannot risk writing unverified blocks to disk when they obviously target the pruning
+			//	// mechanism.
+			//	return it.index, errors.New("sidechain ghost-state attack")
+			//}
 		}
 		if externTd == nil {
 			externTd = bc.GetTd(block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)))
@@ -1276,7 +1262,8 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 		numbers []uint64
 	)
 	parent := it.previous()
-	for parent != nil && !bc.HasState(parent.Hash()) {
+	//for parent != nil && !bc.HasState(parent.Hash()) {
+	for parent != nil && nil == bc.GetTd(parent.Hash(), parent.Number64()) {
 		hashes = append(hashes, parent.Hash())
 		numbers = append(numbers, parent.Number64().Uint64())
 

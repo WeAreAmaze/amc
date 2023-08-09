@@ -5,6 +5,7 @@ import (
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/log"
 	"google.golang.org/protobuf/proto"
+	"strings"
 )
 
 func (s *Service) blockSubscriber(ctx context.Context, msg proto.Message) error {
@@ -25,8 +26,9 @@ func (s *Service) blockSubscriber(ctx context.Context, msg proto.Message) error 
 		}
 	} else if _, err := s.cfg.chain.InsertChain(blocks); err != nil {
 		// todo bad block
-		//if errors.Is(err, Badblock) {
-		s.setBadBlock(ctx, iBlock.Hash())
+		if !strings.Contains(err.Error(), "blockchain is stopped") {
+			s.setBadBlock(ctx, iBlock.Hash())
+		}
 		return err
 	}
 	return nil

@@ -1142,7 +1142,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 		switch status {
 		case CanonStatTy:
-			log.Trace("Inserted new block ", "number ", block.Number64(), "hash", block.Hash(),
+			log.Info("Inserted new block ", "number ", block.Number64(), "hash", block.Hash(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", time.Since(start).Seconds(),
 				"root", block.StateRoot())

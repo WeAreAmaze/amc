@@ -98,4 +98,7 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrAlreadyDeposited already deposited
+	ErrAlreadyDeposited = errors.New("already deposited")
 )

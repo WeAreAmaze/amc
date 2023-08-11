@@ -24,7 +24,9 @@ func (s *Service) blockSubscriber(ctx context.Context, msg proto.Message) error 
 		if err := s.cfg.chain.AddFutureBlock(iBlock); err != nil {
 			return err
 		}
-	} else if _, err := s.cfg.chain.InsertChain(blocks); err != nil {
+		return nil
+	}
+	if _, err := s.cfg.chain.InsertChain(blocks); err != nil {
 		// todo bad block
 		if !strings.Contains(err.Error(), "blockchain is stopped") {
 			s.setBadBlock(ctx, iBlock.Hash())

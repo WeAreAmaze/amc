@@ -35,7 +35,8 @@
       "inMemory": false,
       "rewardEpoch": 10800,
       "rewardLimit": 500000000000000000,
-      "depositContract": "0xE78629fCEb0aB8Fb4901AE67d373C061fbd8AA14"
+      "depositContract": "AMCE78629fCEb0aB8Fb4901AE67d373C061fbd8AA14",
+      "depositNFTContract": "AMC0D06061B9C9F0ccd3dfCdeF943e0F9ae506a8398"
     }
   },
   "alloc": [

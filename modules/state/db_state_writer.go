@@ -57,7 +57,7 @@ func writeIndex(blocknum uint64, changes *changeset.ChangeSet, bucket string, ch
 	for _, change := range changes.Changes {
 		k := modules.CompositeKeyWithoutIncarnation(change.Key)
 
-		index, err := bitmapdb.Get64(changeDb, bucket, k, 0, math.MaxUint32)
+		index, err := bitmapdb.Get64(changeDb, bucket, k, math.MaxUint32, math.MaxUint32)
 		if err != nil {
 			return fmt.Errorf("find chunk failed: %w", err)
 		}

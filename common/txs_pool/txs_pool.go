@@ -19,6 +19,7 @@ package txs_pool
 import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/contracts/deposit"
 )
 
 type ITxsPool interface {
@@ -31,4 +32,5 @@ type ITxsPool interface {
 	Stats() (int, int, int, int)
 	Nonce(addr types.Address) uint64
 	Content() (map[types.Address][]*transaction.Transaction, map[types.Address][]*transaction.Transaction)
+	SetDeposit(deposit *deposit.Deposit)
 }

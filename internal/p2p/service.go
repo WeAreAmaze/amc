@@ -55,8 +55,7 @@ const pubsubQueueSize = 600
 const maxDialTimeout = 10 * time.Second
 
 // todo
-const ttfbTimeout = 5 * time.Second  // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
-const respTimeout = 10 * time.Second // RespTimeout is the maximum time for complete response transfer.
+const ttfbTimeout = 10 * time.Second // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
 
 // Service for managing peer to peer (p2p) networking.
 type Service struct {

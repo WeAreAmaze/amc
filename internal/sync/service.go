@@ -27,8 +27,8 @@ const badBlockSize = 1000
 const syncMetricsInterval = 10 * time.Second
 
 // todo
-const ttfbTimeout = 5 * time.Second  // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
-const respTimeout = 10 * time.Second // RespTimeout is the maximum time for complete response transfer.
+const ttfbTimeout = 10 * time.Second // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
+const respTimeout = 20 * time.Second // RespTimeout is the maximum time for complete response transfer.
 
 // todo
 const maxRequestBlocks = 1024

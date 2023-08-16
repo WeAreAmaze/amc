@@ -256,7 +256,7 @@ func (s *Service) Start() {
 				params = append(params, "nextValidTime", common.PrettyDuration(time.Until(nextValidTime)))
 			}
 			// hexutil.Encode([]byte(p))
-			log.Info("Peer details", params)
+			log.Info("Peer details", params...)
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
 				log.Trace("Protocol details:", "ProtocolID", id)

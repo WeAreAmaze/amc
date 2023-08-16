@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
+	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
@@ -144,7 +145,7 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 		ScorerParams: &scorers.Config{
 			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
 				Threshold:     maxBadResponses,
-				DecayInterval: time.Hour,
+				DecayInterval: 10 * time.Minute,
 			},
 		},
 	})
@@ -235,12 +236,27 @@ func (s *Service) Start() {
 			//addr, _ := s.peers.Address(p)
 			//IP, _ := s.peers.IP(p)
 			//ENR, _ := s.peers.ENR(p)
-			dialArgs, _ := s.peers.DialArgs(p)
-			direction, _ := s.peers.Direction(p)
-			connState, _ := s.peers.ConnState(p)
-			chainState, _ := s.peers.ChainState(p)
+
+			params := make([]interface{}, 0)
+			params = append(params, "perrId", p)
+
+			if dialArgs, err := s.peers.DialArgs(p); err == nil {
+				params = append(params, "dialArgs", dialArgs)
+			}
+			if direction, err := s.peers.Direction(p); err == nil {
+				params = append(params, "Direction", direction)
+			}
+			if connState, err := s.peers.ConnState(p); err == nil {
+				params = append(params, "connState", connState)
+			}
+			if chainState, err := s.peers.ChainState(p); err == nil {
+				params = append(params, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
+			}
+			if nextValidTime, err := s.peers.NextValidTime(p); err == nil {
+				params = append(params, "nextValidTime", common.PrettyDuration(time.Until(nextValidTime)))
+			}
 			// hexutil.Encode([]byte(p))
-			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
+			log.Info("Peer details", params)
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
 				log.Trace("Protocol details:", "ProtocolID", id)

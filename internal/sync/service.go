@@ -116,8 +116,12 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 // Start the regular sync service.
 func (s *Service) Start() {
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
-	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
+	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, p peer.ID) error {
 		// no-op
+		//for no reason disconnect
+		if nextValidTime, err := s.cfg.p2p.Peers().NextValidTime(p); err == nil && time.Now().After(nextValidTime) {
+			s.cfg.p2p.Peers().SetNextValidTime(p, time.Now().Add(1*time.Minute))
+		}
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)

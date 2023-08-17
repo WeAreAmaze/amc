@@ -255,15 +255,24 @@ func (s *Service) Start() {
 			if nextValidTime, err := s.peers.NextValidTime(p); err == nil && time.Now().After(nextValidTime) == false {
 				params = append(params, "nextValidTime", common.PrettyDuration(time.Until(nextValidTime)))
 			}
-			if badResponses, err := s.peers.BadResponses(p); err == nil {
+			if badResponses, err := s.peers.Scorers().BadResponsesScorer().Count(p); err == nil {
 				params = append(params, "badResponses", badResponses)
 			}
-			if processedBlocks, err := s.peers.ProcessedBlocks(p); err == nil {
-				params = append(params, "processedBlocks", processedBlocks)
+			if validationError := s.peers.Scorers().ValidationError(p); validationError != nil {
+				params = append(params, "validationError", validationError)
 			}
+			params = append(params, "processedBlocks", s.peers.Scorers().BlockProviderScorer().ProcessedBlocks(p))
 
 			// hexutil.Encode([]byte(p))
 			log.Info("Peer details", params...)
+
+			log.Info("Peer Score:",
+				"badResponsesScore", s.peers.Scorers().BadResponsesScorer().Score(p),
+				"blockProviderScore", s.peers.Scorers().BlockProviderScorer().Score(p),
+				"peerStatusScore", s.peers.Scorers().PeerStatusScorer().Score(p),
+				"gossipScore", s.peers.Scorers().GossipScorer().Score(p),
+				"Score", s.peers.Scorers().Score(p),
+			)
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
 				log.Trace("Protocol details:", "ProtocolID", id)

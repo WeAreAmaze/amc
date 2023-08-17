@@ -394,28 +394,6 @@ func (p *Status) IsReadyToDial(pid peer.ID) bool {
 	return true
 }
 
-// BadResponses
-func (p *Status) BadResponses(pid peer.ID) (int, error) {
-	p.store.RLock()
-	defer p.store.RUnlock()
-
-	if peerData, ok := p.store.PeerData(pid); ok {
-		return peerData.BadResponses, nil
-	}
-	return 0, peerdata.ErrPeerUnknown
-}
-
-// ProcessedBlocks
-func (p *Status) ProcessedBlocks(pid peer.ID) (uint64, error) {
-	p.store.RLock()
-	defer p.store.RUnlock()
-
-	if peerData, ok := p.store.PeerData(pid); ok {
-		return peerData.ProcessedBlocks, nil
-	}
-	return 0, peerdata.ErrPeerUnknown
-}
-
 // Connecting returns the peers that are connecting.
 func (p *Status) Connecting() []peer.ID {
 	p.store.RLock()

@@ -60,7 +60,7 @@ const (
 	ColocationLimit = 5
 
 	// Additional buffer beyond current peer limit, from which we can store the relevant peer statuses.
-	maxLimitBuffer = 150
+	maxLimitBuffer = 0
 
 	// InboundRatio is the proportion of our connected peer limit at which we will allow inbound peers.
 	InboundRatio = float64(0.8)
@@ -392,6 +392,28 @@ func (p *Status) IsReadyToDial(pid peer.ID) bool {
 	// If no record exists, we don't restrict dials to the
 	// peer.
 	return true
+}
+
+// BadResponses
+func (p *Status) BadResponses(pid peer.ID) (int, error) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	if peerData, ok := p.store.PeerData(pid); ok {
+		return peerData.BadResponses, nil
+	}
+	return 0, peerdata.ErrPeerUnknown
+}
+
+// ProcessedBlocks
+func (p *Status) ProcessedBlocks(pid peer.ID) (uint64, error) {
+	p.store.RLock()
+	defer p.store.RUnlock()
+
+	if peerData, ok := p.store.PeerData(pid); ok {
+		return peerData.ProcessedBlocks, nil
+	}
+	return 0, peerdata.ErrPeerUnknown
 }
 
 // Connecting returns the peers that are connecting.

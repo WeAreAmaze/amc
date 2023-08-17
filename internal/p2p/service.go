@@ -141,7 +141,7 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 	s.pubsub = gs
 
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
-		PeerLimit: int(s.cfg.MaxPeers),
+		PeerLimit: s.cfg.MaxPeers,
 		ScorerParams: &scorers.Config{
 			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
 				Threshold:     maxBadResponses,
@@ -252,9 +252,16 @@ func (s *Service) Start() {
 			if chainState, err := s.peers.ChainState(p); err == nil {
 				params = append(params, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
 			}
-			if nextValidTime, err := s.peers.NextValidTime(p); err == nil {
+			if nextValidTime, err := s.peers.NextValidTime(p); err == nil && time.Now().After(nextValidTime) == false {
 				params = append(params, "nextValidTime", common.PrettyDuration(time.Until(nextValidTime)))
 			}
+			if badResponses, err := s.peers.BadResponses(p); err == nil {
+				params = append(params, "badResponses", badResponses)
+			}
+			if processedBlocks, err := s.peers.ProcessedBlocks(p); err == nil {
+				params = append(params, "processedBlocks", processedBlocks)
+			}
+
 			// hexutil.Encode([]byte(p))
 			log.Info("Peer details", params...)
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)

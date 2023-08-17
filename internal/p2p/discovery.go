@@ -76,7 +76,7 @@ func (s *Service) listenForNewNodes() {
 		s.Peers().RandomizeBackOff(peerInfo.ID)
 		go func(info *peer.AddrInfo) {
 			if err := s.connectWithPeer(s.ctx, *info); err != nil {
-				log.Trace(fmt.Sprintf("Could not connect with peer %s", info.String()))
+				log.Warn(fmt.Sprintf("Could not connect with peer %s err: %s", info.String(), err))
 			}
 		}(peerInfo)
 	}

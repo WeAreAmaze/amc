@@ -749,7 +749,7 @@ func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs
 			}
 			sort.Sort(hs)
 
-			event.GlobalFeed.Send(common.MinedEntireEvent{Entire: state.EntireCode{Codes: hs, Headers: needHeaders, Entire: entri, Rewards: rewards, CoinBase: env.coinbase}})
+			event.GlobalEvent.Send(&common.MinedEntireEvent{Entire: state.EntireCode{Codes: hs, Headers: needHeaders, Entire: entri, Rewards: rewards, CoinBase: env.coinbase}})
 		}
 
 		//

@@ -119,8 +119,9 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, p peer.ID) error {
 		// no-op
 		//for no reason disconnect
+		//todo
 		if nextValidTime, err := s.cfg.p2p.Peers().NextValidTime(p); err == nil && time.Now().After(nextValidTime) {
-			s.cfg.p2p.Peers().SetNextValidTime(p, time.Now().Add(1*time.Minute))
+			s.cfg.p2p.Peers().SetNextValidTime(p, time.Now().Add(10*time.Minute))
 		}
 		return nil
 	})

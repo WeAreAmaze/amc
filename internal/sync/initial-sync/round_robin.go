@@ -16,7 +16,7 @@ import (
 
 const (
 	// counterSeconds is an interval over which an average rate will be calculated.
-	counterSeconds = 60
+	counterSeconds = 20
 )
 
 // batchBlockReceiverFn defines batch receiving function.

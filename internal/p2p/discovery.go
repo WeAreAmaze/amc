@@ -8,6 +8,7 @@ import (
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/utils"
 	"net"
+	"path/filepath"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -174,7 +175,7 @@ func (s *Service) createLocalNode(
 	ipAddr net.IP,
 	udpPort, tcpPort int,
 ) (*enode.LocalNode, error) {
-	db, err := enode.OpenDB("")
+	db, err := enode.OpenDB(filepath.Join(s.cfg.DataDir, "nodedata"), "")
 	if err != nil {
 		return nil, errors.Wrap(err, "could not open node's peer database")
 	}

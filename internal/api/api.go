@@ -966,7 +966,7 @@ func (s *BlockChainAPI) MinedBlock(ctx context.Context, address types.Address) (
 	rpcSub := notifier.CreateSubscription()
 	go func() {
 		entire := make(chan common.MinedEntireEvent, 20)
-		blocksSub := event.GlobalFeed.Subscribe(entire)
+		blocksSub := event.GlobalEvent.Subscribe(entire)
 		for {
 			select {
 			case b := <-entire:

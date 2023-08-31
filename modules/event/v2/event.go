@@ -24,10 +24,7 @@ import (
 
 var errBadChannel = errors.New("event: Subscribe argument does not have sendable channel type")
 
-var (
-	GlobalEvent Event
-	GlobalFeed  Feed
-)
+var GlobalEvent Event
 
 type Subscription interface {
 	Err() <-chan error // returns the error channel
@@ -35,18 +32,13 @@ type Subscription interface {
 }
 
 type Event struct {
-	once      sync.Once
-	sendLock  chan struct{}
-	removeSub chan interface{}
+	once sync.Once
 
 	mu     sync.Mutex
 	inbox2 map[string]caseList
 }
 
 func (e *Event) init() {
-	e.removeSub = make(chan interface{})
-	e.sendLock = make(chan struct{}, 1)
-	e.sendLock <- struct{}{}
 	e.inbox2 = make(map[string]caseList)
 }
 
@@ -65,6 +57,10 @@ func (e *Event) Subscribe(channel interface{}) Subscription {
 	cas := reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}
 	key := reflect.TypeOf(channel).Elem().String()
 
+	//e.inbox2[key][0] is a channel used to interrupts Send
+	if len(e.inbox2[key]) < 1 {
+		e.inbox2[key] = append(e.inbox2[key], reflect.SelectCase{Chan: reflect.ValueOf(make(chan interface{})), Dir: reflect.SelectRecv})
+	}
 	e.inbox2[key] = append(e.inbox2[key], cas)
 
 	return sub
@@ -83,20 +79,42 @@ func (e *Event) Send(value interface{}) int {
 	}
 
 	key := chantyp.Elem().String()
-
+	cases := e.inbox2[key]
 	nsent := 0
-	if _, ok := e.inbox2[key]; ok {
-		cases := e.inbox2[key]
-		for _, c := range cases {
-			value := rvalue.Elem()
-			c.Send = value
-			if c.Chan.TrySend(value) {
+
+	// Set the sent value on all channels.
+	for i := 1; i < len(cases); i++ {
+		cases[i].Send = rvalue
+	}
+	for {
+		// Fast path: try sending without blocking before adding to the select set.
+		// This should usually succeed if subscribers are fast enough and have free
+		// buffer space.
+		for i := 1; i < len(cases); i++ {
+			if cases[i].Chan.TrySend(rvalue.Elem()) {
 				nsent++
+				cases = cases.deactivate(i)
+				i--
 			}
+		}
+		if len(cases) == 1 {
+			break
+		}
+		// Select on the blocked receivers, waiting for them to unblock.
+		chosen, recv, _ := reflect.Select(cases)
+		if chosen == 0 /* <-f.removeSub */ {
+			index := e.inbox2[key].find(recv.Interface())
+			e.inbox2[key] = e.inbox2[key].delete(index)
+			if index >= 0 && index < len(cases) {
+				// Shrink 'cases' too because the removed case was still active.
+				cases = e.inbox2[key][:len(cases)-1]
+			}
+		} else {
+			cases = cases.deactivate(chosen)
+			nsent++
 		}
 	}
 
-	//log.Debugf("inbox %v", e.inbox2)
 	return nsent
 }
 

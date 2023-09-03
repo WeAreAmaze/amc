@@ -1,7 +1,7 @@
 version: '3'
 services:
   bootnode:
-    image: amazechain/amc:latest
+    image: amazechain/amc:miner
     container_name: bootnode
     command:
       - AmazeChain-linux-amd64
@@ -25,37 +25,25 @@ services:
       - 172.18.0.2
       - --engine.miner
       - --engine.etherbase
-      - '0xa2142ab3f25eaa9985f22c3f5b1ff9fa378dac21'
+      - '0x6280240DF26Ccda30aFccB3ba7a1929Bf49e15C9'
       - --account.unlock
       - '0'
       - --account.allow.insecure.unlock
       - --account.password
       - './password'
-      - --metrics
-      - --metrics.influxdb
-      - --metrics.influxdb.endpoint
-      - "http://influxdb:8086"
-      - --metrics.influxdb.token
-      - "ksLlfJ0cRCNXRtrFVpKiZ2au3-pOWL-hgVhgsCqivAlq7Vf0VdyjjVMWA__IhjkcI_GbWccpwRDpQiIGdm2FpA=="
-      - --metrics.influxdb.bucket
-      - "amazechain"
-      - --metrics.influxdb.organization
-      - "amazechain"
-      - --metrics.influxdb.tags
-      - "server=bootnode"
     networks:
       network1:
         ipv4_address: 172.18.0.2
     user: 1000:1000
     volumes:
-      - db_bootnode_1:/home/amc/data
+      - ./deployments/bootnode:/home/amc/data
       - ./deployments/keystore:/home/amc/data/keystore:ro
       - ./deployments/keystore/password:/home/amc/password:ro
     ports:
       - "20012:20012"
       - "20013:20013"
   node:
-    image: amazechain/amc:latest
+    image: amazechain/amc:miner
     container_name: node1
     command:
       - AmazeChain-linux-amd64
@@ -74,24 +62,30 @@ services:
       - 172.18.0.3
       - --engine.miner
       - --engine.etherbase
-      - '0x3ca698823ae0474ee80d2f4bf29ec649474f4040'
+      - '0x6a0496E96fC3A1E9984C6b9b9e0d37b39DC8b09D'
       - --account.unlock
       - '1'
       - --account.allow.insecure.unlock
       - --account.password
       - './password'
+      - --p2p.tcp-port
+      - '61020'
+      - --p2p.udp-port
+      - '61021'
+      - --p2p.bootstrap-node
+      - 'enr:-Iu4QHJisJBXXAaZ8gkiqT8_qDRmsGjhbhazYcyMSuP4B3KmSGzqtiQEwD-RsptVG_oUXmSiMzRXNgunzikiz8-wjt4BgmlkgnY0gmlwhKwSAAKJc2VjcDI1NmsxoQPWCxC2Yx8ENgG-kHZ2b_N9eFlFMj6SlAiJzFMMchH6QoN0Y3CC7liDdWRwgu5X'
     depends_on:
       - bootnode
     networks:
       network1:
         ipv4_address: 172.18.0.3
     volumes:
-      - db_node_1:/home/amc/data
+      - ./deployments/node1:/home/amc/data
       - ./deployments/keystore:/home/amc/data/keystore:ro
       - ./deployments/keystore/password:/home/amc/password:ro
     ports: [ "20112:20112" ]
   node2:
-    image: amazechain/amc:latest
+    image: amazechain/amc:miner
     container_name: node2
     command:
       - AmazeChain-linux-amd64
@@ -110,24 +104,30 @@ services:
       - 172.18.0.4
       - --engine.miner
       - --engine.etherbase
-      - '0x781acbe8becb693098d36875d48e967c92db3a4e'
+      - '0x8Cb83482cDF222f261D0CB282658351C5cAd75B9'
       - --account.unlock
       - '2'
       - --account.allow.insecure.unlock
       - --account.password
       - './password'
+      - --p2p.tcp-port
+      - '61030'
+      - --p2p.udp-port
+      - '61031'
+      - --p2p.bootstrap-node
+      - 'enr:-Iu4QHJisJBXXAaZ8gkiqT8_qDRmsGjhbhazYcyMSuP4B3KmSGzqtiQEwD-RsptVG_oUXmSiMzRXNgunzikiz8-wjt4BgmlkgnY0gmlwhKwSAAKJc2VjcDI1NmsxoQPWCxC2Yx8ENgG-kHZ2b_N9eFlFMj6SlAiJzFMMchH6QoN0Y3CC7liDdWRwgu5X'
     depends_on:
       - bootnode
     networks:
       network1:
         ipv4_address: 172.18.0.4
     volumes:
-      - db_node_2:/home/amc/data
+      - ./deployments/node2:/home/amc/data
       - ./deployments/keystore:/home/amc/data/keystore:ro
       - ./deployments/keystore/password:/home/amc/password:ro
     ports: [ "20212:20212" ]
   downloader:
-    image: amazechain/amc:latest
+    image: amazechain/amc:miner
     container_name: downloader
     depends_on:
       - node2
@@ -146,6 +146,12 @@ services:
       - '20312'
       - --http.addr
       - 172.18.0.5
+      - --p2p.tcp-port
+      - '61040'
+      - --p2p.udp-port
+      - '61041'
+      - --p2p.bootstrap-node
+      - 'enr:-Iu4QHJisJBXXAaZ8gkiqT8_qDRmsGjhbhazYcyMSuP4B3KmSGzqtiQEwD-RsptVG_oUXmSiMzRXNgunzikiz8-wjt4BgmlkgnY0gmlwhKwSAAKJc2VjcDI1NmsxoQPWCxC2Yx8ENgG-kHZ2b_N9eFlFMj6SlAiJzFMMchH6QoN0Y3CC7liDdWRwgu5X'
     networks:
       network1:
         ipv4_address: 172.18.0.5
@@ -153,65 +159,6 @@ services:
       - db_downloader_1:/home/amc/data
       - ./deployments/keystore:/home/amc/data/keystore:ro
     ports: [ "20312:20312" ]
-  postgres:
-    image: postgres:12
-    restart: on-failure
-    container_name: postgres
-    depends_on:
-      - bootnode
-    volumes:
-      - postgres-data-volume:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_PASSWORD=postgres
-    networks:
-      network1:
-        ipv4_address: 172.18.0.6
-  explorer_migrate:
-    container_name: explorer_migrate
-    image: amazechain/amc-explorer:latest
-    depends_on:
-      - postgres
-    env_file:
-      - deployments/explorer/config.env
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blockscout?ssl=false
-    command: mix do ecto.create, ecto.migrate
-    networks:
-      network1:
-        ipv4_address: 172.18.0.7
-  explorer:
-    image: amazechain/amc-explorer:latest
-    container_name: explorer
-    restart: always
-    depends_on:
-      - postgres
-    ports: [ "4000:4000" ]
-    env_file:
-      - ./deployments/explorer/config.env
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blockscout?ssl=false
-    command: mix phx.server
-    networks:
-      network1:
-        ipv4_address: 172.18.0.8
-  influxdb:
-    image: influxdb:latest
-    container_name: influxdb
-    restart: always
-    depends_on:
-      - bootnode
-    ports: [ "8086:8086" ]
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=amazechain
-      - DOCKER_INFLUXDB_INIT_PASSWORD=amazechain
-      - DOCKER_INFLUXDB_INIT_ORG=amazechain
-      - DOCKER_INFLUXDB_INIT_BUCKET=amazechain
-      - INFLUX_HOST=influxdb
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=ksLlfJ0cRCNXRtrFVpKiZ2au3-pOWL-hgVhgsCqivAlq7Vf0VdyjjVMWA__IhjkcI_GbWccpwRDpQiIGdm2FpA==
-    networks:
-      network1:
-        ipv4_address: 172.18.0.9
 networks:
   network1:
     ipam:
@@ -219,13 +166,5 @@ networks:
       config:
         - subnet: 172.18.0.0/24
 volumes:
-  db_bootnode_1:
-    driver: local
-  db_node_1:
-    driver: local
-  db_node_2:
-    driver: local
   db_downloader_1:
-    driver: local
-  postgres-data-volume:
     driver: local

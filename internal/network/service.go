@@ -218,7 +218,7 @@ func (s *Service) nodeManager(peerCh chan peer.AddrInfo) {
 								node.Start()
 								s.addNode(cPeer)
 								log.Info("connected peer", "peerInfo", p.String(), "blockNumber", utils.ConvertH256ToUint256Int(h.CurrentHeight).Uint64())
-								event.GlobalEvent.Send(&common.PeerJoinEvent{Peer: cPeer.ID()})
+								event.GlobalEvent.Send(common.PeerJoinEvent{Peer: cPeer.ID()})
 							} else {
 								log.Error("Peer Handshake failed", "PeerID", p.ID, "PeerAddress", p.Addrs)
 								_ = node.Close()
@@ -231,7 +231,7 @@ func (s *Service) nodeManager(peerCh chan peer.AddrInfo) {
 			if ok {
 				log.Infof("delete node id:%s", id.String())
 				s.deleteNode(id)
-				event.GlobalEvent.Send(&common.PeerDropEvent{Peer: id})
+				event.GlobalEvent.Send(common.PeerDropEvent{Peer: id})
 				if !s.checkBootsStrap(id.String()) {
 					s.host.Peerstore().RemovePeer(id)
 				}

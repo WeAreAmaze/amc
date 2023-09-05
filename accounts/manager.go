@@ -54,8 +54,6 @@ type Manager struct {
 	newBackends chan newBackendEvent       // Incoming backends to be tracked by the manager
 	wallets     []Wallet                   // Cache of all wallets from all registered backends
 
-	feed event.Event // Wallet feed notifying of arrivals/departures
-
 	quit chan chan error
 	term chan struct{} // Channel is closed upon termination of the update loop
 	lock sync.RWMutex
@@ -132,29 +130,31 @@ func (am *Manager) update() {
 	// Loop until termination
 	for {
 		select {
-		case event := <-am.updates:
+		case walletEvent := <-am.updates:
 			// Wallet event arrived, update local cache
 			am.lock.Lock()
-			switch event.Kind {
+			switch walletEvent.Kind {
 			case WalletArrived:
-				am.wallets = merge(am.wallets, event.Wallet)
+				am.wallets = merge(am.wallets, walletEvent.Wallet)
 			case WalletDropped:
-				am.wallets = drop(am.wallets, event.Wallet)
+				am.wallets = drop(am.wallets, walletEvent.Wallet)
 			}
 			am.lock.Unlock()
 
 			// Notify any listeners of the event
-			am.feed.Send(event)
-		case event := <-am.newBackends:
+
+			//am.feed.Send(&walletEvent)
+			event.GlobalEvent.Send(walletEvent)
+		case backendEvent := <-am.newBackends:
 			am.lock.Lock()
 			// Update caches
-			backend := event.backend
+			backend := backendEvent.backend
 			am.wallets = merge(am.wallets, backend.Wallets()...)
 			am.updaters = append(am.updaters, backend.Subscribe(am.updates))
 			kind := reflect.TypeOf(backend)
 			am.backends[kind] = append(am.backends[kind], backend)
 			am.lock.Unlock()
-			close(event.processed)
+			close(backendEvent.processed)
 		case errc := <-am.quit:
 			// Manager terminating, return
 			errc <- nil
@@ -238,7 +238,7 @@ func (am *Manager) Find(account Account) (Wallet, error) {
 // Subscribe creates an async subscription to receive notifications when the
 // manager detects the arrival or departure of a wallet from any of its backends.
 func (am *Manager) Subscribe(sink chan<- WalletEvent) event.Subscription {
-	return am.feed.Subscribe(sink)
+	return event.GlobalEvent.Subscribe(sink)
 }
 
 // merge is a sorted analogue of append for wallets, where the ordering of the

@@ -60,7 +60,7 @@ const (
 	ColocationLimit = 5
 
 	// Additional buffer beyond current peer limit, from which we can store the relevant peer statuses.
-	maxLimitBuffer = 150
+	maxLimitBuffer = 0
 
 	// InboundRatio is the proportion of our connected peer limit at which we will allow inbound peers.
 	InboundRatio = float64(0.8)

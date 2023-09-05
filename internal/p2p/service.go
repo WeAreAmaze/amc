@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
+	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/encoder"
@@ -55,8 +56,10 @@ const pubsubQueueSize = 600
 const maxDialTimeout = 10 * time.Second
 
 // todo
-const ttfbTimeout = 5 * time.Second  // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
-const respTimeout = 10 * time.Second // RespTimeout is the maximum time for complete response transfer.
+const ttfbTimeout = 10 * time.Second // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
+
+// todo
+const reconnectBootNode = 1 * time.Minute
 
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
@@ -141,11 +144,11 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 	s.pubsub = gs
 
 	s.peers = peers.NewStatus(ctx, &peers.StatusConfig{
-		PeerLimit: int(s.cfg.MaxPeers),
+		PeerLimit: s.cfg.MaxPeers,
 		ScorerParams: &scorers.Config{
 			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{
 				Threshold:     maxBadResponses,
-				DecayInterval: time.Hour,
+				DecayInterval: 10 * time.Minute,
 			},
 		},
 	})
@@ -196,7 +199,12 @@ func (s *Service) Start() {
 			s.startupErr = err
 			return
 		}
-		err = s.connectToBootnodes()
+		bootnodes, err := s.bootnodes()
+		if err != nil {
+			s.startupErr = err
+			return
+		}
+		err = s.connectToBootnodes(bootnodes)
 		if err != nil {
 			log.Error("Could not add bootnode to the exclusion list", "err", err)
 			s.startupErr = err
@@ -204,6 +212,10 @@ func (s *Service) Start() {
 		}
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
+		utils.RunEvery(s.ctx, reconnectBootNode, func() {
+			s.ensureBootPeerConnections(bootnodes)
+		})
+
 	}
 
 	s.started = true
@@ -236,12 +248,43 @@ func (s *Service) Start() {
 			//addr, _ := s.peers.Address(p)
 			//IP, _ := s.peers.IP(p)
 			//ENR, _ := s.peers.ENR(p)
-			dialArgs, _ := s.peers.DialArgs(p)
-			direction, _ := s.peers.Direction(p)
-			connState, _ := s.peers.ConnState(p)
-			chainState, _ := s.peers.ChainState(p)
+
+			params := make([]interface{}, 0)
+			params = append(params, "perrId", p)
+
+			if dialArgs, err := s.peers.DialArgs(p); err == nil {
+				params = append(params, "dialArgs", dialArgs)
+			}
+			if direction, err := s.peers.Direction(p); err == nil {
+				params = append(params, "Direction", direction)
+			}
+			if connState, err := s.peers.ConnState(p); err == nil {
+				params = append(params, "connState", connState)
+			}
+			if chainState, err := s.peers.ChainState(p); err == nil {
+				params = append(params, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
+			}
+			if nextValidTime, err := s.peers.NextValidTime(p); err == nil && time.Now().After(nextValidTime) == false {
+				params = append(params, "nextValidTime", common.PrettyDuration(time.Until(nextValidTime)))
+			}
+			if badResponses, err := s.peers.Scorers().BadResponsesScorer().Count(p); err == nil {
+				params = append(params, "badResponses", badResponses)
+			}
+			if validationError := s.peers.Scorers().ValidationError(p); validationError != nil {
+				params = append(params, "validationError", validationError)
+			}
+			params = append(params, "processedBlocks", s.peers.Scorers().BlockProviderScorer().ProcessedBlocks(p))
+
 			// hexutil.Encode([]byte(p))
-			log.Info("Peer details", "perrId", p, "dialArgs", dialArgs, "Direction", direction, "connState", connState, "currentHeight", utils.ConvertH256ToUint256Int(chainState.CurrentHeight).Uint64())
+			log.Info("Peer details", params...)
+
+			log.Info("Peer Score:",
+				"badResponsesScore", s.peers.Scorers().BadResponsesScorer().Score(p),
+				"blockProviderScore", s.peers.Scorers().BlockProviderScorer().Score(p),
+				"peerStatusScore", s.peers.Scorers().PeerStatusScorer().Score(p),
+				"gossipScore", s.peers.Scorers().GossipScorer().Score(p),
+				"Score", s.peers.Scorers().Score(p),
+			)
 			pids, _ := s.host.Peerstore().SupportsProtocols(p, s.host.Mux().Protocols()...)
 			for _, id := range pids {
 				log.Trace("Protocol details:", "ProtocolID", id)
@@ -419,12 +462,12 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	return nil
 }
 
-func (s *Service) connectToBootnodes() error {
+func (s *Service) bootnodes() ([]multiaddr.Multiaddr, error) {
 	nodes := make([]*enode.Node, 0, len(s.cfg.Discv5BootStrapAddr))
 	for _, addr := range s.cfg.Discv5BootStrapAddr {
 		bootNode, err := enode.Parse(enode.ValidSchemes, addr)
 		if err != nil {
-			return err
+			return []multiaddr.Multiaddr{}, err
 		}
 		// do not dial bootnodes with their tcp ports not set
 		if err := bootNode.Record().Load(enr.WithEntry("tcp", new(enr.TCP))); err != nil {
@@ -435,7 +478,35 @@ func (s *Service) connectToBootnodes() error {
 		}
 		nodes = append(nodes, bootNode)
 	}
-	multiAddresses := convertToMultiAddr(nodes)
-	s.connectWithAllPeers(multiAddresses)
+	return convertToMultiAddr(nodes), nil
+}
+
+func (s *Service) connectToBootnodes(nodes []multiaddr.Multiaddr) error {
+	s.connectWithAllPeers(nodes)
 	return nil
+}
+
+// ensureBootPeerConnections will attempt to reestablish connection to the peers
+// if there are currently no connections to that peer.
+func (s *Service) ensureBootPeerConnections(bootnodes []multiaddr.Multiaddr) {
+
+	addrInfos, err := peer.AddrInfosFromP2pAddrs(bootnodes...)
+	if err != nil {
+		log.Error("Could not convert to peer address info's from multiaddresses", "err", err)
+		return
+	}
+	for _, info := range addrInfos {
+		// make each dial non-blocking
+		if connState, err := s.peers.ConnState(info.ID); err != nil || connState != peers.PeerDisconnected {
+			continue
+		}
+		if nextValidTime, err := s.peers.NextValidTime(info.ID); err != nil || !time.Now().After(nextValidTime) {
+			continue
+		}
+		go func(info peer.AddrInfo) {
+			if err := s.connectWithPeer(s.ctx, info); err != nil {
+				log.Warn(fmt.Sprintf("Could not connect with bootnode %s", info.String()), "err", err)
+			}
+		}(info)
+	}
 }

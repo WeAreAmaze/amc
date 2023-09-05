@@ -58,6 +58,9 @@ const maxDialTimeout = 10 * time.Second
 // todo
 const ttfbTimeout = 10 * time.Second // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
 
+// todo
+const reconnectBootNode = 1 * time.Minute
+
 // Service for managing peer to peer (p2p) networking.
 type Service struct {
 	started               bool
@@ -196,7 +199,12 @@ func (s *Service) Start() {
 			s.startupErr = err
 			return
 		}
-		err = s.connectToBootnodes()
+		bootnodes, err := s.bootnodes()
+		if err != nil {
+			s.startupErr = err
+			return
+		}
+		err = s.connectToBootnodes(bootnodes)
 		if err != nil {
 			log.Error("Could not add bootnode to the exclusion list", "err", err)
 			s.startupErr = err
@@ -204,6 +212,10 @@ func (s *Service) Start() {
 		}
 		s.dv5Listener = listener
 		go s.listenForNewNodes()
+		utils.RunEvery(s.ctx, reconnectBootNode, func() {
+			s.ensureBootPeerConnections(bootnodes)
+		})
+
 	}
 
 	s.started = true
@@ -450,12 +462,12 @@ func (s *Service) connectWithPeer(ctx context.Context, info peer.AddrInfo) error
 	return nil
 }
 
-func (s *Service) connectToBootnodes() error {
+func (s *Service) bootnodes() ([]multiaddr.Multiaddr, error) {
 	nodes := make([]*enode.Node, 0, len(s.cfg.Discv5BootStrapAddr))
 	for _, addr := range s.cfg.Discv5BootStrapAddr {
 		bootNode, err := enode.Parse(enode.ValidSchemes, addr)
 		if err != nil {
-			return err
+			return []multiaddr.Multiaddr{}, err
 		}
 		// do not dial bootnodes with their tcp ports not set
 		if err := bootNode.Record().Load(enr.WithEntry("tcp", new(enr.TCP))); err != nil {
@@ -466,7 +478,35 @@ func (s *Service) connectToBootnodes() error {
 		}
 		nodes = append(nodes, bootNode)
 	}
-	multiAddresses := convertToMultiAddr(nodes)
-	s.connectWithAllPeers(multiAddresses)
+	return convertToMultiAddr(nodes), nil
+}
+
+func (s *Service) connectToBootnodes(nodes []multiaddr.Multiaddr) error {
+	s.connectWithAllPeers(nodes)
 	return nil
+}
+
+// ensureBootPeerConnections will attempt to reestablish connection to the peers
+// if there are currently no connections to that peer.
+func (s *Service) ensureBootPeerConnections(bootnodes []multiaddr.Multiaddr) {
+
+	addrInfos, err := peer.AddrInfosFromP2pAddrs(bootnodes...)
+	if err != nil {
+		log.Error("Could not convert to peer address info's from multiaddresses", "err", err)
+		return
+	}
+	for _, info := range addrInfos {
+		// make each dial non-blocking
+		if connState, err := s.peers.ConnState(info.ID); err != nil || connState != peers.PeerDisconnected {
+			continue
+		}
+		if nextValidTime, err := s.peers.NextValidTime(info.ID); err != nil || !time.Now().After(nextValidTime) {
+			continue
+		}
+		go func(info peer.AddrInfo) {
+			if err := s.connectWithPeer(s.ctx, info); err != nil {
+				log.Warn(fmt.Sprintf("Could not connect with bootnode %s", info.String()), "err", err)
+			}
+		}(info)
+	}
 }

@@ -48,7 +48,6 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.2
 	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b
-	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/torquem-ch/mdbx-go v0.30.0
 	github.com/trailofbits/go-mutexasserts v0.0.0-20230328101604-8cdbc5f3d279
 	github.com/urfave/cli/v2 v2.17.2-0.20221006022127-8f469abc00aa

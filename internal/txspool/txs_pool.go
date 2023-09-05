@@ -309,7 +309,7 @@ func (pool *TxsPool) addTxs(txs []*transaction.Transaction, local, sync bool) []
 			}
 		}
 		//log.Infof("event new local txs : %v", localTxs)
-		event.GlobalEvent.Send(&common.NewLocalTxsEvent{Txs: localTxs})
+		event.GlobalEvent.Send(common.NewLocalTxsEvent{Txs: localTxs})
 	}
 	// Reorg the pool internals if needed and return
 	done := pool.requestPromoteExecutables(dirtyAddrs)
@@ -1058,7 +1058,7 @@ func (pool *TxsPool) runReorg(done chan struct{}, reset *txspoolResetRequest, di
 		for _, set := range events {
 			txs = append(txs, set.Flatten()...)
 		}
-		event.GlobalEvent.Send(&common.NewTxsEvent{Txs: txs})
+		event.GlobalEvent.Send(common.NewTxsEvent{Txs: txs})
 	}
 }
 
@@ -1312,7 +1312,7 @@ func (pool *TxsPool) ResetState(blockHash types.Hash) error {
 	if nil == blockNr {
 		return fmt.Errorf("invaild block hash")
 	}
-	stateReader := state.NewStateHistoryReader(tx, tx, *blockNr)
+	stateReader := state.NewStateHistoryReader(tx, tx, *blockNr+1)
 	pool.currentState = state.New(stateReader)
 	return nil
 }

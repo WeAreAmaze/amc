@@ -144,7 +144,7 @@ func (am *Manager) update() {
 			// Notify any listeners of the event
 
 			//am.feed.Send(&walletEvent)
-			event.GlobalEvent.Send(&walletEvent)
+			event.GlobalEvent.Send(walletEvent)
 		case backendEvent := <-am.newBackends:
 			am.lock.Lock()
 			// Update caches

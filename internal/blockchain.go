@@ -450,7 +450,7 @@ func (bc *BlockChain) newBlockLoop() {
 							inserted = true
 						}
 					}
-					event.GlobalEvent.Send(&common.ChainHighestBlock{Block: block, Inserted: inserted})
+					event.GlobalEvent.Send(common.ChainHighestBlock{Block: block, Inserted: inserted})
 
 				} else {
 					log.Errorf("unmarshal err: %v", err)
@@ -1135,7 +1135,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 				"root", block.StateRoot())
 
 			if len(logs) > 0 {
-				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
+				event.GlobalEvent.Send(common.NewLogsEvent{Logs: logs})
 			}
 
 			lastCanon = block

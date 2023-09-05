@@ -195,7 +195,7 @@ func (d *Downloader) Start() error {
 	if d.network.Bootstrapped() {
 		//todo
 		//log.Debugf("boot node")
-		event.GlobalEvent.Send(&common.DownloaderFinishEvent{})
+		event.GlobalEvent.Send(common.DownloaderFinishEvent{})
 		return nil
 	}
 
@@ -333,8 +333,8 @@ func (d *Downloader) synchronise() {
 	//
 	d.waitAvailablePeer()
 	//
-	event.GlobalEvent.Send(&common.DownloaderStartEvent{})
-	defer event.GlobalEvent.Send(&common.DownloaderFinishEvent{})
+	event.GlobalEvent.Send(common.DownloaderStartEvent{})
+	defer event.GlobalEvent.Send(common.DownloaderFinishEvent{})
 
 	defer d.cancel()
 	tick := time.NewTicker(syncTimeTick)

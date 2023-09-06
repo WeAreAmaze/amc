@@ -39,6 +39,20 @@ type NodeConfig struct {
 	DataDir     string `json:"data_dir" yaml:"data_dir"`
 	Miner       bool   `json:"miner" yaml:"miner"`
 
+	AuthRPC bool `json:"auth_rpc" yaml:"auth_rpc"`
+	// AuthAddr is the listening address on which authenticated APIs are provided.
+	AuthAddr string `json:"auth_addr" yaml:"auth_addr"`
+
+	// AuthPort is the port number on which authenticated APIs are provided.
+	AuthPort int `json:"auth_port" yaml:"auth_port"`
+
+	// AuthVirtualHosts is the list of virtual hostnames which are allowed on incoming requests
+	// for the authenticated api. This is by default {'localhost'}.
+	AuthVirtualHosts []string `json:"auth_virtual_hosts" yaml:"auth_virtual_hosts"`
+
+	// JWTSecret is the path to the hex-encoded jwt secret.
+	JWTSecret string `json:"jwt_secret" yaml:"jwt_secret"`
+
 	// KeyStoreDir is the file system folder that contains private keys. The directory can
 	// be specified as a relative path, in which case it is resolved relative to the
 	// current directory.

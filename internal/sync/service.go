@@ -28,8 +28,8 @@ const badBlockSize = 1000
 const syncMetricsInterval = 10 * time.Second
 
 // todo
-const ttfbTimeout = 5 * time.Second  // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
-const respTimeout = 10 * time.Second // RespTimeout is the maximum time for complete response transfer.
+const ttfbTimeout = 10 * time.Second // TtfbTimeout is the maximum time to wait for first byte of request response (time-to-first-byte).
+const respTimeout = 20 * time.Second // RespTimeout is the maximum time for complete response transfer.
 
 // todo
 const maxRequestBlocks = 1024
@@ -119,8 +119,13 @@ func (s *Service) Start() {
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
 		// no-op
-		s.cfg.p2p.Peers()
+		//s.cfg.p2p.Peers()
 		log.Error("disconnect peer", "peer", id)
+		//for no reason disconnect
+		//todo
+		if nextValidTime, err := s.cfg.p2p.Peers().NextValidTime(id); err == nil && time.Now().After(nextValidTime) {
+			s.cfg.p2p.Peers().SetNextValidTime(id, time.Now().Add(10*time.Minute))
+		}
 		return nil
 	})
 	s.cfg.p2p.AddPingMethod(s.sendPingRequest)

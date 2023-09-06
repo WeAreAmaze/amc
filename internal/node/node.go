@@ -20,7 +20,10 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/contracts/deposit"
+	"github.com/amazechain/amc/contracts/deposit/AMT"
+	nftdeposit "github.com/amazechain/amc/contracts/deposit/NFT"
 	"github.com/amazechain/amc/internal/debug"
 	"github.com/amazechain/amc/internal/p2p"
 	amcsync "github.com/amazechain/amc/internal/sync"
@@ -28,7 +31,10 @@ import (
 	"github.com/amazechain/amc/internal/tracers"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/common/cmp"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
+	"hash/crc32"
+	"path"
 	"runtime"
 	"strings"
 
@@ -84,6 +90,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const datadirJWTKey = "jwtsecret" // Path within the datadir to the node's jwt secret
+
 type Node struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -118,6 +126,8 @@ type Node struct {
 	http          *httpServer
 	ipc           *ipcServer
 	ws            *httpServer
+	httpAuth      *httpServer //
+	wsAuth        *httpServer //
 	inprocHandler *jsonrpc.Server
 
 	//n.config.GenesisBlockCfg.Config.Engine.Etherbase
@@ -297,11 +307,13 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		txspool:         pool,
 		txsFetcher:      txsFetcher,
 		engine:          engine,
-		depositContract: deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Config.Engine, bc, chainKv),
+		//depositContract: deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Config.Engine, bc, chainKv),
 
 		inprocHandler: jsonrpc.NewServer(),
 		http:          newHTTPServer(),
 		ws:            newHTTPServer(),
+		wsAuth:        newHTTPServer(),
+		httpAuth:      newHTTPServer(),
 		ipc:           newIPCServer(&cfg.NodeCfg),
 		etherbase:     types.HexToAddress(cfg.GenesisBlockCfg.Config.Engine.Etherbase),
 
@@ -313,6 +325,27 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		sync: syncServer,
 		is:   is,
 	}
+
+	if cfg.GenesisBlockCfg.Config.Engine.APos != nil {
+		depositContracts := make(map[types.Address]deposit.DepositContract, 0)
+		if cfg.GenesisBlockCfg.Config.Engine.APos.DepositContract != "" {
+			var addr types.Address
+			if !addr.DecodeString(cfg.GenesisBlockCfg.Config.Engine.APos.DepositContract) {
+				panic(fmt.Sprintf("cannot decode DepositContract address: %s", cfg.GenesisBlockCfg.Config.Engine.APos.DepositContract))
+			}
+			depositContracts[addr] = new(amtdeposit.Contract)
+		}
+		if cfg.GenesisBlockCfg.Config.Engine.APos.DepositNFTContract != "" {
+			var addr types.Address
+			if !addr.DecodeString(cfg.GenesisBlockCfg.Config.Engine.APos.DepositNFTContract) {
+				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", cfg.GenesisBlockCfg.Config.Engine.APos.DepositContract))
+			}
+			depositContracts[addr] = new(nftdeposit.Contract)
+		}
+		node.depositContract = deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Config.Engine, bc, chainKv, depositContracts)
+	}
+
+	pool.SetDeposit(node.depositContract)
 
 	// Apply flags.
 	//SetNodeConfig(ctx, &cfg)
@@ -394,16 +427,14 @@ func (n *Node) Start() error {
 	//	return err
 	//}
 
-	if n.config.NodeCfg.HTTP {
+	n.rpcAPIs = append(n.rpcAPIs, n.engine.APIs(n.blocks)...)
+	n.rpcAPIs = append(n.rpcAPIs, n.api.Apis()...)
+	n.rpcAPIs = append(n.rpcAPIs, tracers.APIs(n.api)...)
+	n.rpcAPIs = append(n.rpcAPIs, debug.APIs()...)
 
-		n.rpcAPIs = append(n.rpcAPIs, n.engine.APIs(n.blocks)...)
-		n.rpcAPIs = append(n.rpcAPIs, n.api.Apis()...)
-		n.rpcAPIs = append(n.rpcAPIs, tracers.APIs(n.api)...)
-		n.rpcAPIs = append(n.rpcAPIs, debug.APIs()...)
-		if err := n.startRPC(); err != nil {
-			log.Error("failed start jsonrpc service", zap.Error(err))
-			return err
-		}
+	if err := n.startRPC(); err != nil {
+		log.Error("failed start jsonrpc service", zap.Error(err))
+		return err
 	}
 
 	//n.p2p.AddConnectionHandler()
@@ -420,7 +451,9 @@ func (n *Node) Start() error {
 	//go n.txsBroadcastLoop()
 	//go n.txsMessageFetcherLoop()
 
-	n.depositContract.Start()
+	if n.depositContract != nil {
+		n.depositContract.Start()
+	}
 
 	n.is.Start()
 
@@ -530,6 +563,17 @@ func (n *Node) txsMessageFetcherLoop() {
 	}
 }
 
+// getAPIs return two sets of APIs, both the ones that do not require
+// authentication, and the complete set
+func (n *Node) getAPIs() (unauthenticated, all []jsonrpc.API) {
+	for _, api := range n.rpcAPIs {
+		if !api.Authenticated {
+			unauthenticated = append(unauthenticated, api)
+		}
+	}
+	return unauthenticated, n.rpcAPIs
+}
+
 func (n *Node) startInProc() error {
 	for _, api := range n.rpcAPIs {
 		if err := n.inprocHandler.RegisterName(api.Namespace, api.Service); err != nil {
@@ -543,17 +587,53 @@ func (n *Node) stopInProc() {
 	n.inprocHandler.Stop()
 }
 
+// obtainJWTSecret loads the jwt-secret, either from the provided config,
+// or from the default location. If neither of those are present, it generates
+// a new secret and stores to the default location.
+func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
+	fileName := cliParam
+	if len(fileName) == 0 {
+		// no path provided, use default
+		fileName = path.Join(n.config.NodeCfg.DataDir, datadirJWTKey)
+	}
+	// try reading from file
+	if data, err := os.ReadFile(fileName); err == nil {
+		jwtSecret, err := hexutil.Decode(strings.TrimSpace(string(data)))
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to decode hex (%s) string", strings.TrimSpace(string(data))))
+		}
+		if len(jwtSecret) == 32 {
+			log.Info("Loaded JWT secret file", "path", fileName, "crc32", fmt.Sprintf("%#x", crc32.ChecksumIEEE(jwtSecret)))
+			return jwtSecret, nil
+		}
+		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
+		return nil, errors.New("invalid JWT secret")
+	}
+	// Need to generate one
+	jwtSecret := make([]byte, 32)
+	rand.Read(jwtSecret)
+
+	if err := os.WriteFile(fileName, []byte(hexutil.Encode(jwtSecret)), 0600); err != nil {
+		return nil, err
+	}
+	log.Info("Generated JWT secret", "path", fileName)
+	return jwtSecret, nil
+}
+
 func (n *Node) startRPC() error {
+
+	openAPIs, allAPIs := n.getAPIs()
+
 	if err := n.startInProc(); err != nil {
 		return err
 	}
+
 	if n.ipc.endpoint != "" {
 		if err := n.ipc.start(n.rpcAPIs); err != nil {
 			return err
 		}
 	}
-	if n.config.NodeCfg.HTTPHost != "" {
-
+	if n.config.NodeCfg.HTTP {
 		//todo []string{"eth", "web3", "debug", "net", "apoa", "txpool", "apos"}
 		config := httpConfig{
 			CorsAllowedOrigins: []string{},
@@ -593,6 +673,32 @@ func (n *Node) startRPC() error {
 			return err
 		}
 	}
+
+	// Configure authenticated API
+	if len(openAPIs) != len(allAPIs) && n.config.NodeCfg.AuthRPC {
+		jwtSecret, err := n.obtainJWTSecret(n.config.NodeCfg.JWTSecret)
+		if err != nil {
+			return err
+		}
+		config := httpConfig{
+			CorsAllowedOrigins: []string{},
+			Vhosts:             []string{"*"},
+			Modules:            []string{"admin", "apos"},
+			prefix:             "",
+			jwtSecret:          jwtSecret,
+		}
+
+		if err := n.httpAuth.setListenAddr(n.config.NodeCfg.AuthAddr, n.config.NodeCfg.AuthPort); err != nil {
+			return err
+		}
+		if err := n.httpAuth.enableRPC(n.rpcAPIs, config); err != nil {
+			return err
+		}
+		if err := n.httpAuth.start(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

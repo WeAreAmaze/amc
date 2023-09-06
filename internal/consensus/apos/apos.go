@@ -836,8 +836,9 @@ func (c *APos) Close() error {
 // controlling the signer voting.
 func (c *APos) APIs(chain consensus.ChainReader) []jsonrpc.API {
 	return []jsonrpc.API{{
-		Namespace: "apos",
-		Service:   &API{chain: chain, apos: c},
+		Namespace:     "apos",
+		Service:       &API{chain: chain, apos: c},
+		Authenticated: true,
 	}}
 }
 

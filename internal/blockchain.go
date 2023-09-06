@@ -471,7 +471,7 @@ func (bc *BlockChain) newBlockLoop() {
 							inserted = true
 						}
 					}
-					event.GlobalEvent.Send(&common.ChainHighestBlock{Block: block, Inserted: inserted})
+					event.GlobalEvent.Send(common.ChainHighestBlock{Block: block, Inserted: inserted})
 
 				} else {
 					log.Errorf("unmarshal err: %v", err)
@@ -934,7 +934,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
-			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *lastCanon.(*block2.Block), Inserted: true})
+			event.GlobalEvent.Send(common.ChainHighestBlock{Block: *lastCanon.(*block2.Block), Inserted: true})
 		}
 	}()
 
@@ -1142,13 +1142,13 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 		switch status {
 		case CanonStatTy:
-			log.Info("Inserted new block ", "number ", block.Number64(), "hash", block.Hash(),
+			log.Trace("Inserted new block ", "number ", block.Number64(), "hash", block.Hash(),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"elapsed", time.Since(start).Seconds(),
 				"root", block.StateRoot())
 
 			if len(logs) > 0 {
-				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
+				event.GlobalEvent.Send(common.NewLogsEvent{Logs: logs})
 			}
 
 			lastCanon = block
@@ -1845,10 +1845,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	}
 	for i := len(oldChain) - 1; i >= 0; i-- {
 		// Also send event for blocks removed from the canon chain.
-		event.GlobalEvent.Send(&common.ChainSideEvent{Block: oldChain[i].(*block2.Block)})
+		event.GlobalEvent.Send(common.ChainSideEvent{Block: oldChain[i].(*block2.Block)})
 	}
 	if len(deletedLogs) > 0 {
-		event.GlobalEvent.Send(&common.RemovedLogsEvent{Logs: deletedLogs})
+		event.GlobalEvent.Send(common.RemovedLogsEvent{Logs: deletedLogs})
 	}
 
 	if _, err := bc.insertChain(reInsert); nil != err {

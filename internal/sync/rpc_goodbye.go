@@ -24,7 +24,7 @@ var backOffTime = map[ssztype.SSZUint64]time.Duration{
 	// 2 hours to let the remote peer score us
 	// back up again.
 	p2ptypes.GoodbyeCodeBadScore:       2 * time.Hour,
-	p2ptypes.GoodbyeCodeBanned:         2 * time.Hour,
+	p2ptypes.GoodbyeCodeBanned:         1 * time.Hour,
 	p2ptypes.GoodbyeCodeClientShutdown: 1 * time.Hour,
 	// Wait 5 minutes before dialing a peer who is
 	// 'full'

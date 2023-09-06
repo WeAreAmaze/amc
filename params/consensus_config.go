@@ -45,5 +45,6 @@ type APosConfig struct {
 	RewardEpoch        uint64   `json:"rewardEpoch" yaml:"rewardEpoch"`
 	RewardLimit        *big.Int `json:"rewardLimit" yaml:"rewardLimit"`
 
-	DepositContract string `json:"depositContract" yaml:"depositContract"` // Deposit contract
+	DepositContract    string `json:"depositContract" yaml:"depositContract"`       // Deposit contract
+	DepositNFTContract string `json:"depositNFTContract" yaml:"depositNFTContract"` // Deposit NFT contract
 }

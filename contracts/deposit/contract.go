@@ -17,14 +17,12 @@
 package deposit
 
 import (
-	"bytes"
 	"context"
-	"embed"
 	"errors"
 	"github.com/amazechain/amc/common"
-	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/crypto/bls"
 	"github.com/amazechain/amc/common/hexutil"
+	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
@@ -33,13 +31,6 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
 )
-
-//go:embed abi.json
-var abiJson embed.FS
-var depositAbiCode []byte
-
-var depositEventSignature = crypto.Keccak256Hash([]byte("DepositEvent(bytes,uint256,bytes)"))
-var withdrawnSignature = crypto.Keccak256Hash([]byte("WithdrawnEvent(uint256)"))
 
 const (
 	//
@@ -58,12 +49,13 @@ const (
 	FiveHundredDepositRewardPerMonth = 6.25 * params.AMT //max uint64 = ^uint64(0) ≈ 18.44 AMT so 15 AMT is ok
 )
 
-func init() {
-	var err error
-	depositAbiCode, err = abiJson.ReadFile("abi.json")
-	if err != nil {
-		panic("Could not open abi.json")
-	}
+// DepositContract d
+type DepositContract interface {
+	WithdrawnSignature() types.Hash
+	DepositSignature() types.Hash
+	UnpackDepositLogData(data []byte) (publicKey []byte, signature []byte, depositAmount *uint256.Int, err error)
+	IsDepositAction(sig [4]byte) bool
+	UnpackWithdrawnLogData(data []byte) (amount *uint256.Int, err error)
 }
 
 func GetDepositInfo(tx kv.Tx, addr types.Address) *Info {
@@ -131,18 +123,21 @@ type Deposit struct {
 
 	logsCh   chan common.NewLogsEvent     // Channel to receive new log event
 	rmLogsCh chan common.RemovedLogsEvent // Channel to receive removed log event
+
+	depositContracts map[types.Address]DepositContract
 }
 
-func NewDeposit(ctx context.Context, config *params.ConsensusConfig, bc common.IBlockChain, db kv.RwDB) *Deposit {
+func NewDeposit(ctx context.Context, config *params.ConsensusConfig, bc common.IBlockChain, db kv.RwDB, depositContracts map[types.Address]DepositContract) *Deposit {
 	c, cancel := context.WithCancel(ctx)
 	d := &Deposit{
-		ctx:             c,
-		cancel:          cancel,
-		consensusConfig: config,
-		blockChain:      bc,
-		db:              db,
-		logsCh:          make(chan common.NewLogsEvent),
-		rmLogsCh:        make(chan common.RemovedLogsEvent),
+		ctx:              c,
+		cancel:           cancel,
+		consensusConfig:  config,
+		blockChain:       bc,
+		db:               db,
+		logsCh:           make(chan common.NewLogsEvent),
+		rmLogsCh:         make(chan common.RemovedLogsEvent),
+		depositContracts: depositContracts,
 	}
 
 	d.logsSub = event.GlobalEvent.Subscribe(d.logsCh)
@@ -154,42 +149,67 @@ func NewDeposit(ctx context.Context, config *params.ConsensusConfig, bc common.I
 	return d
 }
 
-func (d Deposit) Start() {
+func (d *Deposit) Start() {
 	go d.eventLoop()
 }
 
-func (d Deposit) Stop() {
+func (d *Deposit) Stop() {
 	d.cancel()
 }
 
-func (d Deposit) eventLoop() {
+func (d *Deposit) IsDepositAction(txs *transaction.Transaction) bool {
+	var (
+		depositContract      DepositContract
+		foundDepositContract bool
+	)
+	to := txs.To()
+	if to == nil {
+		return false
+	}
+	if depositContract, foundDepositContract = d.depositContracts[*to]; !foundDepositContract {
+		return false
+	}
+
+	if len(txs.Data()) < 4 {
+		return false
+	}
+
+	var sig [4]byte
+	copy(sig[:], txs.Data()[:4])
+	if !depositContract.IsDepositAction(sig) {
+		return false
+	}
+
+	return true
+}
+
+func (d *Deposit) eventLoop() {
 	// Ensure all subscriptions get cleaned up
 	defer func() {
 		d.logsSub.Unsubscribe()
 		d.rmLogsSub.Unsubscribe()
 	}()
 
-	var depositContractByes, _ = hexutil.Decode(d.consensusConfig.APos.DepositContract)
 	for {
 		select {
 		case logEvent := <-d.logsCh:
 			for _, l := range logEvent.Logs {
-				if nil != d.consensusConfig.APos && bytes.Compare(l.Address[:], depositContractByes[:]) == 0 {
-					if l.Topics[0] == depositEventSignature {
-						d.handleDepositEvent(l.TxHash, l.Sender, l.Data)
-					} else if l.Topics[0] == withdrawnSignature {
-						d.handleWithdrawnEvent(l.TxHash, l.Sender, l.Data)
+				if depositContract, found := d.depositContracts[l.Address]; found {
+					if l.Topics[0] == depositContract.DepositSignature() {
+						d.handleDepositEvent(l.Sender, l.Data, depositContract)
+					} else if l.Topics[0] == depositContract.WithdrawnSignature() {
+						d.handleWithdrawnEvent(l.Sender, l.Data, depositContract)
 					}
 				}
 			}
 		case logRemovedEvent := <-d.rmLogsCh:
 			for _, l := range logRemovedEvent.Logs {
-				if nil != d.consensusConfig.APos && bytes.Compare(l.Address[:], depositContractByes[:]) == 0 {
-					log.Trace("log event topic[0]= ", "hash", l.Topics[0], "depositEventSignature", depositEventSignature, "withdrawnSignature", withdrawnSignature)
-					if l.Topics[0] == depositEventSignature {
-						d.handleUndoDepositEvent(l.TxHash, l.Sender, l.Data)
-					} else if l.Topics[0] == withdrawnSignature {
-						d.handleUndoWithdrawnEvent(l.TxHash, l.Sender, l.Data)
+				if depositContract, found := d.depositContracts[l.Address]; found {
+					//log.Trace("log event topic[0]= ", "hash", l.Topics[0], "depositEventSignature", depositEventSignature, "withdrawnSignature", withdrawnSignature)
+					if l.Topics[0] == depositContract.DepositSignature() {
+						d.handleUndoDepositEvent(l.Sender, l.Data, depositContract)
+					} else if l.Topics[0] == depositContract.WithdrawnSignature() {
+						d.handleUndoWithdrawnEvent(l.Sender, l.Data, depositContract)
 					}
 				}
 			}
@@ -225,11 +245,11 @@ func (d Deposit) verifySignature(sig []byte, pub []byte, depositAmount *uint256.
 	return nil
 }
 
-func (d Deposit) handleDepositEvent(txHash types.Hash, txAddress types.Address, data []byte) {
-
-	pb, amount, sig, err := UnpackDepositLogData(data)
+func (d *Deposit) handleDepositEvent(txAddress types.Address, data []byte, depositContract DepositContract) {
+	// 1
+	pb, sig, amount, err := depositContract.UnpackDepositLogData(data)
 	if err != nil {
-		log.Warn("cannot unpack deposit log data")
+		log.Warn("cannot unpack deposit log data", "err", err)
 		return
 	}
 
@@ -256,10 +276,10 @@ func (d Deposit) handleDepositEvent(txHash types.Hash, txAddress types.Address, 
 	}
 }
 
-func (d Deposit) handleUndoDepositEvent(txHash types.Hash, txAddress types.Address, data []byte) {
-	pb, amount, sig, err := UnpackDepositLogData(data)
+func (d Deposit) handleUndoDepositEvent(txAddress types.Address, data []byte, depositContract DepositContract) {
+	pb, sig, amount, err := depositContract.UnpackDepositLogData(data)
 	if err != nil {
-		log.Warn("cannot unpack deposit log data")
+		log.Warn("cannot unpack deposit log data", "err", err)
 		return
 	}
 
@@ -285,9 +305,9 @@ func (d Deposit) handleUndoDepositEvent(txHash types.Hash, txAddress types.Addre
 
 }
 
-func (d Deposit) handleWithdrawnEvent(txHash types.Hash, txAddress types.Address, data []byte) {
+func (d Deposit) handleWithdrawnEvent(txAddress types.Address, data []byte, depositContract DepositContract) {
 	// 1
-	amount, err := UnpackWithdrawnLogData(data)
+	amount, err := depositContract.UnpackWithdrawnLogData(data)
 	if err != nil {
 		log.Warn("cannot unpack deposit log data")
 		return
@@ -310,8 +330,8 @@ func (d Deposit) handleWithdrawnEvent(txHash types.Hash, txAddress types.Address
 	}
 }
 
-func (d Deposit) handleUndoWithdrawnEvent(txHash types.Hash, txAddress types.Address, data []byte) {
-	amount, err := UnpackWithdrawnLogData(data)
+func (d Deposit) handleUndoWithdrawnEvent(txAddress types.Address, data []byte, depositContract DepositContract) {
+	amount, err := depositContract.UnpackWithdrawnLogData(data)
 	if err != nil {
 		log.Warn("cannot unpack deposit log data")
 		return

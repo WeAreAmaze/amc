@@ -17,141 +17,75 @@
 package v2
 
 import (
-	"errors"
+	"github.com/amazechain/amc/log"
 	"reflect"
 	"sync"
 )
 
-var errBadChannel = errors.New("event: Subscribe argument does not have sendable channel type")
-
-var (
-	GlobalEvent Event
-	GlobalFeed  Feed
-)
-
-type Subscription interface {
-	Err() <-chan error // returns the error channel
-	Unsubscribe()      // cancels sending of events, closing the error channel
-}
+var GlobalEvent Event
 
 type Event struct {
-	once      sync.Once
-	sendLock  chan struct{}
-	removeSub chan interface{}
+	once sync.Once
 
-	mu     sync.Mutex
-	inbox2 map[string]caseList
+	feeds      map[string]*Feed
+	feedsLock  sync.RWMutex
+	feedsScope map[string]*SubscriptionScope
 }
 
 func (e *Event) init() {
-	e.removeSub = make(chan interface{})
-	e.sendLock = make(chan struct{}, 1)
-	e.sendLock <- struct{}{}
-	e.inbox2 = make(map[string]caseList)
+	e.feeds = make(map[string]*Feed)
+	e.feedsScope = make(map[string]*SubscriptionScope)
+
+}
+
+func (e *Event) initKey(key string) {
+	e.feedsLock.Lock()
+	defer e.feedsLock.Unlock()
+	if _, ok := e.feeds[key]; !ok {
+		e.feeds[key] = new(Feed)
+		e.feedsScope[key] = new(SubscriptionScope)
+	}
 }
 
 func (e *Event) Subscribe(channel interface{}) Subscription {
 	e.once.Do(e.init)
 
-	chanval := reflect.ValueOf(channel)
-	chantyp := chanval.Type()
-	if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.SendDir == 0 {
-		panic(errBadChannel)
-	}
-	sub := &eventSub{feed: e, channel: chanval, err: make(chan error, 1)}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	cas := reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}
 	key := reflect.TypeOf(channel).Elem().String()
+	e.initKey(key)
 
-	e.inbox2[key] = append(e.inbox2[key], cas)
+	e.feedsLock.RLock()
+	defer e.feedsLock.RUnlock()
+	sub := e.feedsScope[key].Track(e.feeds[key].Subscribe(channel))
 
 	return sub
 }
 
 func (e *Event) Send(value interface{}) int {
 
-	rvalue := reflect.ValueOf(value)
-	chantyp := reflect.TypeOf(value)
 	e.once.Do(e.init)
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if chantyp.Kind() != reflect.Ptr {
-		panic("value must be ptr type!!")
-	}
-
-	key := chantyp.Elem().String()
+	key := reflect.TypeOf(value).String()
+	e.initKey(key)
 
 	nsent := 0
-	if _, ok := e.inbox2[key]; ok {
-		cases := e.inbox2[key]
-		for _, c := range cases {
-			value := rvalue.Elem()
-			c.Send = value
-			if c.Chan.TrySend(value) {
-				nsent++
-			}
-		}
-	}
 
-	//log.Debugf("inbox %v", e.inbox2)
+	e.feedsLock.RLock()
+	defer e.feedsLock.RUnlock()
+
+	log.Trace("GlobalEvent Send", "key", key)
+	if e.feedsScope[key].Count() == 0 {
+		return nsent
+	}
+	nsent = e.feeds[key].Send(value)
+
 	return nsent
 }
 
-func (e *Event) remove(sub *eventSub) {
-	ch := sub.channel.Interface()
-	key := reflect.TypeOf(ch).Elem().String()
-	e.mu.Lock()
-	defer e.mu.Unlock()
+func (e *Event) Close() {
+	e.feedsLock.Lock()
+	defer e.feedsLock.Unlock()
 
-	if _, ok := e.inbox2[key]; ok {
-		if index := e.inbox2[key].find(ch); index != -1 {
-			e.inbox2[key] = e.inbox2[key].delete(index)
-			if len(e.inbox2[key]) <= 0 {
-				delete(e.inbox2, key)
-			}
-		}
+	for _, scope := range e.feedsScope {
+		scope.Close()
 	}
-}
-
-type eventSub struct {
-	feed    *Event
-	channel reflect.Value
-	errOnce sync.Once
-	err     chan error
-}
-
-func (sub *eventSub) Unsubscribe() {
-	sub.errOnce.Do(func() {
-		sub.feed.remove(sub)
-		close(sub.err)
-	})
-}
-
-func (sub *eventSub) Err() <-chan error {
-	return sub.err
-}
-
-type caseList []reflect.SelectCase
-
-func (cs caseList) find(channel interface{}) int {
-	for i, cas := range cs {
-		if cas.Chan.Interface() == channel {
-			return i
-		}
-	}
-
-	return -1
-}
-
-func (cs caseList) delete(index int) caseList {
-	return append(cs[:index], cs[index+1:]...)
-}
-
-func (cs caseList) deactivate(index int) caseList {
-	last := len(cs) - 1
-	cs[index], cs[last] = cs[last], cs[index]
-	return cs[:last]
 }

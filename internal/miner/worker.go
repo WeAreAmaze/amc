@@ -337,7 +337,7 @@ func (w *worker) resultLoop() error {
 			}
 
 			if len(logs) > 0 {
-				event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
+				event.GlobalEvent.Send(common.NewLogsEvent{Logs: logs})
 			}
 
 			log.Info("🔨 Successfully sealed new block",
@@ -356,7 +356,7 @@ func (w *worker) resultLoop() error {
 				log.Error("Failed Broadcast block to p2p network", "err", err)
 				continue
 			}
-			event.GlobalEvent.Send(&common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
+			event.GlobalEvent.Send(common.ChainHighestBlock{Block: *blk.(*block.Block), Inserted: true})
 		}
 	}
 }
@@ -749,7 +749,7 @@ func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs
 			}
 			sort.Sort(hs)
 
-			event.GlobalFeed.Send(common.MinedEntireEvent{Entire: state.EntireCode{Codes: hs, Headers: needHeaders, Entire: entri, Rewards: rewards, CoinBase: env.coinbase}})
+			event.GlobalEvent.Send(common.MinedEntireEvent{Entire: state.EntireCode{Codes: hs, Headers: needHeaders, Entire: entri, Rewards: rewards, CoinBase: env.coinbase}})
 		}
 
 		//

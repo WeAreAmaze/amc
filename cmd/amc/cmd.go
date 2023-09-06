@@ -329,7 +329,7 @@ var (
 	P2PMaxPeers = &cli.IntFlag{
 		Name:        "p2p.max-peers",
 		Usage:       "The max number of p2p peers to maintain.",
-		Value:       20,
+		Value:       5,
 		Destination: &DefaultConfig.P2PCfg.MaxPeers,
 	}
 	// P2PAllowList defines a CIDR subnet to exclusively allow connections.
@@ -398,6 +398,33 @@ var (
 	ToDataDirFlag = &cli.StringFlag{
 		Name:  "chaindata.to",
 		Usage: "to data  dir",
+	}
+)
+
+var (
+	AuthRPCFlag = &cli.BoolFlag{
+		Name:        "authrpc",
+		Usage:       "Enable the AUTH-RPC server",
+		Value:       false,
+		Destination: &DefaultConfig.NodeCfg.AuthRPC,
+	}
+	// Authenticated RPC HTTP settings
+	AuthRPCListenFlag = &cli.StringFlag{
+		Name:        "authrpc.addr",
+		Usage:       "Listening address for authenticated APIs",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.AuthAddr,
+	}
+	AuthRPCPortFlag = &cli.IntFlag{
+		Name:        "authrpc.port",
+		Usage:       "Listening port for authenticated APIs",
+		Destination: &DefaultConfig.NodeCfg.AuthPort,
+	}
+	JWTSecretFlag = &cli.StringFlag{
+		Name:        "authrpc.jwtsecret",
+		Usage:       "Path to a JWT secret to use for authenticated RPC endpoints",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.JWTSecret,
 	}
 )
 
@@ -496,6 +523,12 @@ var (
 )
 
 var (
+	authRPCFlag = []cli.Flag{
+		AuthRPCFlag,
+		AuthRPCListenFlag,
+		AuthRPCPortFlag,
+		JWTSecretFlag,
+	}
 	settingFlag = []cli.Flag{
 		DataDirFlag,
 	}

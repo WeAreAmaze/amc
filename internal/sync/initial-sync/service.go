@@ -52,8 +52,8 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 // Start the initial sync service.
 func (s *Service) Start() {
 
-	event.GlobalEvent.Send(&common.DownloaderStartEvent{})
-	defer event.GlobalEvent.Send(&common.DownloaderFinishEvent{})
+	event.GlobalEvent.Send(common.DownloaderStartEvent{})
+	defer event.GlobalEvent.Send(common.DownloaderFinishEvent{})
 
 	log.Info("Waiting Minimum peers...")
 	highestExpectedBlockNr := s.waitForMinimumPeers()
@@ -98,10 +98,10 @@ func (s *Service) Synced() bool {
 func (s *Service) Resync() error {
 	// Set it to false since we are syncing again.
 	s.markSyncing()
-	event.GlobalEvent.Send(&common.DownloaderStartEvent{})
+	event.GlobalEvent.Send(common.DownloaderStartEvent{})
 	defer func() {
 		s.markSynced()
-		event.GlobalEvent.Send(&common.DownloaderFinishEvent{})
+		event.GlobalEvent.Send(common.DownloaderFinishEvent{})
 	}() // Reset it at the end of the method.
 	//
 	beforeBlockNr := s.cfg.Chain.CurrentBlock().Number64()

@@ -168,7 +168,7 @@ func (s *Service) AddDisconnectionHandler(handler func(ctx context.Context, id p
 				s.peers.SetConnectionState(conn.RemotePeer(), peers.PeerDisconnected)
 				// Only log disconnections if we were fully connected.
 				if priorState == peers.PeerConnected {
-					log.Debug("Peer disconnected", "multiAddr", peerMultiaddrString(conn), "activePeers", len(s.peers.Active()))
+					log.Warn("Peer disconnected", "multiAddr", peerMultiaddrString(conn), "activePeers", len(s.peers.Active()))
 				}
 			}()
 		},

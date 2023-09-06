@@ -26,7 +26,6 @@ import (
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/consensus"
-	"github.com/amazechain/amc/internal/consensus/apos"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/amazechain/amc/internal/vm"
 	"github.com/amazechain/amc/modules/rawdb"
@@ -201,7 +200,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	//	b.header.Time,
 	//	parent,
 	//)
-	b.header.Difficulty = uint256.NewInt(2)
+	b.SetDifficulty(uint256.NewInt(2))
 }
 
 func (b *BlockGen) GetHeader() *block.Header {
@@ -317,8 +316,6 @@ func GenerateChain(config *params.ChainConfig, parent *block.Block, engine conse
 				b.header.Difficulty = uint256.NewInt(0)
 			}
 		}
-		sig, _ := crypto.Sign(apos.SealHash(b.header).Bytes(), key)
-		copy(b.header.Extra[len(b.header.Extra)-65:], sig)
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
@@ -341,7 +338,8 @@ func GenerateChain(config *params.ChainConfig, parent *block.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			if _, _, _, err := b.engine.FinalizeAndAssemble(chainreader, b.header, ibs, b.txs, nil, b.receipts); err != nil {
+			blk, _, _, err := b.engine.FinalizeAndAssemble(chainreader, b.header, ibs, b.txs, nil, b.receipts)
+			if err != nil {
 				return nil, nil, fmt.Errorf("call to FinaliseAndAssemble: %w", err)
 			}
 			// Write state changes to db
@@ -355,7 +353,7 @@ func GenerateChain(config *params.ChainConfig, parent *block.Block, engine conse
 			//	return nil, nil, fmt.Errorf("call to CalcTrieRoot: %w", err)
 			//}
 			// Recreating block to make sure Root makes it into the header
-			block := block.NewBlock(b.header, b.txs).(*block.Block)
+			block := block.NewBlock(blk.Header(), b.txs).(*block.Block)
 			return block, b.receipts, nil
 		}
 		return nil, nil, fmt.Errorf("no engine to generate blocks")
@@ -421,10 +419,11 @@ func makeHeader(chain consensus.ChainReader, parent *block.Block, state *state.I
 
 	header := MakeEmptyHeader(parent.Header().(*block.Header), chain.Config(), time, nil)
 	header.Coinbase = parent.Coinbase()
-	header.Difficulty = engine.CalcDifficulty(chain, time,
-		parent,
-	)
-	header.Extra = make([]byte, 32+65)
+	header.Difficulty = engine.CalcDifficulty(chain, time, &block.Header{
+		Number:     parent.Number64(),
+		Time:       time - 10,
+		Difficulty: parent.Difficulty(),
+	})
 	// header.AuRaSeal = engine.GenerateSeal(chain, header, parent.Header(), nil)
 
 	return header

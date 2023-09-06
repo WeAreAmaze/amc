@@ -87,7 +87,7 @@ func (v *BlockValidator) ValidateBody(b block.IBlock) error {
 	}
 
 	if hash := DeriveSha(transaction.Transactions(b.Transactions())); hash != b.TxHash() {
-		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, b.TxHash())
+		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", b.TxHash(), hash)
 	}
 
 	if !v.bc.HasBlockAndState(b.ParentHash(), b.Number64().Uint64()-1) {

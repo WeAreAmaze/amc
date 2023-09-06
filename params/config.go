@@ -232,10 +232,10 @@ var (
 		LondonBlock:           big.NewInt(0),
 		ArrowGlacierBlock:     big.NewInt(0),
 		GrayGlacierBlock:      big.NewInt(0),
-		BeijingBlock:          big.NewInt(0),
+		BeijingBlock:          big.NewInt(1000),
 		Engine: &ConsensusConfig{
 			EngineName: "APosEngine",
-			Period:     8,
+			Period:     0,
 			GasFloor:   0,
 			GasCeil:    30000000,
 			APos: &APosConfig{

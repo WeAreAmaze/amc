@@ -23,7 +23,6 @@ import (
 	"github.com/amazechain/amc/modules"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"google.golang.org/protobuf/proto"
 )
 
 var _ WriterWithChangeSets = (*PlainStateWriter)(nil)

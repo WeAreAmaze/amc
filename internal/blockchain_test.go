@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/paths"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/internal/consensus/apos"
@@ -11,7 +12,6 @@ import (
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"os"
 	"strings"
 	"testing"
 )
@@ -30,36 +30,26 @@ func testReorgLong(t *testing.T, full bool) {
 
 func testReorg(t *testing.T, first, second []int64, td uint64, full bool) {
 
-	db := rawdb.NewMemoryDatabase(os.TempDir())
+	db := rawdb.NewMemoryDatabase(paths.RandomTmpPath())
 	defer db.Close()
+
+	//engine := apos.New(params.TestAposChainConfig.Engine, nil, params.TestAposChainConfig)
 
 	// Create a pristine chain and database
 	genDb, _, blockchain, err := newCanonical(db, apos.New(params.TestAposChainConfig.Engine, db, params.TestAposChainConfig), 0, full)
 	if err != nil {
 		t.Fatalf("failed to create pristine chain: %v", err)
 	}
-	//defer blockchain.Stop()
+	defer genDb.Close()
 
 	// Insert an easy and a difficult chain afterwards
-	easyBlocks, _ := GenerateChain(params.TestAposChainConfig, blockchain.CurrentBlock().(*block.Block), apos.New(params.TestAposChainConfig.Engine, db, params.TestAposChainConfig), genDb, len(first), func(i int, b *BlockGen) {
+	easyBlocks, _ := GenerateChain(params.TestAposChainConfig, blockchain.CurrentBlock().(*block.Block), apos.New(params.TestAposChainConfig.Engine, genDb, params.TestAposChainConfig), genDb, len(first), func(i int, b *BlockGen) {
 		b.OffsetTime(first[i])
-	}, false)
-	for i, blk := range easyBlocks.Blocks {
-		header := blk.Header().(*block.Header)
-		if i > 0 {
-			header.ParentHash = easyBlocks.Blocks[i-1].Hash()
-		}
-		header.Extra = make([]byte, 32+65)
-		header.Difficulty = uint256.NewInt(2)
+	})
 
-		//sig, _ := crypto.Sign(apos.SealHash(header).Bytes(), key)
-		//copy(header.Extra[len(header.Extra)-clique.ExtraSeal:], sig)
-		//chain.Headers[i] = header
-		//chain.Blocks[i] = block.WithSeal(header)
-	}
-	diffBlocks, _ := GenerateChain(params.TestAposChainConfig, blockchain.CurrentBlock().(*block.Block), apos.New(params.TestAposChainConfig.Engine, db, params.TestAposChainConfig), genDb, len(second), func(i int, b *BlockGen) {
+	diffBlocks, _ := GenerateChain(params.TestAposChainConfig, blockchain.CurrentBlock().(*block.Block), apos.New(params.TestAposChainConfig.Engine, genDb, params.TestAposChainConfig), genDb, len(second), func(i int, b *BlockGen) {
 		b.OffsetTime(second[i])
-	}, false)
+	})
 	//if full {
 	if _, err := blockchain.InsertChain(blockToIBlock(easyBlocks.Blocks)); err != nil {
 		t.Fatalf("failed to insert easy chain: %v", err)
@@ -86,6 +76,7 @@ func testReorg(t *testing.T, first, second []int64, td uint64, full bool) {
 	// Check that the chain is valid number and link wise
 	//if full {
 	prev := blockchain.CurrentBlock().Header().(*block.Header)
+
 	for blk, _ := blockchain.GetBlockByNumber(new(uint256.Int).Sub(blockchain.CurrentBlock().Number64(), uint256.NewInt(1))); blk.Number64().Uint64() != 0; prev = blk.Header().(*block.Header) {
 		if prev.ParentHash != blk.Hash() {
 			t.Errorf("parent block hash mismatch: have %x, want %x", prev.ParentHash, blk.Hash())
@@ -129,8 +120,6 @@ func newCanonical(db kv.RwDB, engine consensus.Engine, n int, full bool) (kv.RwD
 			Config:    params.TestAposChainConfig,
 			Alloc:     make([]conf.Allocate, 1),
 		}
-
-		//signer = transaction.LatestSignerForChainID(nil)
 	)
 	copy(genesis.ExtraData[32:], addr[:])
 	genesis.Alloc[0] = conf.Allocate{
@@ -141,7 +130,12 @@ func newCanonical(db kv.RwDB, engine consensus.Engine, n int, full bool) (kv.RwD
 	gb := GenesisBlock{
 		GenesisBlockConfig: genesis,
 	}
-	gBlock, _, _ := gb.ToBlock()
+	var gBlock *block.Block
+	db.Update(context.Background(), func(tx kv.RwTx) error {
+		gBlock, _, _ = gb.Write(tx)
+		return nil
+	})
+
 	// Initialize a fresh chain with only a genesis block
 	blockchain, _ := NewBlockChain(context.Background(), gBlock, engine, nil, db, nil, params.TestAposChainConfig, params.TestAposChainConfig.Engine)
 
@@ -151,37 +145,18 @@ func newCanonical(db kv.RwDB, engine consensus.Engine, n int, full bool) (kv.RwD
 
 	// Create and inject the requested chain
 	if n == 0 {
-		return db, genesis, blockchain.(*BlockChain), nil
+		return rawdb.NewMemoryDatabase(paths.RandomTmpPath()), genesis, blockchain.(*BlockChain), nil
 	}
 	//if full {
 	// Full block-chain requested
-	genDb, blocks := makeBlockChainWithGenesis(db, &gb, n, engine, func(i int, b *BlockGen) {
-		// The chain maker doesn't have access to a chain, so the difficulty will be
-		// lets unset (nil). Set it here to the correct value.
-		b.SetDifficulty(uint256.NewInt(2))
+	genDb, blocks := makeBlockChainWithGenesis(&gb, n, engine, canonicalSeed)
 
-		// We want to simulate an empty middle block, having the same state as the
-		// first one. The last is needs a state change again to force a reorg.
-		if i != 1 {
-			//baseFee := b.GetHeader().BaseFee
-			//tx, err := transaction.SignTx(transaction.NewTransaction(b.TxNonce(addr), types.Address{0x00}, new(uint256.Int), params.TxGas, baseFee, nil), *signer, key)
-			//if err != nil {
-			//	panic(err)
-			//}
-			//b.AddTxWithChain(getHeader, engine, *tx)
-		}
-	})
 	ib := make([]block.IBlock, len(blocks))
 	for i, b := range blocks {
 		ib[i] = b
 	}
 	_, err := blockchain.InsertChain(ib)
 	return genDb, genesis, blockchain.(*BlockChain), err
-	//}
-	//// Header-only chain requested
-	//genDb, headers := makeHeaderChainWithGenesis(genesis, n, engine, canonicalSeed)
-	//_, err := blockchain.InsertHeaderChain(headers)
-	//return genDb, genesis, blockchain.(*BlockChain), err
 }
 
 func blockToIBlock(in []*block.Block) []block.IBlock {

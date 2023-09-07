@@ -437,7 +437,8 @@ func (a *StateAccount) Reset() {
 	a.Nonce = 0
 	a.Incarnation = 0
 	a.Balance.Clear()
-	copy(a.Root[:], emptyRoot[:])
+	//copy(a.Root[:], emptyRoot[:])
+	a.Root = types.Hash{}
 	copy(a.CodeHash[:], emptyCodeHash[:])
 }
 

@@ -112,6 +112,13 @@ var rpcFlags = []cli.Flag{
 		Destination: &DefaultConfig.NodeCfg.HTTPApi,
 	},
 
+	&cli.StringFlag{
+		Name:        "http.corsdomain",
+		Usage:       "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.HTTPCors,
+	},
+
 	&cli.BoolFlag{
 		Name:        "ws",
 		Usage:       "Enable the WS-RPC server",
@@ -136,6 +143,13 @@ var rpcFlags = []cli.Flag{
 		Usage:       "API's offered over the WS-RPC interface",
 		Value:       "",
 		Destination: &DefaultConfig.NodeCfg.WSApi,
+	},
+
+	&cli.StringFlag{
+		Name:        "ws.origins",
+		Usage:       "Origins from which to accept websockets requests",
+		Value:       "",
+		Destination: &DefaultConfig.NodeCfg.WSOrigins,
 	},
 }
 

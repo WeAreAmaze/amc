@@ -330,7 +330,7 @@ func (h *httpServer) wsAllowed() bool {
 func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSecret []byte) http.Handler {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
-	handler = newVHostHandler(vhosts, srv)
+	handler = newVHostHandler(vhosts, handler)
 	if len(jwtSecret) != 0 {
 		handler = newJWTHandler(jwtSecret, handler)
 	}
@@ -373,19 +373,22 @@ func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
 }
 
 func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// if r.Host is not set, we can continue serving since a browser would set the Host header
 	if r.Host == "" {
 		h.next.ServeHTTP(w, r)
 		return
 	}
 	host, _, err := net.SplitHostPort(r.Host)
 	if err != nil {
+		// Either invalid (too many colons) or no port specified
 		host = r.Host
 	}
 	if ipAddr := net.ParseIP(host); ipAddr != nil {
+		// It's an IP address, we can serve that
 		h.next.ServeHTTP(w, r)
 		return
-
 	}
+	// Not an IP address, but a hostname. Need to validate
 	if _, exist := h.vhosts["*"]; exist {
 		h.next.ServeHTTP(w, r)
 		return

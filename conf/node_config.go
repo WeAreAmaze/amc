@@ -31,13 +31,22 @@ type NodeConfig struct {
 	HTTPHost    string `json:"http_host" yaml:"http_host" `
 	HTTPPort    string `json:"http_port" yaml:"http_port"`
 	HTTPApi     string `json:"http_api" yaml:"http_api"`
-	WS          bool   `json:"ws" yaml:"ws" `
-	WSHost      string `json:"ws_host" yaml:"ws_host" `
-	WSPort      string `json:"ws_port" yaml:"ws_port"`
-	WSApi       string `json:"ws_api" yaml:"ws_api"`
-	IPCPath     string `json:"ipc_path" yaml:"ipc_path"`
-	DataDir     string `json:"data_dir" yaml:"data_dir"`
-	Miner       bool   `json:"miner" yaml:"miner"`
+	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
+	// clients. Please be aware that CORS is a browser enforced security, it's fully
+	// useless for custom HTTP clients.
+	HTTPCors string `json:"http_cors" yaml:"http_cors"`
+
+	WS     bool   `json:"ws" yaml:"ws" `
+	WSHost string `json:"ws_host" yaml:"ws_host" `
+	WSPort string `json:"ws_port" yaml:"ws_port"`
+	WSApi  string `json:"ws_api" yaml:"ws_api"`
+	// WSOrigins is the list of domain to accept websocket requests from. Please be
+	// aware that the server can only act upon the HTTP request the client sends and
+	// cannot verify the validity of the request header.
+	WSOrigins string `toml:",omitempty"`
+	IPCPath   string `json:"ipc_path" yaml:"ipc_path"`
+	DataDir   string `json:"data_dir" yaml:"data_dir"`
+	Miner     bool   `json:"miner" yaml:"miner"`
 
 	AuthRPC bool `json:"auth_rpc" yaml:"auth_rpc"`
 	// AuthAddr is the listening address on which authenticated APIs are provided.

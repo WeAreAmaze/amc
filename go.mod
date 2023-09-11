@@ -45,6 +45,7 @@ require (
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prysmaticlabs/fastssz v0.0.0-20221107182844-78142813af44
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
+	github.com/rs/cors v1.7.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.2
 	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b

@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/amazechain/amc/log"
+	"github.com/rs/cors"
 	"io"
 	"io/ioutil"
 	"net"
@@ -327,7 +328,9 @@ func (h *httpServer) wsAllowed() bool {
 }
 
 func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSecret []byte) http.Handler {
-	handler := newVHostHandler(vhosts, srv)
+	// Wrap the CORS-handler within a host-handler
+	handler := newCorsHandler(srv, cors)
+	handler = newVHostHandler(vhosts, srv)
 	if len(jwtSecret) != 0 {
 		handler = newJWTHandler(jwtSecret, handler)
 	}
@@ -340,6 +343,20 @@ func NewWSHandlerStack(srv http.Handler, jwtSecret []byte) http.Handler {
 		return newJWTHandler(jwtSecret, srv)
 	}
 	return srv
+}
+
+func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
+	// disable CORS support if user has not specified a custom CORS configuration
+	if len(allowedOrigins) == 0 {
+		return srv
+	}
+	c := cors.New(cors.Options{
+		AllowedOrigins: allowedOrigins,
+		AllowedMethods: []string{http.MethodPost, http.MethodGet},
+		AllowedHeaders: []string{"*"},
+		MaxAge:         600,
+	})
+	return c.Handler(srv)
 }
 
 type virtualHostHandler struct {

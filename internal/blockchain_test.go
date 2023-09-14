@@ -11,6 +11,7 @@ import (
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/internal/consensus/apos"
 	"github.com/amazechain/amc/modules/rawdb"
+	"github.com/amazechain/amc/modules/state"
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -234,6 +235,17 @@ func TestReward(t *testing.T) {
 	// Import the chain. This runs all block validation rules.
 	if _, err1 := blockchain.InsertChain(blockToIBlock(chain.Blocks)); err1 != nil {
 		t.Fatalf("failed to insert original chain: %v", err1)
+	}
+
+	if err := db.View(context.Background(), func(tx kv.Tx) error {
+		stateReader := state.NewPlainStateReader(tx)
+		ibs := state.New(stateReader)
+
+		addr2Balance := ibs.GetBalance(addr2)
+		t.Logf("add1 banlance: %s", addr2Balance.String())
+		return nil
+	}); err != nil {
+		t.Fatalf("cannnot open database: %v", err)
 	}
 
 }

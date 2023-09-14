@@ -5,6 +5,7 @@ import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/paths"
+	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
@@ -151,11 +152,7 @@ func newCanonical(db kv.RwDB, chainConfig *params.ChainConfig, engine consensus.
 		block.SetDifficulty(uint256.NewInt(2))
 	})
 
-	ib := make([]block.IBlock, len(blocks))
-	for i, b := range blocks {
-		ib[i] = b
-	}
-	_, err := blockchain.InsertChain(ib)
+	_, err := blockchain.InsertChain(blockToIBlock(blocks))
 	return genDb, gb.GenesisBlockConfig, blockchain.(*BlockChain), err
 }
 
@@ -174,4 +171,69 @@ func blockToIBlock(in []*block.Block) []block.IBlock {
 		out[i] = b.WithSeal(header)
 	}
 	return out
+}
+
+// Tests
+func TestReward(t *testing.T) {
+	var (
+		chainConfig = params.TestAposChainConfig
+		db          = rawdb.NewMemoryDatabase(paths.RandomTmpPath())
+		aposEngine  = apos.New(chainConfig.Engine, db, chainConfig)
+		miners      = []types.Address{addr}
+
+		key1, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		key3, _  = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+		addr1    = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2    = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3    = crypto.PubkeyToAddress(key3.PublicKey)
+		allocate = []conf.Allocate{
+			{
+				Address: strings.Replace(addr.Hex(), "0x", "AMC", 1),
+				Balance: "100000000000000000000000000",
+			},
+			{
+				Address: strings.Replace(addr1.Hex(), "0x", "AMC", 1),
+				Balance: "100000000000000000000000000",
+			},
+			{
+				Address: strings.Replace(addr2.Hex(), "0x", "AMC", 1),
+				Balance: "100000000000000000000000000",
+			},
+			{
+				Address: strings.Replace(addr3.Hex(), "0x", "AMC", 1),
+				Balance: "100000000000000000000000000",
+			},
+		}
+		signer = transaction.LatestSigner(chainConfig)
+	)
+	defer db.Close()
+
+	gBlock, gb, err := newGenesisBlockConfig(db, chainConfig, miners, allocate)
+	if err != nil {
+		t.Fatalf("failed to create genesis block: %v", err)
+	}
+
+	// Create a pristine chain and database
+	genDb, _, blockchain, err := newCanonical(db, chainConfig, aposEngine, gBlock, gb, 1)
+	if err != nil {
+		t.Fatalf("failed to create pristine chain: %v", err)
+	}
+	defer genDb.Close()
+
+	chain, _ := GenerateChain(chainConfig, blockchain.CurrentBlock().(*block.Block), aposEngine, genDb, 1, func(i int, gen *BlockGen) {
+		switch i {
+		case 0:
+			pastDrop, _ := transaction.SignTx(transaction.NewTransaction(gen.TxNonce(addr2), addr2, &addr1, uint256.NewInt(1000), params.TxGas, uint256.NewInt(params.GWei), nil), signer, key2)
+			gen.AddTx(*pastDrop)
+
+		case 2:
+		}
+	})
+
+	// Import the chain. This runs all block validation rules.
+	if _, err1 := blockchain.InsertChain(blockToIBlock(chain.Blocks)); err1 != nil {
+		t.Fatalf("failed to insert original chain: %v", err1)
+	}
+
 }

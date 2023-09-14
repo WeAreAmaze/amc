@@ -5,6 +5,7 @@ import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/paths"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/internal/consensus/apos"
@@ -31,22 +32,31 @@ func testReorgLong(t *testing.T, full bool) {
 }
 
 func testReorg(t *testing.T, first, second []int64, td uint64) {
-	db := rawdb.NewMemoryDatabase(paths.RandomTmpPath())
+	var (
+		chainConfig = params.TestAposChainConfig
+		db          = rawdb.NewMemoryDatabase(paths.RandomTmpPath())
+		aposEngine  = apos.New(chainConfig.Engine, db, chainConfig)
+	)
 	defer db.Close()
 
+	gBlock, gb, err := newGenesisBlockConfig(db, chainConfig, []types.Address{addr}, []conf.Allocate{conf.Allocate{Address: strings.Replace(addr.Hex(), "0x", "AMC", 1), Balance: "100000000000000000000000000"}})
+	if err != nil {
+		t.Fatalf("failed to create genesis block: %v", err)
+	}
+
 	// Create a pristine chain and database
-	genDb, _, blockchain, err := newCanonical(db, apos.New(params.TestAposChainConfig.Engine, db, params.TestAposChainConfig), 0)
+	genDb, _, blockchain, err := newCanonical(db, chainConfig, aposEngine, gBlock, gb, 0)
 	if err != nil {
 		t.Fatalf("failed to create pristine chain: %v", err)
 	}
 	defer genDb.Close()
 
 	// Insert an easy and a difficult chain afterwards
-	easyBlocks, _ := GenerateChain(params.TestAposChainConfig, blockchain.CurrentBlock().(*block.Block), apos.New(params.TestAposChainConfig.Engine, genDb, params.TestAposChainConfig), genDb, len(first), func(i int, b *BlockGen) {
+	easyBlocks, _ := GenerateChain(chainConfig, blockchain.CurrentBlock().(*block.Block), aposEngine, genDb, len(first), func(i int, b *BlockGen) {
 		b.OffsetTime(first[i])
 	})
 
-	diffBlocks, _ := GenerateChain(params.TestAposChainConfig, blockchain.CurrentBlock().(*block.Block), apos.New(params.TestAposChainConfig.Engine, genDb, params.TestAposChainConfig), genDb, len(second), func(i int, b *BlockGen) {
+	diffBlocks, _ := GenerateChain(chainConfig, blockchain.CurrentBlock().(*block.Block), aposEngine, genDb, len(second), func(i int, b *BlockGen) {
 		b.OffsetTime(second[i])
 	})
 	//if full {
@@ -75,49 +85,69 @@ func testReorg(t *testing.T, first, second []int64, td uint64) {
 	}
 }
 
+func newGenesisBlockConfig(db kv.RwDB, chainConfig *params.ChainConfig, miners []types.Address, allocate []conf.Allocate) (*block.Block, *GenesisBlock, error) {
+	var (
+		gBlock *block.Block
+	)
+	gb := &GenesisBlock{
+		GenesisBlockConfig: &conf.GenesisBlockConfig{
+			ExtraData: make([]byte, 32+20*len(miners)+65),
+			BaseFee:   uint256.NewInt(params.InitialBaseFee),
+			Config:    chainConfig,
+			Alloc:     allocate,
+			Miners:    make([]string, 0),
+		},
+	}
+	for i, miner := range miners {
+		gb.GenesisBlockConfig.Miners = append(gb.GenesisBlockConfig.Miners, strings.Replace(miner.Hex(), "0x", "AMC", 1))
+		copy(gb.GenesisBlockConfig.ExtraData[32+i*20:32+i*20+20], miner[:])
+	}
+
+	if err := db.Update(context.Background(), func(tx kv.RwTx) error {
+		gBlock, _, _ = gb.Write(tx)
+		//todo remove
+		//if chainConfig.Engine.EngineName == "APosEngine" {
+		//	minersPB := consensus_pb.PBSigners{}
+		//	for _, miner := range miners {
+		//
+		//		minersPB.Signer = append(minersPB.Signer, &consensus_pb.PBSigner{
+		//			Public:  miner,
+		//			Address: utils.ConvertAddressToH160(miner),
+		//		})
+		//	}
+		//	data, err := proto.Marshal(&miners)
+		//	if err != nil {
+		//		return err
+		//	}
+		//
+		//	if err := rawdb.StoreSigners(tx, data); err != nil {
+		//		return err
+		//	}
+		//}
+		return nil
+	}); err != nil {
+		return nil, nil, err
+	}
+
+	return gBlock, gb, nil
+}
+
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain. The database and genesis specification for block generation
 // are also returned in case more test blocks are needed later.
-func newCanonical(db kv.RwDB, engine consensus.Engine, n int) (kv.RwDB, *conf.GenesisBlockConfig, *BlockChain, error) {
-	var (
-		genesis = &conf.GenesisBlockConfig{
-			ExtraData: make([]byte, 32+20+65),
-			BaseFee:   uint256.NewInt(params.InitialBaseFee),
-			Config:    params.TestAposChainConfig,
-			Alloc:     make([]conf.Allocate, 1),
-			Miners:    []string{strings.Replace(addr.Hex(), "0x", "AMC", 1)},
-		}
-	)
-	copy(genesis.ExtraData[32:32+20], addr[:])
-	genesis.Alloc[0] = conf.Allocate{
-		Address: strings.Replace(addr.Hex(), "0x", "AMC", 1),
-		Balance: "100000000000000000000000000",
-	}
-
-	gb := GenesisBlock{
-		GenesisBlockConfig: genesis,
-	}
-	var gBlock *block.Block
-	db.Update(context.Background(), func(tx kv.RwTx) error {
-		gBlock, _, _ = gb.Write(tx)
-		return nil
-	})
+func newCanonical(db kv.RwDB, chainConfig *params.ChainConfig, engine consensus.Engine, gBlock *block.Block, gb *GenesisBlock, n int) (kv.RwDB, *conf.GenesisBlockConfig, *BlockChain, error) {
 
 	// Initialize a fresh chain with only a genesis block
-	blockchain, _ := NewBlockChain(context.Background(), gBlock, engine, nil, db, nil, params.TestAposChainConfig, params.TestAposChainConfig.Engine)
-
-	//getHeader := func(hash types.Hash, number uint64) {
-	//
-	//}
+	blockchain, _ := NewBlockChain(context.Background(), gBlock, engine, nil, db, nil, chainConfig, chainConfig.Engine)
 
 	// Create and inject the requested chain
 	if n == 0 {
-		return rawdb.NewMemoryDatabase(paths.RandomTmpPath()), genesis, blockchain.(*BlockChain), nil
+		return rawdb.NewMemoryDatabase(paths.RandomTmpPath()), gb.GenesisBlockConfig, blockchain.(*BlockChain), nil
 	}
 	//if full {
 	// Full block-chain requested
-	genDb, blocks, _ := GenerateChainWithGenesis(&gb, engine, n, func(i int, block *BlockGen) {
+	genDb, blocks, _ := GenerateChainWithGenesis(gb, engine, n, func(i int, block *BlockGen) {
 		block.SetDifficulty(uint256.NewInt(2))
 	})
 
@@ -126,7 +156,7 @@ func newCanonical(db kv.RwDB, engine consensus.Engine, n int) (kv.RwDB, *conf.Ge
 		ib[i] = b
 	}
 	_, err := blockchain.InsertChain(ib)
-	return genDb, genesis, blockchain.(*BlockChain), err
+	return genDb, gb.GenesisBlockConfig, blockchain.(*BlockChain), err
 }
 
 func blockToIBlock(in []*block.Block) []block.IBlock {

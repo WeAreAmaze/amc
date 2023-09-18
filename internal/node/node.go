@@ -636,7 +636,7 @@ func (n *Node) startRPC() error {
 	if n.config.NodeCfg.HTTP {
 		//todo []string{"eth", "web3", "debug", "net", "apoa", "txpool", "apos"}
 		config := httpConfig{
-			CorsAllowedOrigins: []string{},
+			CorsAllowedOrigins: utils.SplitAndTrim(n.config.NodeCfg.HTTPCors),
 			Vhosts:             []string{"*"},
 			Modules:            utils.SplitAndTrim(n.config.NodeCfg.HTTPApi),
 			prefix:             "",
@@ -662,7 +662,7 @@ func (n *Node) startRPC() error {
 		//todo
 		config := wsConfig{
 			Modules:   utils.SplitAndTrim(n.config.NodeCfg.WSApi),
-			Origins:   []string{"*"},
+			Origins:   utils.SplitAndTrim(n.config.NodeCfg.WSOrigins),
 			prefix:    "",
 			jwtSecret: []byte{},
 		}
@@ -681,7 +681,7 @@ func (n *Node) startRPC() error {
 			return err
 		}
 		config := httpConfig{
-			CorsAllowedOrigins: []string{},
+			CorsAllowedOrigins: utils.SplitAndTrim(n.config.NodeCfg.HTTPCors),
 			Vhosts:             []string{"*"},
 			Modules:            []string{"admin", "apos"},
 			prefix:             "",

@@ -48,6 +48,11 @@ type MinedBlockResponse struct {
 	CurrentBlockNumber *uint256.Int `json:"currentBlockNumber"`
 }
 
+type VerifiedBlockResponse struct {
+	MinedBlocks []MinedBlock `json:"minedBlocks"`
+	Total       *uint256.Int `json:"totalBlocks"`
+}
+
 // API is a user facing jsonrpc API to allow controlling the signer and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
@@ -403,6 +408,77 @@ Finish:
 	return &MinedBlockResponse{
 		MinedBlocks:        minedBlocks,
 		CurrentBlockNumber: currentBlock.Number64(),
+	}, nil
+}
+
+// VerifiedBlock
+func (api *API) VerifiedBlock(address common.Address, from jsonrpc.BlockNumberOrHash, wantCount uint64, to *jsonrpc.BlockNumber) (*VerifiedBlockResponse, error) {
+
+	addr := *mvm_types.ToAmcAddress(&address)
+	var (
+		err           error
+		searchCount   int
+		findCount     uint64
+		currentHeader block.IHeader
+		currentBlock  block.IBlock
+		depositInfo   *deposit.Info
+	)
+
+	if to.Int64() <= 0 {
+		return nil, fmt.Errorf("'To' block number must be greater than 0")
+	}
+
+	api.apos.db.View(context.Background(), func(tx kv.Tx) error {
+		depositInfo = deposit.GetDepositInfo(tx, addr)
+		return nil
+	})
+	if depositInfo == nil {
+		return nil, fmt.Errorf("address do not have depositInfo")
+	}
+	//
+	currentHeader = api.getHeader(from)
+	if currentHeader == nil {
+		return nil, err
+	}
+
+	//
+	currentBlock = api.chain.GetBlock(currentHeader.Hash(), currentHeader.Number64().Uint64())
+	searchCount = 0
+	findCount = 0
+	minedBlocks := make([]MinedBlock, 0)
+
+	for i := currentHeader.Number64().Uint64(); i >= 0; i-- {
+		verifier := currentBlock.Body().Verifier()
+		for _, verify := range verifier {
+			if addr == verify.Address {
+				minedBlocks = append(minedBlocks, MinedBlock{
+					BlockNumber: currentBlock.Number64(),
+					Timestamp:   currentBlock.Time(),
+					Reward:      depositInfo.RewardPerBlock,
+				})
+				findCount++
+				if findCount >= wantCount {
+					break
+				}
+			}
+		}
+		if uint64(*to) == currentBlock.Number64().Uint64() {
+			break
+		}
+		searchCount++
+		if searchCount >= int(api.apos.config.APos.RewardEpoch) {
+			break
+		}
+		currentHeader = api.chain.GetHeaderByNumber(new(uint256.Int).SubUint64(currentBlock.Number64(), 1))
+		if currentHeader == nil {
+			break
+		}
+		currentBlock = api.chain.GetBlock(currentHeader.Hash(), currentHeader.Number64().Uint64())
+	}
+
+	return &VerifiedBlockResponse{
+		MinedBlocks: minedBlocks,
+		Total:       uint256.NewInt(findCount),
 	}, nil
 }
 

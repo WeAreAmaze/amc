@@ -23,6 +23,7 @@ import (
 	"github.com/amazechain/amc/common/math"
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/internal/p2p"
+	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
 	"sort"
@@ -35,10 +36,8 @@ import (
 	"github.com/ledgerwatch/erigon-lib/kv"
 
 	"github.com/amazechain/amc/api/protocol/msg_proto"
-	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common"
 	block2 "github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
@@ -95,7 +94,7 @@ type BlockChain struct {
 
 	insertLock    chan struct{}
 	latestBlockCh chan block2.IBlock
-	lock          sync.Mutex
+	lock          *utils.ClosableMutex
 
 	peers map[peer.ID]bool
 
@@ -172,6 +171,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 
 		numberCache: numberCache,
 		headerCache: headerCache,
+		lock:        utils.NewClosableMutex(),
 	}
 	if err := bc.loadLastState(); nil != err {
 		return nil, err
@@ -419,70 +419,6 @@ func (bc *BlockChain) LatestBlockCh() (block2.IBlock, error) {
 
 		return block, nil
 	}
-}
-
-func (bc *BlockChain) newBlockLoop() {
-	bc.wg.Done()
-	//if bc.pubsub == nil {
-	//	bc.errorCh <- ErrInvalidPubSub
-	//	return
-	//}
-
-	topic, err := bc.pubsub.JoinTopic(message.GossipBlockMessage)
-	if err != nil {
-		bc.errorCh <- ErrInvalidPubSub
-		return
-	}
-
-	sub, err := topic.Subscribe()
-	if err != nil {
-		bc.errorCh <- ErrInvalidPubSub
-		return
-	}
-
-	for {
-		select {
-		case <-bc.ctx.Done():
-			log.Infof("block chain quit...")
-			return
-		default:
-			msg, err := sub.Next(bc.ctx)
-			if err != nil {
-				//todo panic: send on closed channel
-				bc.errorCh <- err
-				return
-			}
-
-			var newBlock types_pb.Block
-			if err := proto.Unmarshal(msg.Data, &newBlock); err == nil {
-				var block block2.Block
-				if err := block.FromProtoMessage(&newBlock); err == nil {
-					var inserted bool
-					// if future block
-					if block.Number64().Uint64() > bc.CurrentBlock().Number64().Uint64()+1 {
-						inserted = false
-						bc.AddFutureBlock(&block)
-					} else {
-						if _, err := bc.InsertChain([]block2.IBlock{&block}); err != nil {
-							inserted = false
-							log.Errorf("failed to inster new block in blockchain, err:%v", err)
-						} else {
-							log.Info("Imported new chain segment", "hash", block.Hash(), "number", block.Number64().Uint64(), "stateRoot", block.StateRoot(), "txs", len(block.Body().Transactions()))
-							inserted = true
-						}
-					}
-					event.GlobalEvent.Send(common.ChainHighestBlock{Block: block, Inserted: inserted})
-
-				} else {
-					log.Errorf("unmarshal err: %v", err)
-				}
-
-			} else {
-				log.Warnf("failed to unmarshal pubsub message, err:%v", err)
-			}
-		}
-	}
-
 }
 
 func (bc *BlockChain) runLoop() {
@@ -1702,7 +1638,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	if newBlock == nil {
 		return fmt.Errorf("invalid new chain")
 	}
-	log.Debug("reorg to the same height", "height", oldBlock.Number64())
+	//log.Debug("reorg to the same height", "height", oldBlock.Number64())
 	var err error
 	// Both sides of the reorg are at the same number, reduce both until the common
 	// ancestor is found
@@ -1857,6 +1793,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	return nil
 }
 func (bc *BlockChain) Quit() <-chan struct{} {
+	bc.lock.Close()
 	return bc.ctx.Done()
 }
 

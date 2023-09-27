@@ -58,6 +58,7 @@ type task struct {
 	block     block.IBlock
 	createdAt time.Time
 	nopay     map[types.Address]*uint256.Int
+	entire    *state.EntireCode
 }
 
 type newWorkReq struct {
@@ -152,6 +153,8 @@ type worker struct {
 	chainConfig *params.ChainConfig
 
 	isLocalBlock func(header *block.Header) bool
+
+	pendingMu    sync.RWMutex
 	pendingTasks map[types.Hash]*task
 
 	wg sync.WaitGroup
@@ -186,7 +189,6 @@ func newWorker(ctx context.Context, group *errgroup.Group, conf *params.Consensu
 		txsPool:          txsPool,
 		conf:             conf,
 		chainConfig:      chainConfig,
-		mu:               sync.RWMutex{},
 		startCh:          make(chan struct{}, 1),
 		group:            group,
 		isLocalBlock:     isLocalBlock,
@@ -293,9 +295,9 @@ func (w *worker) resultLoop() error {
 				sealhash = w.engine.SealHash(blk.Header())
 				hash     = blk.Hash()
 			)
-			w.mu.RLock()
+			w.pendingMu.RLock()
 			task, exist := w.pendingTasks[sealhash]
-			w.mu.RUnlock()
+			w.pendingMu.RUnlock()
 			if !exist {
 				log.Error("Block found but no relative pending task", "number", blk.Number64().Uint64(), "sealhash", sealhash, "hash", hash)
 				//w.startCh <- struct{}{}
@@ -395,17 +397,22 @@ func (w *worker) taskLoop() error {
 			}
 			interrupt()
 			stopCh, prev = make(chan struct{}), sealHash
-			w.mu.Lock()
+			w.pendingMu.Lock()
 			w.pendingTasks[sealHash] = task
-			w.mu.Unlock()
+			w.pendingMu.Unlock()
+
+			if w.chainConfig.IsBeijing(task.block.Header().Number64().Uint64()) {
+				event.GlobalEvent.Send(common.MinedEntireEvent{Entire: *task.entire})
+			}
 
 			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
-				w.mu.Lock()
+				w.pendingMu.Lock()
 				delete(w.pendingTasks, sealHash)
-				w.mu.Unlock()
-				log.Warn("delete task", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot, "err", err)
+				w.pendingMu.Unlock()
+				log.Warn("Block sealing failed", "sealHash", sealHash, "hash", hash, "stateRoot", stateRoot, "err", err)
 				if errors.Is(err, consensus.ErrNotEnoughSign) {
-					time.Sleep(1 * time.Second)
+					//todo
+					//time.Sleep(1 * time.Second)
 					w.startCh <- struct{}{}
 				}
 			} else {
@@ -539,13 +546,13 @@ func (w *worker) workLoop(recommit time.Duration) error {
 	}
 
 	clearPending := func(number *uint256.Int) {
-		w.mu.Lock()
+		w.pendingMu.Lock()
 		for h, t := range w.pendingTasks {
 			if number.Cmp(uint256.NewInt(0).Add(t.block.Number64(), uint256.NewInt(staleThreshold))) < 1 {
 				delete(w.pendingTasks, h)
 			}
 		}
-		w.mu.Unlock()
+		w.pendingMu.Unlock()
 	}
 
 	for {
@@ -730,6 +737,8 @@ func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs
 			return err
 		}
 
+		var entire *state.EntireCode
+
 		if w.chainConfig.IsBeijing(env.header.Number.Uint64()) {
 			txs := make([][]byte, len(env.txs))
 			for i, tx := range env.txs {
@@ -749,14 +758,14 @@ func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs
 			}
 			sort.Sort(hs)
 
-			event.GlobalEvent.Send(common.MinedEntireEvent{Entire: state.EntireCode{Codes: hs, Headers: needHeaders, Entire: entri, Rewards: rewards, CoinBase: env.coinbase}})
+			entire = &state.EntireCode{Codes: hs, Headers: needHeaders, Entire: entri, Rewards: rewards, CoinBase: env.coinbase}
 		}
 
 		//
 		w.updateSnapshot(env, rewards)
 
 		select {
-		case w.taskCh <- &task{receipts: env.receipts, block: iblock, createdAt: time.Now(), state: ibs, nopay: unpay}:
+		case w.taskCh <- &task{receipts: env.receipts, block: iblock, createdAt: time.Now(), state: ibs, nopay: unpay, entire: entire}:
 			log.Debug("Commit new sealing work",
 				"number", iblock.Header().Number64().Uint64(),
 				"sealhash", w.engine.SealHash(iblock.Header()),

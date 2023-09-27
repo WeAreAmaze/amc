@@ -34,8 +34,6 @@ const respTimeout = 20 * time.Second // RespTimeout is the maximum time for comp
 // todo
 const maxRequestBlocks = 1024
 
-const maintainPeerStatusesInterval = 2 * time.Minute
-
 const resyncInterval = 1 * time.Minute
 
 const enableFullSSZDataLogging = false
@@ -118,6 +116,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 func (s *Service) Start() {
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
+
 		// no-op
 		//s.cfg.p2p.Peers()
 		log.Error("disconnect peer", "peer", id)

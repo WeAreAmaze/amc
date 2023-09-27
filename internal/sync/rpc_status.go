@@ -22,7 +22,8 @@ import (
 // maintainPeerStatuses by infrequently polling peers for their latest status.
 func (s *Service) maintainPeerStatuses() {
 	// Run twice per epoch.
-	utils.RunEvery(s.ctx, maintainPeerStatusesInterval, func() {
+	interval := time.Duration(s.cfg.chain.Config().Engine.Period) * time.Second
+	utils.RunEvery(s.ctx, interval, func() {
 		wg := new(sync.WaitGroup)
 		for _, pid := range s.cfg.p2p.Peers().Connected() {
 			wg.Add(1)
@@ -49,7 +50,7 @@ func (s *Service) maintainPeerStatuses() {
 					// Peer has vanished; nothing to do.
 					return
 				}
-				if time.Now().After(lastUpdated.Add(maintainPeerStatusesInterval)) {
+				if time.Now().After(lastUpdated.Add(interval)) {
 					if err := s.reValidatePeer(s.ctx, id); err != nil {
 						log.Debug("Could not revalidate peer", "peer", id, "err", err)
 						s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Increment(id)

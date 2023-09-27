@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	pubsublog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -155,6 +156,8 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 
 	// Initialize Data maps.
 	//types.InitializeDataMaps()
+
+	pubsublog.SetLogLevel("pubsub", "debug")
 
 	return s, nil
 }

@@ -747,7 +747,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		ctx, cancle := context.WithTimeout(context.Background(), delay)
 		defer cancle()
 		member := c.CountDepositor()
-		aggSign, verifiers, err := SignMerge(ctx, header, member)
+		aggSign, verifiers, err := SignMerge(ctx, header, member, stop)
 		if nil != err {
 			return err
 		}
@@ -907,7 +907,7 @@ func (c *APos) IsServiceTransaction(sender types.Address, syscall consensus.Syst
 	return false
 }
 
-func SignMerge(ctx context.Context, header *block.Header, depositNum uint64) (types.Signature, []*block.Verify, error) {
+func SignMerge(ctx context.Context, header *block.Header, depositNum uint64, stop <-chan struct{}) (types.Signature, []*block.Verify, error) {
 	aggrSigns := make([]bls.Signature, 0)
 	verifiers := make([]*block.Verify, 0)
 	uniq := make(map[types.Address]struct{})
@@ -941,6 +941,8 @@ LOOP:
 				PublicKey: s.PublicKey,
 			})
 			uniq[s.Address] = struct{}{}
+		case <-stop:
+			break LOOP
 		case <-ctx.Done():
 			break LOOP
 		}

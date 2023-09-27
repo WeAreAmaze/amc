@@ -231,6 +231,7 @@ func MachineVerify(ctx context.Context) error {
 					copy(tmp.PublicKey[:], pri.PublicKey().Marshal())
 					tmp.Address = addr
 					// send res
+					log.Tracef("try to send sign: %s blockNr:%s", addr, b.Entire.Entire.Header.Number.String())
 					aggsign.SigChannel <- tmp
 					//log.Tracef("send verify sign, %+v", tmp)
 				}(s, k)

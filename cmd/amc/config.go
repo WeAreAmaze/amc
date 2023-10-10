@@ -76,7 +76,7 @@ var DefaultConfig = conf.Config{
 
 	P2PCfg: &conf.P2PConfig{P2PLimit: &conf.P2PLimit{}},
 
-	GenesisBlockCfg: ReadGenesis("allocs/genesis.json"),
+	GenesisBlockCfg: ReadGenesis("allocs/genesis_mainnet.json"),
 	GPO:             conf.FullNodeGPO,
 	Miner: conf.MinerConfig{
 		GasCeil:  30000000,

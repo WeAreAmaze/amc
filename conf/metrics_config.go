@@ -17,6 +17,10 @@
 package conf
 
 type MetricsConfig struct {
+	Enable bool   `json:"enable" yaml:"enable"`
+	Port   int    `json:"port" yaml:"port"`
+	HTTP   string `json:"http" yaml:"http"`
+
 	EnableInfluxDB       bool   `json:"enable_influx_db" yaml:"enable_influx_db"`
 	InfluxDBEndpoint     string `json:"influx_db_endpoint" yaml:"influx_db_endpoint"`
 	InfluxDBDatabase     string `json:"influx_db_database" yaml:"influx_db_database"`

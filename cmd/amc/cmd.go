@@ -473,8 +473,30 @@ var (
 
 	// MetricsEnabledFlag Metrics flags
 	MetricsEnabledFlag = &cli.BoolFlag{
-		Name:  "metrics",
-		Usage: "Enable metrics collection and reporting",
+		Name:        "metrics",
+		Usage:       "Enable metrics collection and reporting",
+		Value:       false,
+		Destination: &DefaultConfig.MetricsCfg.Enable,
+	}
+
+	// MetricsHTTPFlag defines the endpoint for a stand-alone metrics HTTP endpoint.
+	// Since the pprof service enables sensitive/vulnerable behavior, this allows a user
+	// to enable a public-OK metrics endpoint without having to worry about ALSO exposing
+	// other profiling behavior or information.
+	MetricsHTTPFlag = &cli.StringFlag{
+		Name:  "metrics.addr",
+		Usage: `Enable stand-alone metrics HTTP server listening interface.`,
+		//Category: flags.MetricsCategory,
+		Value:       "127.0.0.1",
+		Destination: &DefaultConfig.MetricsCfg.HTTP,
+	}
+	MetricsPortFlag = &cli.IntFlag{
+		Name: "metrics.port",
+		Usage: `Metrics HTTP server listening port.
+Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.`,
+		Value: 6060,
+		// Category: flags.MetricsCategory,
+		Destination: &DefaultConfig.MetricsCfg.Port,
 	}
 
 	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
@@ -556,6 +578,8 @@ var (
 
 	metricsFlags = []cli.Flag{
 		MetricsEnabledFlag,
+		MetricsHTTPFlag,
+		MetricsPortFlag,
 		MetricsEnableInfluxDBFlag,
 		MetricsInfluxDBEndpointFlag,
 		MetricsInfluxDBTokenFlag,

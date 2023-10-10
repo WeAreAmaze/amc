@@ -126,8 +126,19 @@ func doReward(chainConf *params.ChainConfig, consConf *conf.ConsensusConfig, sta
 				})
 			}
 		}
-		state.SoftFinalise()
+		if !isWrongStateRootBlockNumber(header.Number64()) {
+			state.SoftFinalise()
+		}
 		sort.Sort(rewards)
 	}
 	return rewards, upayMap, nil
+}
+
+func isWrongStateRootBlockNumber(blockNr *uint256.Int) bool {
+	switch blockNr.Uint64() {
+	case 1288400, 1299200, 1310000, 1320800, 1331600, 1342400, 1353200, 1364000, 1374800, 1385600, 1396400, 1407200, 1418000, 1428800, 1439600, 1450400:
+		return true
+	default:
+		return false
+	}
 }

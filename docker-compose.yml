@@ -7,10 +7,6 @@ services:
       - AmazeChain-linux-amd64
       - --data.dir
       - data
-      - --p2p.listen
-      - '/ip4/172.18.0.2/tcp/61016'
-      - --p2p.key
-      - 'CAMSeTB3AgEBBCBZandzyO1LLLNawa6diRUh/A7FTOkxLlHuaIaQJ2piDqAKBggqhkjOPQMBB6FEA0IABEhI/zTNfeaDp31XUoGwUACXZ1HswgWtJGxYoqq9CIxfEvMl3HnMn2ZVcSz2z590k/CpfnrsTLik/8dUiXBfh2U='
       - --log.level
       - info
       - --http
@@ -32,17 +28,25 @@ services:
       - --account.password
       - './password'
       - --metrics
-      - --metrics.influxdb
-      - --metrics.influxdb.endpoint
-      - "http://influxdb:8086"
-      - --metrics.influxdb.token
-      - "ksLlfJ0cRCNXRtrFVpKiZ2au3-pOWL-hgVhgsCqivAlq7Vf0VdyjjVMWA__IhjkcI_GbWccpwRDpQiIGdm2FpA=="
-      - --metrics.influxdb.bucket
-      - "amazechain"
-      - --metrics.influxdb.organization
-      - "amazechain"
-      - --metrics.influxdb.tags
-      - "server=bootnode"
+      - --metrics.addr
+      - '0.0.0.0'
+      - --p2p.tcp-port
+      - '61020'
+      - --p2p.udp-port
+      - '61021'
+      - --p2p.min-sync-peers
+      - '0'
+#      - --metrics.influxdb
+#      - --metrics.influxdb.endpoint
+#      - "http://influxdb:8086"
+#      - --metrics.influxdb.token
+#      - "ksLlfJ0cRCNXRtrFVpKiZ2au3-pOWL-hgVhgsCqivAlq7Vf0VdyjjVMWA__IhjkcI_GbWccpwRDpQiIGdm2FpA=="
+#      - --metrics.influxdb.bucket
+#      - "amazechain"
+#      - --metrics.influxdb.organization
+#      - "amazechain"
+#      - --metrics.influxdb.tags
+#      - "server=bootnode"
     networks:
       network1:
         ipv4_address: 172.18.0.2
@@ -51,6 +55,7 @@ services:
       - db_bootnode_1:/home/amc/data
       - ./deployments/keystore:/home/amc/data/keystore:ro
       - ./deployments/keystore/password:/home/amc/password:ro
+      - ./cmd/amc/allocs/genesis.json:/home/amc/allocs/genesis.json:ro
     ports:
       - "20012:20012"
       - "20013:20013"
@@ -61,17 +66,13 @@ services:
       - AmazeChain-linux-amd64
       - --data.dir
       - data
-      - --p2p.bootstrap
-      - '/ip4/172.18.0.2/tcp/61016/p2p/QmRFiu3yisZdfySiRLRhjDcD3ZLeteEo31R9mmKudDhP53'
-      - --p2p.listen
-      - '/ip4/172.18.0.3/tcp/61016'
       - --log.level
       - info
       - --http
       - --http.port
       - '20112'
       - --http.addr
-      - 172.18.0.3
+      - '172.18.0.3'
       - --engine.miner
       - --engine.etherbase
       - '0x3ca698823ae0474ee80d2f4bf29ec649474f4040'
@@ -80,6 +81,12 @@ services:
       - --account.allow.insecure.unlock
       - --account.password
       - './password'
+      - --p2p.tcp-port
+      - '61020'
+      - --p2p.udp-port
+      - '61021'
+      - --p2p.min-sync-peers
+      - '1'
     depends_on:
       - bootnode
     networks:
@@ -97,10 +104,6 @@ services:
       - AmazeChain-linux-amd64
       - --data.dir
       - data
-      - --p2p.bootstrap
-      - '/ip4/172.18.0.2/tcp/61016/p2p/QmRFiu3yisZdfySiRLRhjDcD3ZLeteEo31R9mmKudDhP53'
-      - --p2p.listen
-      - '/ip4/172.18.0.4/tcp/61016'
       - --log.level
       - info
       - --http
@@ -116,6 +119,12 @@ services:
       - --account.allow.insecure.unlock
       - --account.password
       - './password'
+      - --p2p.tcp-port
+      - '61020'
+      - --p2p.udp-port
+      - '61021'
+      - --p2p.min-sync-peers
+      - '1'
     depends_on:
       - bootnode
     networks:
@@ -126,74 +135,7 @@ services:
       - ./deployments/keystore:/home/amc/data/keystore:ro
       - ./deployments/keystore/password:/home/amc/password:ro
     ports: [ "20212:20212" ]
-  downloader:
-    image: amazechain/amc:latest
-    container_name: downloader
-    depends_on:
-      - node2
-    command:
-      - AmazeChain-linux-amd64
-      - --data.dir
-      - data
-      - --p2p.bootstrap
-      - '/ip4/172.18.0.2/tcp/61016/p2p/QmRFiu3yisZdfySiRLRhjDcD3ZLeteEo31R9mmKudDhP53'
-      - --p2p.listen
-      - '/ip4/172.18.0.5/tcp/61016'
-      - --log.level
-      - info
-      - --http
-      - --http.port
-      - '20312'
-      - --http.addr
-      - 172.18.0.5
-    networks:
-      network1:
-        ipv4_address: 172.18.0.5
-    volumes:
-      - db_downloader_1:/home/amc/data
-      - ./deployments/keystore:/home/amc/data/keystore:ro
-    ports: [ "20312:20312" ]
-  postgres:
-    image: postgres:12
-    restart: on-failure
-    container_name: postgres
-    depends_on:
-      - bootnode
-    volumes:
-      - postgres-data-volume:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_PASSWORD=postgres
-    networks:
-      network1:
-        ipv4_address: 172.18.0.6
-  explorer_migrate:
-    container_name: explorer_migrate
-    image: amazechain/amc-explorer:latest
-    depends_on:
-      - postgres
-    env_file:
-      - deployments/explorer/config.env
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blockscout?ssl=false
-    command: mix do ecto.create, ecto.migrate
-    networks:
-      network1:
-        ipv4_address: 172.18.0.7
-  explorer:
-    image: amazechain/amc-explorer:latest
-    container_name: explorer
-    restart: always
-    depends_on:
-      - postgres
-    ports: [ "4000:4000" ]
-    env_file:
-      - ./deployments/explorer/config.env
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blockscout?ssl=false
-    command: mix phx.server
-    networks:
-      network1:
-        ipv4_address: 172.18.0.8
+
   influxdb:
     image: influxdb:latest
     container_name: influxdb
@@ -215,24 +157,30 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.47.0
-    user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000} # Uses erigon user from Dockerfile
+    user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
     command: --log.level=warn --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=150d --web.console.libraries=/usr/share/prometheus/console_libraries --web.console.templates=/usr/share/prometheus/consoles
     ports: [ "9090:9090" ]
     volumes:
-      - ${AMC_PROMETHEUS_CONFIG:-./cmd/prometheus/prometheus.yml}:/etc/prometheus/prometheus.yml
+      - ${AMC_PROMETHEUS_CONFIG:-./deployments/prometheus/prometheus.yml}:/etc/prometheus/prometheus.yml
       - ${XDG_DATA_HOME:-~/.local/share}/amc-prometheus:/prometheus
     restart: unless-stopped
+    networks:
+      network1:
+        ipv4_address: 172.18.0.9
 
   grafana:
     image: grafana/grafana:10.1.2
     user: "472:0" # required for grafana version >= 7.3
     ports: [ "3000:3000" ]
     volumes:
-      - ${AMC_GRAFANA_CONFIG:-./cmd/prometheus/grafana.ini}:/etc/grafana/grafana.ini
-      - ./cmd/prometheus/datasources:/etc/grafana/provisioning/datasources
-      - ./cmd/prometheus/dashboards:/etc/grafana/provisioning/dashboards
+      - ${AMC_GRAFANA_CONFIG:-./deployments/prometheus/grafana.ini}:/etc/grafana/grafana.ini
+      - ./deployments/prometheus/datasources:/etc/grafana/provisioning/datasources
+      - ./deployments/prometheus/dashboards:/etc/grafana/provisioning/dashboards
       - ${XDG_DATA_HOME:-~/.local/share}/amc-grafana:/var/lib/grafana
     restart: unless-stopped
+    networks:
+      network1:
+        ipv4_address: 172.18.0.10
 
 networks:
   network1:
@@ -246,9 +194,5 @@ volumes:
   db_node_1:
     driver: local
   db_node_2:
-    driver: local
-  db_downloader_1:
-    driver: local
-  postgres-data-volume:
     driver: local
 

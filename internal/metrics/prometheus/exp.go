@@ -2,7 +2,6 @@ package prometheus
 
 import (
 	"fmt"
-	"github.com/amazechain/amc/internal/metrics"
 	"github.com/amazechain/amc/log"
 	"net/http"
 )
@@ -14,7 +13,7 @@ var EnabledExpensive = false
 func Setup(address string, log log.Logger) *http.ServeMux {
 	prometheusMux := http.NewServeMux()
 
-	prometheusMux.Handle("/debug/metrics/prometheus", Handler(metrics.DefaultRegistry))
+	prometheusMux.Handle("/debug/metrics/prometheus", Handler(DefaultRegistry))
 
 	promServer := &http.Server{
 		Addr:    address,

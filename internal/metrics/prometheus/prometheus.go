@@ -20,7 +20,6 @@ package prometheus
 import (
 	"fmt"
 	metrics2 "github.com/VictoriaMetrics/metrics"
-	"github.com/amazechain/amc/internal/metrics"
 	"github.com/amazechain/amc/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
@@ -31,7 +30,7 @@ import (
 
 // Handler returns an HTTP handler which dump metrics in Prometheus format.
 // Output format can be cheched here: https://o11y.tools/metricslint/
-func Handler(reg metrics.Registry) http.Handler {
+func Handler(reg Registry) http.Handler {
 	prometheus.DefaultRegisterer.MustRegister(defaultSet)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +43,7 @@ func Handler(reg metrics.Registry) http.Handler {
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
-		metrics2.WritePrometheus(w, false)
+		metrics2.WritePrometheus(w, true)
 
 		contentType := expfmt.Negotiate(r.Header)
 		enc := expfmt.NewEncoder(w, contentType)

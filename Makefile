@@ -98,6 +98,25 @@ dev:
 	--log.level debug \
 	--account.unlock=0x588639773bc6f163aa262245cda746c120676431 --account.allow.insecure.unlock --account.password $(HOME)/.metachain/passwd
 
+PACKAGE_NAME          := github.com/WeAreAmaze/amc
+GOLANG_CROSS_VERSION  ?= v1.20.7
+
+.PHONY: release
+release:
+	@docker run \
+		--rm \
+		--privileged \
+		-e CGO_ENABLED=1 \
+		-e GITHUB_TOKEN \
+		-e DOCKER_USERNAME \
+		-e DOCKER_PASSWORD \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v `pwd`:/go/src/$(PACKAGE_NAME) \
+		-w /go/src/$(PACKAGE_NAME) \
+		ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
+		--clean --skip-validate
+
+
 #== mobiles start
 mobile: clean mobile-dir android ios
 

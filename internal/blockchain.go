@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/amazechain/amc/contracts/deposit"
+	"github.com/amazechain/amc/internal/metrics/prometheus"
 	"github.com/amazechain/amc/internal/p2p"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
@@ -57,6 +58,14 @@ var (
 	errChainStopped         = errors.New("blockchain is stopped")
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errBlockDoesNotExist    = errors.New("block does not exist in blockchain")
+)
+var (
+	BlockExecutionTimer  = prometheus.GetOrCreateSummary("chain_execution_seconds")
+	headBlockGauge       = prometheus.GetOrCreateCounter("chain_head_block", true)
+	blockInsertTimer     = prometheus.GetOrCreateHistogram("chain_inserts")
+	blockValidationTimer = prometheus.GetOrCreateHistogram("chain_validation")
+	blockExecutionTimer  = prometheus.GetOrCreateHistogram("chain_execution")
+	blockWriteTimer      = prometheus.GetOrCreateHistogram("chain_write")
 )
 
 type WriteStatus byte
@@ -181,6 +190,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	}
 
 	bc.currentBlock.Store(current)
+	headBlockGauge.Set(current.Number64().Uint64())
 	bc.forker = NewForkChoice(bc, nil)
 	//bc.process = avm.NewVMProcessor(ctx, bc, engine)
 	bc.process = NewStateProcessor(config, bc, engine)
@@ -1014,6 +1024,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	//}()
 
 	evmRecord := func(ctx context.Context, db kv.RwDB, blockNr uint64, f func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error)) (*state.IntraBlockState, map[types.Address]*uint256.Int, error) {
+		defer BlockExecutionTimer.UpdateDuration(time.Now())
 		tx, err := db.BeginRo(ctx)
 		if nil != err {
 			return nil, nil, err
@@ -1074,18 +1085,26 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 			var err error
 			var nopay map[types.Address]*uint256.Int
+
+			pstart := time.Now()
 			receipts, nopay, logs, usedGas, err = bc.process.Process(block.(*block2.Block), ibs, reader, writer, blockHashFunc)
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
 				//atomic.StoreUint32(&followupInterrupt, 1)
 				return nil, err
 			}
+			ptime := time.Since(pstart)
+			vstart := time.Now()
+
 			if err := bc.validator.ValidateState(block, ibs, receipts, usedGas); err != nil {
 				bc.reportBlock(block, receipts, err)
 				//atomic.StoreUint32(&followupInterrupt, 1)
 				return nil, err
 			}
+			vtime := time.Since(vstart)
 
+			blockExecutionTimer.Observe(ptime.Seconds()) // The time spent on EVM processing
+			blockValidationTimer.Observe(vtime.Seconds())
 			return nopay, nil
 		})
 		if nil != err {
@@ -1115,14 +1134,15 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		//}); nil != err {
 		//	return it.index, err
 		//}
-
+		wstart := time.Now()
 		var status WriteStatus
 		status, err = bc.writeBlockWithState(block, receipts, ibs, nopay)
 		//atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
 		}
-
+		blockWriteTimer.Observe(time.Since(wstart).Seconds())
+		blockInsertTimer.Observe(time.Since(start).Seconds())
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += usedGas
@@ -1453,6 +1473,7 @@ func (bc *BlockChain) writeHeadBlock(tx kv.RwTx, block block2.IBlock) error {
 	}
 
 	bc.currentBlock.Store(block.(*block2.Block))
+	headBlockGauge.Set(block.Number64().Uint64())
 	if notExternalTx {
 		if err = tx.Commit(); nil != err {
 			return err

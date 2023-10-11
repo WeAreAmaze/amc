@@ -4937,11 +4937,11 @@
           "datasource": {
             "type": "prometheus"
           },
-          "expr": "p2p_peer_count{state=\"Connected\"}",
+          "expr": "p2p_peer_count{instance=~\"$instance\"}",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "peers: {{instance}}",
+          "legendFormat": "peers: {{instance}}-{{state}}",
           "refId": "A"
         },
         {

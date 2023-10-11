@@ -860,7 +860,7 @@
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "peers: {{instance}}",
+          "legendFormat": "peers: {{instance}}-{{state}}",
           "refId": "A"
         },
         {

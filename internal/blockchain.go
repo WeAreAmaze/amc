@@ -60,7 +60,6 @@ var (
 	errBlockDoesNotExist    = errors.New("block does not exist in blockchain")
 )
 var (
-	BlockExecutionTimer  = prometheus.GetOrCreateSummary("chain_execution_seconds")
 	headBlockGauge       = prometheus.GetOrCreateCounter("chain_head_block", true)
 	blockInsertTimer     = prometheus.GetOrCreateHistogram("chain_inserts")
 	blockValidationTimer = prometheus.GetOrCreateHistogram("chain_validation")
@@ -1024,7 +1023,6 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	//}()
 
 	evmRecord := func(ctx context.Context, db kv.RwDB, blockNr uint64, f func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error)) (*state.IntraBlockState, map[types.Address]*uint256.Int, error) {
-		defer BlockExecutionTimer.UpdateDuration(time.Now())
 		tx, err := db.BeginRo(ctx)
 		if nil != err {
 			return nil, nil, err
@@ -1103,8 +1101,8 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 			}
 			vtime := time.Since(vstart)
 
-			blockExecutionTimer.Observe(ptime.Seconds()) // The time spent on EVM processing
-			blockValidationTimer.Observe(vtime.Seconds())
+			blockExecutionTimer.Observe(float64(ptime)) // The time spent on EVM processing
+			blockValidationTimer.Observe(float64(vtime))
 			return nopay, nil
 		})
 		if nil != err {
@@ -1141,8 +1139,8 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		if err != nil {
 			return it.index, err
 		}
-		blockWriteTimer.Observe(time.Since(wstart).Seconds())
-		blockInsertTimer.Observe(time.Since(start).Seconds())
+		blockWriteTimer.Observe(float64(time.Since(wstart)))
+		blockInsertTimer.Observe(float64(time.Since(start)))
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += usedGas

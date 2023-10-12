@@ -55,7 +55,6 @@ services:
       - db_bootnode_1:/home/amc/data
       - ./deployments/keystore:/home/amc/data/keystore:ro
       - ./deployments/keystore/password:/home/amc/password:ro
-      - ./cmd/amc/allocs/genesis.json:/home/amc/allocs/genesis.json:ro
     ports:
       - "20012:20012"
       - "20013:20013"

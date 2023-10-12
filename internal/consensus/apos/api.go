@@ -457,10 +457,10 @@ func (api *API) VerifiedBlock(address common.Address, from jsonrpc.BlockNumberOr
 					Reward:      depositInfo.RewardPerBlock,
 				})
 				findCount++
-				if findCount >= wantCount {
-					break
-				}
 			}
+		}
+		if findCount >= wantCount {
+			break
 		}
 		if uint64(*to) == currentBlock.Number64().Uint64() {
 			break

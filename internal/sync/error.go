@@ -53,7 +53,7 @@ func writeErrorResponseToStream(responseCode byte, reason string, stream libp2pc
 	if err != nil {
 		log.Debug("Could not generate a response error", "err", err)
 	} else if _, err := stream.Write(resp); err != nil {
-		log.Debugf("Could not write to stream", "err", err)
+		log.Debug("Could not write to stream", "err", err)
 	} else {
 		// If sending the error message succeeded, close to send an EOF.
 		closeStream(stream)

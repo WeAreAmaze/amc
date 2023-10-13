@@ -23,6 +23,7 @@ import (
 	"github.com/amazechain/amc/core"
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/consensus/misc"
+	"github.com/amazechain/amc/internal/metrics/prometheus"
 	"github.com/holiman/uint256"
 	"sort"
 	"sync"
@@ -50,6 +51,10 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"golang.org/x/sync/errgroup"
+)
+
+var (
+	blockSignGauge = prometheus.GetOrCreateCounter("block_sign_counter", true)
 )
 
 type task struct {
@@ -335,6 +340,7 @@ func (w *worker) resultLoop() error {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
+			blockSignGauge.Set(uint64(len(blk.Body().Verifier())))
 
 			if len(logs) > 0 {
 				event.GlobalEvent.Send(common.NewLogsEvent{Logs: logs})

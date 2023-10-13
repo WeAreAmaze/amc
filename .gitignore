@@ -31,3 +31,5 @@ mobile/
 amc
 
 genesis*.json
+
+./deployments/

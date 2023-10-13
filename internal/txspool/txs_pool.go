@@ -22,6 +22,7 @@ import (
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/consensus/misc"
+	"github.com/amazechain/amc/internal/metrics/prometheus"
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -79,6 +80,10 @@ var (
 	// ErrTipAboveFeeCap is a sanity error to ensure no one is able to specify a
 	// transaction with a tip higher than the total fee cap.
 	ErrTipAboveFeeCap = fmt.Errorf("max priority fee per gas higher than max fee per gas")
+
+	pendingGauge = prometheus.GetOrCreateCounter("txpool_pending", true)
+	queuedGauge  = prometheus.GetOrCreateCounter("txpool_queued", true)
+	localGauge   = prometheus.GetOrCreateCounter("txpool_local", true)
 )
 
 type txspoolResetRequest struct {
@@ -237,6 +242,7 @@ func (pool *TxsPool) promoteTx(addr types.Address, hash types.Hash, tx *transact
 		pool.priced.Removed(1)
 	} else {
 		// Nothing was replaced, bump the pending counter
+		pendingGauge.Inc()
 	}
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.pendingNonces.set(addr, tx.Nonce()+1)
@@ -352,8 +358,7 @@ func (pool *TxsPool) removeTx(hash types.Hash, outofbound bool) {
 		pool.priced.Removed(1)
 	}
 	if pool.locals.contains(addr) {
-		// todo
-		//localGauge.Dec(1)
+		localGauge.Dec()
 	}
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
@@ -371,7 +376,7 @@ func (pool *TxsPool) removeTx(hash types.Hash, outofbound bool) {
 			// Update the account nonce if needed
 			pool.pendingNonces.setIfLower(addr, tx.Nonce())
 			// Reduce the pending counter
-			//pendingGauge.Dec(int64(1 + len(invalids)))
+			pendingGauge.Add(-(1 + len(invalids)))
 			return
 		}
 	}
@@ -379,7 +384,7 @@ func (pool *TxsPool) removeTx(hash types.Hash, outofbound bool) {
 	if future := pool.queue[addr]; future != nil {
 		if removed, _ := future.Remove(tx); removed {
 			// Reduce the queued counter
-			//queuedGauge.Dec(1)
+			queuedGauge.Dec()
 		}
 		if future.Empty() {
 			delete(pool.queue, addr)
@@ -482,6 +487,9 @@ func (pool *TxsPool) add(tx *transaction.Transaction, local bool) (replaced bool
 		pool.locals.add(from)
 		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}
+	if isLocal {
+		localGauge.Inc()
+	}
 
 	//log.Debug("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To)
 	return replaced, nil
@@ -506,6 +514,8 @@ func (pool *TxsPool) enqueueTx(hash types.Hash, tx *transaction.Transaction, loc
 		hash := old.Hash()
 		pool.all.Remove(hash)
 		pool.priced.Removed(1)
+	} else {
+		queuedGauge.Inc()
 	}
 
 	// If the transaction isn't in lookup set but it's expected to be there,
@@ -780,6 +790,7 @@ func (pool *TxsPool) promoteExecutables(accounts []types.Address) []*transaction
 			}
 		}
 		//log.Debug("Promoted queued transactions", "count", len(promoted))
+		queuedGauge.Add(-(len(readies)))
 
 		// Drop all transactions over the allowed limit
 		var caps []*transaction.Transaction
@@ -794,7 +805,9 @@ func (pool *TxsPool) promoteExecutables(accounts []types.Address) []*transaction
 		// Mark all the items dropped as removed
 		//todo pool.priced.Removed(len(forwards) + len(drops) + len(caps))
 		pool.priced.Removed(len(caps))
+		queuedGauge.Add(-(len(forwards) + len(drops) + len(caps)))
 		if pool.locals.contains(addr) {
+			localGauge.Add(-(len(forwards) + len(drops) + len(caps)))
 		}
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
@@ -853,7 +866,9 @@ func (pool *TxsPool) truncatePending() {
 						log.Debug("Removed fairness-exceeding pending transaction", "hash", hash)
 					}
 					pool.priced.Removed(len(caps))
+					pendingGauge.Add(-len(caps))
 					if pool.locals.contains(offenders[i]) {
+						localGauge.Add(-(len(caps)))
 					}
 					pending--
 				}
@@ -878,7 +893,9 @@ func (pool *TxsPool) truncatePending() {
 					log.Debug("Removed fairness-exceeding pending transaction", "hash", hash)
 				}
 				pool.priced.Removed(len(caps))
+				pendingGauge.Add(-len(caps))
 				if pool.locals.contains(addr) {
+					localGauge.Add(-len(caps))
 				}
 				pending--
 			}
@@ -965,7 +982,9 @@ func (pool *TxsPool) demoteUnexecutables() {
 			// Internal shuffle shouldn't touch the lookup set.
 			pool.enqueueTx(hash, tx, false, false)
 		}
+		pendingGauge.Add(-(len(olds) + len(drops) + len(invalids)))
 		if pool.locals.contains(addr) {
+			localGauge.Add(-(len(olds) + len(drops) + len(invalids)))
 		}
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
@@ -978,6 +997,7 @@ func (pool *TxsPool) demoteUnexecutables() {
 				pool.enqueueTx(hash, tx, false, false)
 			}
 			// This might happen in a reorg, so log it to the metering
+			pendingGauge.Add(-(len(gapped)))
 		}
 		// Delete the entire pending entry if it became empty.
 		if list.Empty() {

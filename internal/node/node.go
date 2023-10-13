@@ -25,6 +25,7 @@ import (
 	"github.com/amazechain/amc/contracts/deposit/AMT"
 	nftdeposit "github.com/amazechain/amc/contracts/deposit/NFT"
 	"github.com/amazechain/amc/internal/debug"
+	"github.com/amazechain/amc/internal/metrics/prometheus"
 	"github.com/amazechain/amc/internal/p2p"
 	amcsync "github.com/amazechain/amc/internal/sync"
 	initialsync "github.com/amazechain/amc/internal/sync/initial-sync"
@@ -34,6 +35,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 	"hash/crc32"
+	"net"
 	"path"
 	"runtime"
 	"strings"
@@ -826,18 +828,29 @@ func (n *Node) KeyStoreDir() string {
 }
 
 func (n *Node) SetupMetrics(config conf.MetricsConfig) {
+	if config.Enable {
 
-	if config.EnableInfluxDB {
-		var (
-			endpoint     = config.InfluxDBEndpoint
-			bucket       = config.InfluxDBBucket
-			token        = config.InfluxDBToken
-			organization = config.InfluxDBOrganization
-			tagsMap      = SplitTagsFlag(config.InfluxDBTags)
-		)
+		if config.EnableInfluxDB {
+			var (
+				endpoint     = config.InfluxDBEndpoint
+				bucket       = config.InfluxDBBucket
+				token        = config.InfluxDBToken
+				organization = config.InfluxDBOrganization
+				tagsMap      = SplitTagsFlag(config.InfluxDBTags)
+			)
 
-		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "amc.", tagsMap)
+			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "amc.", tagsMap)
+		} else {
+			if config.HTTP != "" {
+				address := net.JoinHostPort(config.HTTP, fmt.Sprintf("%d", config.Port))
+				log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+				prometheus.Setup(address, log.Root())
+			} else if config.Port != 0 {
+				log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", "metrics.port", "metrics.addr"))
+			}
+		}
 	}
+
 }
 
 func (s *Node) Etherbase() (eb types.Address, err error) {

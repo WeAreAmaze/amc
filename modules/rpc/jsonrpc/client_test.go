@@ -16,30 +16,23 @@
 
 package jsonrpc
 
-import (
-	"context"
-	"fmt"
-	"testing"
-	"time"
-)
-
 func init() {
 
 }
 
-func TestHttpClient(t *testing.T) {
-	client, _ := Dial("http://127.0.0.1:8545")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	m := make(map[string]string, 0)
-	if err := client.CallContext(ctx, &m, "rpc_modules"); err != nil {
-		fmt.Println("can't get rpc modules:", err)
-		return
-	}
-	if len(m) == 0 {
-		t.Fail()
-	}
-}
+//func TestHttpClient(t *testing.T) {
+//	client, _ := Dial("http://127.0.0.1:8545")
+//	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+//	defer cancel()
+//	m := make(map[string]string, 0)
+//	if err := client.CallContext(ctx, &m, "rpc_modules"); err != nil {
+//		fmt.Println("can't get rpc modules:", err)
+//		return
+//	}
+//	if len(m) == 0 {
+//		t.Fail()
+//	}
+//}
 
 //func TestIPC(t *testing.T) {
 //	client, _ := Dial("")

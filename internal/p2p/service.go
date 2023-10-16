@@ -273,6 +273,10 @@ func (s *Service) Start() {
 			if validationError := s.peers.Scorers().ValidationError(p); validationError != nil {
 				params = append(params, "validationError", validationError)
 			}
+			if ping, err := s.peers.GetPing(p); err == nil && ping != nil {
+				params = append(params, "ping", ping.String())
+			}
+
 			params = append(params, "processedBlocks", s.peers.Scorers().BlockProviderScorer().ProcessedBlocks(p))
 
 			// hexutil.Encode([]byte(p))

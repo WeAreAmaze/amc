@@ -1,0 +1,21 @@
+FROM alpine:3.15
+
+RUN apk add --no-cache ca-certificates curl tzdata
+
+COPY amazechain /usr/local/bin/
+
+ARG UID=1000
+ARG GID=1000
+RUN adduser -D -u $UID -g $GID amc
+
+
+ENV AMCDATA /home/amc/data
+# this 777 will be replaced by 700 at runtime (allows semi-arbitrary "--user" values)
+RUN mkdir -p "$AMCDATA" && chown -R amc:amc "$AMCDATA" && chmod 777 "$AMCDATA"
+VOLUME /home/amc/data
+
+USER amc
+WORKDIR /home/amc
+
+EXPOSE 20012 20013 20014 61015/udp 61016  6060
+ENTRYPOINT ["amazechain"]

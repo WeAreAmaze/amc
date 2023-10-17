@@ -57,7 +57,7 @@ amc: deps
 
 images:
 	@echo "docker images build ..."
-	DOCKER_BUILDKIT=1 docker build -t amazechain/amc:miner .
+	DOCKER_BUILDKIT=1 docker build -t amazechain/amc:latest .
 	@echo "Compile done!"
 
 up:
@@ -115,6 +115,8 @@ release:
 		-w /go/src/$(PACKAGE_NAME) \
 		ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
 		--clean --skip-validate
+
+		@docker image push --all-tags amazechain/amc
 
 
 #== mobiles start

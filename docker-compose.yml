@@ -4,7 +4,7 @@ services:
     image: amazechain/amc:latest
     container_name: bootnode
     command:
-      - AmazeChain-linux-amd64
+      - amazechain
       - --data.dir
       - data
       - --log.level
@@ -62,7 +62,7 @@ services:
     image: amazechain/amc:latest
     container_name: node1
     command:
-      - AmazeChain-linux-amd64
+      - amazechain
       - --data.dir
       - data
       - --log.level
@@ -100,7 +100,7 @@ services:
     image: amazechain/amc:latest
     container_name: node2
     command:
-      - AmazeChain-linux-amd64
+      - amazechain
       - --data.dir
       - data
       - --log.level

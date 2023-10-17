@@ -1,10 +1,5 @@
 # Build
-FROM docker.io/library/golang:1.19-alpine3.15 AS builder
-
-# Add aliyun repos
-RUN echo http://mirrors.aliyun.com/alpine/v3.13/main/ > /etc/apk/repositories && echo http://mirrors.aliyun.com/alpine/v3.13/community/ >> /etc/apk/repositories
-# GO PROXY
-RUN go env -w GOPROXY=https://goproxy.cn,direct
+FROM golang:1.19-alpine3.15 AS builder
 
 # RUN apk add --no-cache gcc musl-dev linux-headers git make
 RUN apk add --no-cache build-base  linux-headers git bash ca-certificates  libstdc++
@@ -12,11 +7,11 @@ RUN apk add --no-cache build-base  linux-headers git bash ca-certificates  libst
 WORKDIR /amc
 ADD . .
 ENV GO111MODULE="on"
-ENV GOPROXY="https://goproxy.cn,direct"
-RUN go mod tidy && go build  -o ./build/bin/AmazeChain-linux-amd64 ./cmd/amc
+
+RUN go mod tidy && go build  -o ./build/bin/amazechain ./cmd/amc
 
 
-FROM docker.io/library/alpine:3.15
+FROM alpine:3.15
 #libstdc++
 RUN apk add --no-cache ca-certificates curl tzdata
 # copy compiled artifacts from builder
@@ -41,5 +36,4 @@ WORKDIR /home/amc
 
 RUN echo $UID
 
-EXPOSE 20012
-EXPOSE 20013
+EXPOSE 20012 20013 20014 61015/udp 61016  6060

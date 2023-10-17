@@ -1,4 +1,4 @@
-project_name: amazechain
+project_name: amc
 
 release:
   disable: false
@@ -61,3 +61,26 @@ builds:
     tags: [ nosqlite, noboltdb ]
     ldflags: -s -w
 
+
+dockers:
+  - image_templates:
+      - amazechain/{{ .ProjectName }}:{{ .Version }}-amd64
+    dockerfile: Dockerfile.release
+    use: buildx
+    skip_push: true
+    goarch: amd64
+    ids:
+      - linux-amd64
+    build_flag_templates:
+      - --platform=linux/amd64
+
+docker_manifests:
+  - name_template: amazechain/{{ .ProjectName }}:{{ .Version }}
+    skip_push: true
+    image_templates:
+      - amazechain/{{ .ProjectName }}:{{ .Version }}-amd64
+
+  - name_template: amazechain/{{ .ProjectName }}:latest
+    skip_push: true
+    image_templates:
+      - amazechain/{{ .ProjectName }}:{{ .Version }}-amd64

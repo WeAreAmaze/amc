@@ -36,6 +36,9 @@ jobs:
           TAG=${GITHUB_REF#refs/tags/}
           echo ::set-output name=tag_name::${TAG}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
       - run: echo ${{ steps.prepare.outputs.tag_name }}
 
       - name: Run GoReleaser

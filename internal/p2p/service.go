@@ -273,6 +273,10 @@ func (s *Service) Start() {
 			if validationError := s.peers.Scorers().ValidationError(p); validationError != nil {
 				params = append(params, "validationError", validationError)
 			}
+			if ping, err := s.peers.GetPing(p); err == nil && ping != nil {
+				params = append(params, "ping", ping.String())
+			}
+
 			params = append(params, "processedBlocks", s.peers.Scorers().BlockProviderScorer().ProcessedBlocks(p))
 
 			// hexutil.Encode([]byte(p))
@@ -418,7 +422,7 @@ func (s *Service) pingPeers() {
 	for _, pid := range s.peers.Connected() {
 		go func(id peer.ID) {
 			if err := s.pingMethod(s.ctx, id); err != nil {
-				log.Debug("Failed to ping peer", "peer", id)
+				log.Debug("Failed to ping peer", "peer", id, "err", err)
 			}
 		}(pid)
 	}

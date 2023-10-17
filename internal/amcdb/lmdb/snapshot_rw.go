@@ -18,7 +18,7 @@ package lmdb
 
 import (
 	"context"
-	"github.com/torquem-ch/mdbx-go/mdbx"
+	"github.com/erigontech/mdbx-go/mdbx"
 	"sync"
 )
 

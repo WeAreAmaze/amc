@@ -630,9 +630,9 @@ func (n *Node) startRPC() error {
 	}
 
 	if n.ipc.endpoint != "" {
-		if err := n.ipc.start(n.rpcAPIs); err != nil {
-			return err
-		}
+		//if err := n.ipc.start(n.rpcAPIs); err != nil {
+		//	return err
+		//}
 	}
 	if n.config.NodeCfg.HTTP {
 		//todo []string{"eth", "web3", "debug", "net", "apoa", "txpool", "apos"}

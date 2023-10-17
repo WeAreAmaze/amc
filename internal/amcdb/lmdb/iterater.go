@@ -18,12 +18,11 @@ package lmdb
 
 import (
 	"github.com/amazechain/amc/common/db"
-	"github.com/torquem-ch/mdbx-go/mdbx"
+	"github.com/erigontech/mdbx-go/mdbx"
 	"runtime"
 )
 
 /*
-
  */
 type Iterator struct {
 	*mdbx.Cursor

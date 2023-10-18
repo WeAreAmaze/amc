@@ -1,8 +1,7 @@
 version: '3'
 services:
-  bootnode:
+  amc:
     image: amazechain/amc:latest
-    container_name: bootnode
     command:
       - amazechain
       - --data.dir
@@ -13,20 +12,12 @@ services:
       - --http.port
       - '20012'
       - --http.addr
-      - 172.18.0.2
+      - '0.0.0.0'
       - --ws
       - --ws.port
       - '20013'
       - --ws.addr
-      - 172.18.0.2
-      - --engine.miner
-      - --engine.etherbase
-      - '0xa2142ab3f25eaa9985f22c3f5b1ff9fa378dac21'
-      - --account.unlock
-      - '0'
-      - --account.allow.insecure.unlock
-      - --account.password
-      - './password'
+      - '0.0.0.0'
       - --metrics
       - --metrics.addr
       - '0.0.0.0'
@@ -35,124 +26,16 @@ services:
       - --p2p.udp-port
       - '61021'
       - --p2p.min-sync-peers
-      - '0'
-#      - --metrics.influxdb
-#      - --metrics.influxdb.endpoint
-#      - "http://influxdb:8086"
-#      - --metrics.influxdb.token
-#      - "ksLlfJ0cRCNXRtrFVpKiZ2au3-pOWL-hgVhgsCqivAlq7Vf0VdyjjVMWA__IhjkcI_GbWccpwRDpQiIGdm2FpA=="
-#      - --metrics.influxdb.bucket
-#      - "amazechain"
-#      - --metrics.influxdb.organization
-#      - "amazechain"
-#      - --metrics.influxdb.tags
-#      - "server=bootnode"
+      - '1'
     networks:
       network1:
         ipv4_address: 172.18.0.2
     user: 1000:1000
     volumes:
-      - db_bootnode_1:/home/amc/data
-      - ./deployments/keystore:/home/amc/data/keystore:ro
-      - ./deployments/keystore/password:/home/amc/password:ro
+      - amc:/home/amc/data
     ports:
       - "20012:20012"
       - "20013:20013"
-  node:
-    image: amazechain/amc:latest
-    container_name: node1
-    command:
-      - amazechain
-      - --data.dir
-      - data
-      - --log.level
-      - info
-      - --http
-      - --http.port
-      - '20112'
-      - --http.addr
-      - '172.18.0.3'
-      - --engine.miner
-      - --engine.etherbase
-      - '0x3ca698823ae0474ee80d2f4bf29ec649474f4040'
-      - --account.unlock
-      - '1'
-      - --account.allow.insecure.unlock
-      - --account.password
-      - './password'
-      - --p2p.tcp-port
-      - '61020'
-      - --p2p.udp-port
-      - '61021'
-      - --p2p.min-sync-peers
-      - '1'
-    depends_on:
-      - bootnode
-    networks:
-      network1:
-        ipv4_address: 172.18.0.3
-    volumes:
-      - db_node_1:/home/amc/data
-      - ./deployments/keystore:/home/amc/data/keystore:ro
-      - ./deployments/keystore/password:/home/amc/password:ro
-    ports: [ "20112:20112" ]
-  node2:
-    image: amazechain/amc:latest
-    container_name: node2
-    command:
-      - amazechain
-      - --data.dir
-      - data
-      - --log.level
-      - info
-      - --http
-      - --http.port
-      - '20212'
-      - --http.addr
-      - 172.18.0.4
-      - --engine.miner
-      - --engine.etherbase
-      - '0x781acbe8becb693098d36875d48e967c92db3a4e'
-      - --account.unlock
-      - '2'
-      - --account.allow.insecure.unlock
-      - --account.password
-      - './password'
-      - --p2p.tcp-port
-      - '61020'
-      - --p2p.udp-port
-      - '61021'
-      - --p2p.min-sync-peers
-      - '1'
-    depends_on:
-      - bootnode
-    networks:
-      network1:
-        ipv4_address: 172.18.0.4
-    volumes:
-      - db_node_2:/home/amc/data
-      - ./deployments/keystore:/home/amc/data/keystore:ro
-      - ./deployments/keystore/password:/home/amc/password:ro
-    ports: [ "20212:20212" ]
-
-  influxdb:
-    image: influxdb:latest
-    container_name: influxdb
-    restart: always
-    depends_on:
-      - bootnode
-    ports: [ "8086:8086" ]
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=amazechain
-      - DOCKER_INFLUXDB_INIT_PASSWORD=amazechain
-      - DOCKER_INFLUXDB_INIT_ORG=amazechain
-      - DOCKER_INFLUXDB_INIT_BUCKET=amazechain
-      - INFLUX_HOST=influxdb
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=ksLlfJ0cRCNXRtrFVpKiZ2au3-pOWL-hgVhgsCqivAlq7Vf0VdyjjVMWA__IhjkcI_GbWccpwRDpQiIGdm2FpA==
-    networks:
-      network1:
-        ipv4_address: 172.18.0.9
 
   prometheus:
     image: prom/prometheus:v2.47.0
@@ -188,10 +71,5 @@ networks:
       config:
         - subnet: 172.18.0.0/24
 volumes:
-  db_bootnode_1:
+  amc:
     driver: local
-  db_node_1:
-    driver: local
-  db_node_2:
-    driver: local
-

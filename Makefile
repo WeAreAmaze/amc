@@ -57,7 +57,7 @@ amc: deps
 
 images:
 	@echo "docker images build ..."
-	DOCKER_BUILDKIT=1 docker build -t amazechain/amc:latest .
+	DOCKER_BUILDKIT=1 docker build -t amazechain/amc:local .
 	@echo "Compile done!"
 
 up:

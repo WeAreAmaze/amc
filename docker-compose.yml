@@ -3,7 +3,6 @@ services:
   amc:
     image: amazechain/amc:latest
     command:
-      - amazechain
       - --data.dir
       - data
       - --log.level
@@ -21,10 +20,6 @@ services:
       - --metrics
       - --metrics.addr
       - '0.0.0.0'
-      - --p2p.tcp-port
-      - '61020'
-      - --p2p.udp-port
-      - '61021'
       - --p2p.min-sync-peers
       - '1'
     networks:

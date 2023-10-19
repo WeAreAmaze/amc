@@ -17,7 +17,6 @@
 package main
 
 import (
-	"github.com/amazechain/amc/version"
 	"github.com/urfave/cli/v2"
 )
 
@@ -35,16 +34,7 @@ var (
 	p2pDenyList      = cli.NewStringSlice()
 )
 
-var rootCmd = []*cli.Command{
-	{
-		Name:    "version",
-		Aliases: []string{"v"},
-		Action: func(context *cli.Context) error {
-			version.PrintVersion()
-			return nil
-		},
-	},
-}
+var rootCmd []*cli.Command
 
 var networkFlags = []cli.Flag{
 	&cli.StringSliceFlag{

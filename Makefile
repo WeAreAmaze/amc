@@ -87,16 +87,6 @@ devtools:
 	env GOBIN= go install github.com/prysmaticlabs/fastssz/sszgen@latest
 	env GOBIN= go install github.com/prysmaticlabs/protoc-gen-go-cast@latest
 
-devimg:
-	@echo "docker dev images build ..."
-	DOCKER_BUILDKIT=1 docker build -f Dockerfile.dev -t amazechain/amc:devbase .
-	@echo "Compile done!"
-dev:
-	@mkdir -p $(HOME)/.metachain
-	go run ./cmd/amc --data.dir=$(HOME)/.metachain/ --log.level=debug --http --http.port=20012 --http.addr=0.0.0.0 --ws --ws.port=20013 --ws.addr=0.0.0.0 \
-	--engine.miner --engine.etherbase=0x588639773bc6f163aa262245cda746c120676431 --engine.type=APosEngine \
-	--log.level debug \
-	--account.unlock=0x588639773bc6f163aa262245cda746c120676431 --account.allow.insecure.unlock --account.password $(HOME)/.metachain/passwd
 
 PACKAGE_NAME          := github.com/WeAreAmaze/amc
 GOLANG_CROSS_VERSION  ?= v1.20.7

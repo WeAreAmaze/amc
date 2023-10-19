@@ -488,64 +488,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		// Category: flags.MetricsCategory,
 		Destination: &DefaultConfig.MetricsCfg.Port,
 	}
-
-	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
-		Name:        "metrics.influxdb",
-		Usage:       "Enable metrics export/push to an external InfluxDB database",
-		Value:       false,
-		Destination: &DefaultConfig.MetricsCfg.EnableInfluxDB,
-	}
-	MetricsInfluxDBEndpointFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.endpoint",
-		Usage:       "InfluxDB API endpoint to report metrics to",
-		Value:       DefaultConfig.MetricsCfg.InfluxDBEndpoint,
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBEndpoint,
-	}
-
-	MetricsInfluxDBDatabaseFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.database",
-		Usage:       "InfluxDB database name to push reported metrics to",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBDatabase,
-	}
-	MetricsInfluxDBUsernameFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.username",
-		Usage:       "Username to authorize access to the database",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBUsername,
-	}
-	MetricsInfluxDBPasswordFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.password",
-		Usage:       "Password to authorize access to the database",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBPassword,
-	}
-
-	MetricsInfluxDBTagsFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.tags",
-		Usage:       "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBTags,
-	}
-	//
-	//MetricsEnableInfluxDBV2Flag = &cli.BoolFlag{
-	//	Name:  "metrics.influxdbv2",
-	//	Usage: "Enable metrics export/push to an external InfluxDB v2 database",
-	//}
-
-	MetricsInfluxDBTokenFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.token",
-		Usage:       "Token to authorize access to the database (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBToken,
-	}
-
-	MetricsInfluxDBBucketFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.bucket",
-		Usage:       "InfluxDB bucket name to push reported metrics to (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBBucket,
-	}
-
-	MetricsInfluxDBOrganizationFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.organization",
-		Usage:       "InfluxDB organization name (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBOrganization,
-	}
 )
 
 var (
@@ -570,16 +512,6 @@ var (
 		MetricsEnabledFlag,
 		MetricsHTTPFlag,
 		MetricsPortFlag,
-		MetricsEnableInfluxDBFlag,
-		MetricsInfluxDBEndpointFlag,
-		MetricsInfluxDBTokenFlag,
-		MetricsInfluxDBBucketFlag,
-		MetricsInfluxDBOrganizationFlag,
-		MetricsInfluxDBTagsFlag,
-
-		MetricsInfluxDBPasswordFlag,
-		MetricsInfluxDBUsernameFlag,
-		MetricsInfluxDBDatabaseFlag,
 	}
 
 	p2pFlags = []cli.Flag{

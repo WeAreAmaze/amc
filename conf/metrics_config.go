@@ -20,14 +20,4 @@ type MetricsConfig struct {
 	Enable bool   `json:"enable" yaml:"enable"`
 	Port   int    `json:"port" yaml:"port"`
 	HTTP   string `json:"http" yaml:"http"`
-
-	EnableInfluxDB       bool   `json:"enable_influx_db" yaml:"enable_influx_db"`
-	InfluxDBEndpoint     string `json:"influx_db_endpoint" yaml:"influx_db_endpoint"`
-	InfluxDBDatabase     string `json:"influx_db_database" yaml:"influx_db_database"`
-	InfluxDBUsername     string `json:"influx_db_username" yaml:"influx_db_username"`
-	InfluxDBPassword     string `json:"influx_db_password" yaml:"influx_db_password"`
-	InfluxDBToken        string `json:"influx_db_token" yaml:"influx_db_token"`
-	InfluxDBBucket       string `json:"influx_db_bucket" yaml:"influx_db_bucket"`
-	InfluxDBOrganization string `json:"influx_db_organization" yaml:"influx_db_organization"`
-	InfluxDBTags         string `json:"influx_db_tags" yaml:"influx_db_tags"`
 }

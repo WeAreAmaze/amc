@@ -68,12 +68,8 @@ var DefaultConfig = conf.Config{
 		MaxReaders: 1000,
 	},
 	MetricsCfg: conf.MetricsConfig{
-		Port:                 6060,
-		HTTP:                 "127.0.0.1",
-		InfluxDBEndpoint:     "",
-		InfluxDBToken:        "",
-		InfluxDBBucket:       "",
-		InfluxDBOrganization: "",
+		Port: 6060,
+		HTTP: "127.0.0.1",
 	},
 
 	P2PCfg: &conf.P2PConfig{P2PLimit: &conf.P2PLimit{}},

@@ -52,10 +52,7 @@ import (
 	log2 "github.com/ledgerwatch/log/v3"
 	"golang.org/x/sync/semaphore"
 
-	"github.com/amazechain/amc/internal/metrics/influxdb"
 	"github.com/amazechain/amc/log"
-	"github.com/rcrowley/go-metrics"
-
 	"os"
 	"path/filepath"
 	"strconv"
@@ -829,25 +826,12 @@ func (n *Node) KeyStoreDir() string {
 
 func (n *Node) SetupMetrics(config conf.MetricsConfig) {
 	if config.Enable {
-
-		if config.EnableInfluxDB {
-			var (
-				endpoint     = config.InfluxDBEndpoint
-				bucket       = config.InfluxDBBucket
-				token        = config.InfluxDBToken
-				organization = config.InfluxDBOrganization
-				tagsMap      = SplitTagsFlag(config.InfluxDBTags)
-			)
-
-			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "amc.", tagsMap)
-		} else {
-			if config.HTTP != "" {
-				address := net.JoinHostPort(config.HTTP, fmt.Sprintf("%d", config.Port))
-				log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-				prometheus.Setup(address, log.Root())
-			} else if config.Port != 0 {
-				log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", "metrics.port", "metrics.addr"))
-			}
+		if config.HTTP != "" {
+			address := net.JoinHostPort(config.HTTP, fmt.Sprintf("%d", config.Port))
+			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+			prometheus.Setup(address, log.Root())
+		} else if config.Port != 0 {
+			log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", "metrics.port", "metrics.addr"))
 		}
 	}
 

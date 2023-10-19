@@ -1,6 +1,6 @@
 # CLI Reference
 
-The AMC node is operated via the CLI by running the `amc` command. To stop it, press `ctrl-c`. You may need to wait a bit as Reth tears down existing p2p connections or other cleanup tasks.
+The AMC node is operated via the CLI by running the `amc` command. To stop it, press `ctrl-c`. You may need to wait a bit as amc down existing p2p connections or other cleanup tasks.
 
 However, amc has more commands than that:
 

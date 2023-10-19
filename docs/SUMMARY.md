@@ -16,7 +16,7 @@
    1. [Pruning & Full Node](./run/pruning.md)
    1. [Ports](./run/ports.md)
    1. [Troubleshooting](./run/troubleshooting.md)
-1. [Interacting with Reth over JSON-RPC](./jsonrpc/intro.md)
+1. [Interacting with AMCover JSON-RPC](./jsonrpc/intro.md)
    1. [eth](./jsonrpc/eth.md)
    1. [web3](./jsonrpc/web3.md)
    1. [net](./jsonrpc/net.md)

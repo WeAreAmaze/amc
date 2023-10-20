@@ -42,8 +42,8 @@ import (
 var ErrGenesisNoConfig = errors.New("genesis has no chain configuration")
 
 type GenesisBlock struct {
-	Hash               string
-	GenesisBlockConfig *conf.GenesisBlockConfig
+	Hash          string
+	GenesisConfig *conf.Genesis
 	//	ChainConfig *params.ChainConfig
 }
 
@@ -74,7 +74,7 @@ func (g *GenesisBlock) Write(tx kv.RwTx) (*block2.Block, *state.IntraBlockState,
 	if err := rawdb.WriteHeadHeaderHash(tx, block.Hash()); err != nil {
 		return nil, nil, err
 	}
-	if err := rawdb.WriteChainConfig(tx, block.Hash(), g.GenesisBlockConfig.Config); err != nil {
+	if err := rawdb.WriteChainConfig(tx, block.Hash(), g.GenesisConfig.Config); err != nil {
 		return nil, nil, err
 	}
 	// We support ethash/serenity for issuance (for now)
@@ -84,7 +84,7 @@ func (g *GenesisBlock) Write(tx kv.RwTx) (*block2.Block, *state.IntraBlockState,
 }
 
 func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) {
-	_ = g.GenesisBlockConfig.Alloc //nil-check
+	_ = g.GenesisConfig.Alloc //nil-check
 
 	var root types.Hash
 	var statedb *state.IntraBlockState
@@ -103,7 +103,7 @@ func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) 
 		r, w := state.NewPlainStateReader(tx), state.NewPlainStateWriter(tx, tx, 0)
 		statedb = state.New(r)
 
-		for _, a := range g.GenesisBlockConfig.Alloc {
+		for _, a := range g.GenesisConfig.Alloc {
 			addr, err := types.HexToString(a.Address)
 			if err != nil {
 				panic(err)
@@ -128,7 +128,7 @@ func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) 
 			}
 		}
 
-		if err := statedb.FinalizeTx(g.GenesisBlockConfig.Config.Rules(0), w); err != nil {
+		if err := statedb.FinalizeTx(g.GenesisConfig.Config.Rules(0), w); err != nil {
 			panic(err)
 		}
 		root = statedb.GenerateRootHash()
@@ -137,12 +137,12 @@ func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) 
 
 	var ExtraData []byte
 
-	switch g.GenesisBlockConfig.Engine.EngineName {
+	switch g.GenesisConfig.Config.Consensus {
 	case "APoaEngine", "APosEngine":
 
 		var signers []types.Address
 
-		for _, miner := range g.GenesisBlockConfig.Miners {
+		for _, miner := range g.GenesisConfig.Miners {
 			addr, err := types.HexToString(miner)
 			if err != nil {
 				return nil, nil, fmt.Errorf("invalid miner:  %s", miner)
@@ -163,36 +163,36 @@ func (g *GenesisBlock) ToBlock() (*block2.Block, *state.IntraBlockState, error) 
 		}
 
 	default:
-		return nil, nil, fmt.Errorf("invalid engine name %s", g.GenesisBlockConfig.Engine.Etherbase)
+		return nil, nil, fmt.Errorf("invalid engine name %s", g.GenesisConfig.Engine.Etherbase)
 	}
 
 	head := &block2.Header{
-		ParentHash:  g.GenesisBlockConfig.ParentHash,
-		Coinbase:    g.GenesisBlockConfig.Coinbase,
+		ParentHash:  g.GenesisConfig.ParentHash,
+		Coinbase:    g.GenesisConfig.Coinbase,
 		Root:        root,
 		TxHash:      types.Hash{0},
 		ReceiptHash: types.Hash{0},
-		Difficulty:  g.GenesisBlockConfig.Difficulty,
-		Number:      uint256.NewInt(g.GenesisBlockConfig.Number),
-		GasLimit:    g.GenesisBlockConfig.Engine.GasCeil,
-		GasUsed:     g.GenesisBlockConfig.GasUsed,
-		Time:        uint64(g.GenesisBlockConfig.Timestamp),
-		Extra:       g.GenesisBlockConfig.ExtraData,
-		MixDigest:   g.GenesisBlockConfig.Mixhash,
-		Nonce:       block2.EncodeNonce(g.GenesisBlockConfig.Nonce),
-		BaseFee:     g.GenesisBlockConfig.BaseFee,
+		Difficulty:  g.GenesisConfig.Difficulty,
+		Number:      uint256.NewInt(g.GenesisConfig.Number),
+		GasLimit:    g.GenesisConfig.Engine.GasCeil,
+		GasUsed:     g.GenesisConfig.GasUsed,
+		Time:        uint64(g.GenesisConfig.Timestamp),
+		Extra:       g.GenesisConfig.ExtraData,
+		MixDigest:   g.GenesisConfig.Mixhash,
+		Nonce:       block2.EncodeNonce(g.GenesisConfig.Nonce),
+		BaseFee:     g.GenesisConfig.BaseFee,
 	}
 	head.Extra = ExtraData
 
-	if g.GenesisBlockConfig.GasLimit == 0 {
+	if g.GenesisConfig.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
-	if g.GenesisBlockConfig.Difficulty == nil {
+	if g.GenesisConfig.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	if g.GenesisBlockConfig.Config != nil && (g.GenesisBlockConfig.Config.IsLondon(0)) {
-		if g.GenesisBlockConfig.BaseFee != nil {
-			head.BaseFee = g.GenesisBlockConfig.BaseFee
+	if g.GenesisConfig.Config != nil && (g.GenesisConfig.Config.IsLondon(0)) {
+		if g.GenesisConfig.BaseFee != nil {
+			head.BaseFee = g.GenesisConfig.BaseFee
 		} else {
 			head.BaseFee = uint256.NewInt(params.InitialBaseFee)
 		}
@@ -210,7 +210,7 @@ func (g *GenesisBlock) WriteGenesisState(tx kv.RwTx) (*block2.Block, *state.Intr
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, account := range g.GenesisBlockConfig.Alloc {
+	for _, account := range g.GenesisConfig.Alloc {
 		if len(account.Code) > 0 || len(account.Storage) > 0 {
 			// Special case for weird tests - inaccessible storage
 			var b [2]byte
@@ -228,7 +228,7 @@ func (g *GenesisBlock) WriteGenesisState(tx kv.RwTx) (*block2.Block, *state.Intr
 		return nil, statedb, fmt.Errorf("can't commit genesis block with number > 0")
 	}
 
-	blockWriter := state.NewPlainStateWriter(tx, tx, g.GenesisBlockConfig.Number)
+	blockWriter := state.NewPlainStateWriter(tx, tx, g.GenesisConfig.Number)
 	if err := statedb.CommitBlock(&params.Rules{}, blockWriter); err != nil {
 		return nil, statedb, fmt.Errorf("cannot write state: %w", err)
 	}
@@ -242,7 +242,7 @@ func (g *GenesisBlock) WriteGenesisState(tx kv.RwTx) (*block2.Block, *state.Intr
 	return block, statedb, nil
 }
 
-//func NewGenesisBlockFromConfig(config *conf.GenesisBlockConfig, engineName string, tx kv.RwTx) (*block2.Block, error) {
+//func NewGenesisBlockFromConfig(config *conf.Genesis, engineName string, tx kv.RwTx) (*block2.Block, error) {
 //
 //	state := statedb.NewStateDB(types.Hash{}, tx)
 //

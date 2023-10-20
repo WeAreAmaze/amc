@@ -17,6 +17,7 @@
 package main
 
 import (
+	"github.com/amazechain/amc/params/networkname"
 	"github.com/urfave/cli/v2"
 )
 
@@ -148,7 +149,7 @@ var consensusFlag = []cli.Flag{
 		Name:        "engine.type",
 		Usage:       "consensus engine",
 		Value:       "APosEngine", //APoaEngine,APosEngine
-		Destination: &DefaultConfig.GenesisBlockCfg.Engine.EngineName,
+		Destination: &DefaultConfig.GenesisCfg.Engine.EngineName,
 	},
 	&cli.BoolFlag{
 		Name:        "engine.miner",
@@ -160,7 +161,7 @@ var consensusFlag = []cli.Flag{
 		Name:        "engine.etherbase",
 		Usage:       "consensus etherbase",
 		Value:       "",
-		Destination: &DefaultConfig.GenesisBlockCfg.Engine.Etherbase,
+		Destination: &DefaultConfig.GenesisCfg.Engine.Etherbase,
 	},
 }
 
@@ -403,6 +404,13 @@ var (
 		Name:  "chaindata.to",
 		Usage: "to data  dir",
 	}
+
+	ChainFlag = &cli.StringFlag{
+		Name:        "chain",
+		Usage:       "Name of the testnet to join (value:[mainnet,testnet,private])",
+		Value:       networkname.MainnetChainName,
+		Destination: &DefaultConfig.NodeCfg.Chain,
+	}
 )
 
 var (
@@ -499,6 +507,7 @@ var (
 	}
 	settingFlag = []cli.Flag{
 		DataDirFlag,
+		ChainFlag,
 	}
 	accountFlag = []cli.Flag{
 		PasswordFileFlag,

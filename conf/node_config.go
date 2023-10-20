@@ -46,6 +46,7 @@ type NodeConfig struct {
 	WSOrigins string `toml:",omitempty"`
 	IPCPath   string `json:"ipc_path" yaml:"ipc_path"`
 	DataDir   string `json:"data_dir" yaml:"data_dir"`
+	Chain     string `json:"chain" yaml:"chain"`
 	Miner     bool   `json:"miner" yaml:"miner"`
 
 	AuthRPC bool `json:"auth_rpc" yaml:"auth_rpc"`

@@ -29,7 +29,6 @@ import (
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/internal/avm/rlp"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
@@ -176,8 +175,8 @@ func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, er
 // Apoa is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type Apoa struct {
-	config *conf.ConsensusConfig // Consensus engine configuration parameters
-	db     kv.RwDB               // Database to store and retrieve snapshot checkpoints
+	config *params.CliqueConfig // Consensus engine configuration parameters
+	db     kv.RwDB              // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -194,13 +193,13 @@ type Apoa struct {
 
 // New creates a Apoa proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *conf.ConsensusConfig, db kv.RwDB) consensus.Engine {
+func New(config *params.CliqueConfig, db kv.RwDB) consensus.Engine {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
-	if conf.APoa.Epoch == 0 {
-		conf.APoa.Epoch = epochLength
+	if conf.Epoch == 0 {
+		conf.Epoch = epochLength
 	}
-	// Allocate the snapshot caches and create the engine
+	// GenesisAlloc the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
@@ -261,7 +260,7 @@ func (c *Apoa) verifyHeader(chain consensus.ChainHeaderReader, iHeader block.IHe
 		return errors.New("block in the future")
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
-	checkpoint := (number % c.config.APoa.Epoch) == 0
+	checkpoint := (number % c.config.Epoch) == 0
 	if checkpoint && header.Coinbase != (types.Address{}) {
 		return errInvalidCheckpointBeneficiary
 	}

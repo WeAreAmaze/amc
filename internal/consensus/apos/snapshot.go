@@ -19,12 +19,12 @@ package apos
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/amazechain/amc/params"
 	"sort"
 	"time"
 
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/rawdb"
@@ -51,8 +51,8 @@ type Tally struct {
 
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
-	config   *conf.APosConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache    // Cache of recent block signatures to speed up ecrecover
+	config   *params.APosConfig // Consensus engine parameters to fine tune behavior
+	sigcache *lru.ARCCache      // Cache of recent block signatures to speed up ecrecover
 
 	Number  uint64                     `json:"number"`  // Block number where the snapshot was created
 	Hash    types.Hash                 `json:"hash"`    // Block hash where the snapshot was created
@@ -72,7 +72,7 @@ func (s signersAscending) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 // newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
 // the genesis block.
-func newSnapshot(config *conf.APosConfig, sigcache *lru.ARCCache, number uint64, hash types.Hash, signers []types.Address) *Snapshot {
+func newSnapshot(config *params.APosConfig, sigcache *lru.ARCCache, number uint64, hash types.Hash, signers []types.Address) *Snapshot {
 	snap := &Snapshot{
 		config:   config,
 		sigcache: sigcache,
@@ -89,7 +89,7 @@ func newSnapshot(config *conf.APosConfig, sigcache *lru.ARCCache, number uint64,
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *conf.APosConfig, sigcache *lru.ARCCache, tx kv.Getter, hash types.Hash) (*Snapshot, error) {
+func loadSnapshot(config *params.APosConfig, sigcache *lru.ARCCache, tx kv.Getter, hash types.Hash) (*Snapshot, error) {
 	blob, err := rawdb.GetPoaSnapshot(tx, hash)
 	if err != nil {
 		return nil, err

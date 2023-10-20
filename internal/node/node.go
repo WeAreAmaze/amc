@@ -40,7 +40,6 @@ import (
 	"runtime"
 	"strings"
 
-	consensus_pb "github.com/amazechain/amc/api/protocol/consensus_proto"
 	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/api"
 
@@ -129,7 +128,7 @@ type Node struct {
 	wsAuth        *httpServer //
 	inprocHandler *jsonrpc.Server
 
-	//n.config.GenesisBlockCfg.Engine.Etherbase
+	//n.config.GenesisCfg.Engine.Etherbase
 	etherbase types.Address
 	lock      sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
@@ -148,19 +147,19 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	c, cancel := context.WithCancel(ctx)
 
 	var (
-		genesisBlock block.IBlock
-		privateKey   crypto.PrivKey
-		err          error
-		pubsubServer common.IPubSub
-		node         Node
-		downloader   common.IDownloader
-		peers        = map[peer.ID]common.Peer{}
-		engine       consensus.Engine
-		//err        error
-		//chainConfig *params.ChainConfig
+		genesisBlock  block.IBlock
+		privateKey    crypto.PrivKey
+		pubsubServer  common.IPubSub
+		node          Node
+		downloader    common.IDownloader
+		peers         = map[peer.ID]common.Peer{}
+		engine        consensus.Engine
+		genesisHash   types.Hash
+		genesisConfig *conf.Genesis
+		chainConfig   *params.ChainConfig
+		chainKv       kv.RwDB
+		err           error
 	)
-
-	//chainConfig = params.AmazeChainConfig
 
 	if len(cfg.NodeCfg.NodePrivate) <= 0 {
 		privateKey, _, err = crypto.GenerateECDSAKeyPair(rand.Reader)
@@ -175,42 +174,47 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	}
 
 	//
-	chainKv, err := OpenDatabase(cfg, nil, name)
+	chainKv, err = OpenDatabase(cfg, nil, name)
 	if nil != err {
 		return nil, err
 	}
 
-	if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
-		var genesisErr error
-		genesisBlock, genesisErr = WriteGenesisBlock(tx, cfg.GenesisBlockCfg)
-		if nil != genesisErr {
-			return genesisErr
+	if err := chainKv.View(ctx, func(tx kv.Tx) error {
+		//
+		genesisHash, err = rawdb.ReadCanonicalHash(tx, 0)
+		//
+		if genesisHash == (types.Hash{}) && err != nil {
+			//return fmt.Errorf("GenesisHash is missing err:%w", err)
+			return internal.ErrGenesisNoConfig
 		}
-		if cfg.GenesisBlockCfg.Miners != nil {
-			miners := consensus_pb.PBSigners{}
-			for _, miner := range cfg.GenesisBlockCfg.Miners {
-				addr, err := types.HexToString(miner)
-				if err != nil {
-					return err
-				}
-				miners.Signer = append(miners.Signer, &consensus_pb.PBSigner{
-					Public:  miner,
-					Address: utils.ConvertAddressToH160(addr),
-				})
-			}
-			data, err := proto.Marshal(&miners)
-			if err != nil {
-				return err
-			}
+		if genesisHash == (types.Hash{}) && err == nil {
+			//needs WriteGenesisBlock
+			return nil
+		}
+		//
+		chainConfig, err = rawdb.ReadChainConfig(tx, genesisHash)
+		if err != nil {
+			return err
+		}
 
-			if err := rawdb.StoreSigners(tx, data); err != nil {
-				return err
-			}
-		}
 		return nil
-
 	}); err != nil {
-		panic(err)
+		return nil, err
+	}
+
+	if genesisHash == (types.Hash{}) {
+		genesisHash = *params.GenesisHashByChainName(cfg.NodeCfg.Chain)
+		genesisConfig = params.GenesisByChainName(cfg.NodeCfg.Chain)
+		if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
+			var genesisErr error
+			genesisBlock, genesisErr = WriteGenesisBlock(tx, genesisConfig)
+			if nil != genesisErr {
+				return genesisErr
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	s, err := network.NewService(ctx, &cfg.NetworkCfg, peers, node.ProtocolHandshake, node.ProtocolHandshakeInfo)
@@ -229,16 +233,16 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
-	switch cfg.GenesisBlockCfg.Engine.EngineName {
+	switch cfg.GenesisCfg.Config.Consensus {
 	case "APoaEngine":
-		engine = apoa.New(cfg.GenesisBlockCfg.Engine, chainKv)
+		engine = apoa.New(cfg.GenesisCfg.Config.Clique, chainKv)
 	case "APosEngine":
-		engine = apos.New(cfg.GenesisBlockCfg.Engine, chainKv, cfg.GenesisBlockCfg.Config)
+		engine = apos.New(cfg.GenesisCfg.Config.Apos, chainKv, cfg.GenesisCfg.Config)
 	default:
-		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisBlockCfg.Engine.EngineName)
+		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisCfg.Config.Consensus)
 	}
 
-	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisBlockCfg.Config)
+	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisCfg.Config)
 	pool, _ := txspool.NewTxsPool(ctx, bc)
 
 	is := initialsync.NewService(c, &initialsync.Config{
@@ -313,7 +317,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		wsAuth:        newHTTPServer(),
 		httpAuth:      newHTTPServer(),
 		ipc:           newIPCServer(&cfg.NodeCfg),
-		etherbase:     types.HexToAddress(cfg.GenesisBlockCfg.Engine.Etherbase),
+		etherbase:     types.HexToAddress(cfg.GenesisCfg.Config.Etherbase),
 
 		accman:     accman,
 		keyDir:     keyDir,
@@ -324,23 +328,23 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		is:   is,
 	}
 
-	if cfg.GenesisBlockCfg.Engine.APos != nil {
+	if cfg.GenesisCfg.Config.Apos != nil {
 		depositContracts := make(map[types.Address]deposit.DepositContract, 0)
-		if cfg.GenesisBlockCfg.Engine.APos.DepositContract != "" {
+		if depositContractAddress := cfg.GenesisCfg.Config.Apos.DepositContract; depositContractAddress != "" {
 			var addr types.Address
-			if !addr.DecodeString(cfg.GenesisBlockCfg.Engine.APos.DepositContract) {
-				panic(fmt.Sprintf("cannot decode DepositContract address: %s", cfg.GenesisBlockCfg.Engine.APos.DepositContract))
+			if !addr.DecodeString(depositContractAddress) {
+				panic(fmt.Sprintf("cannot decode DepositContract address: %s", depositContractAddress))
 			}
 			depositContracts[addr] = new(amtdeposit.Contract)
 		}
-		if cfg.GenesisBlockCfg.Engine.APos.DepositNFTContract != "" {
+		if depositNFTContractAddress := cfg.GenesisCfg.Config.Apos.DepositNFTContract; depositNFTContractAddress != "" {
 			var addr types.Address
-			if !addr.DecodeString(cfg.GenesisBlockCfg.Engine.APos.DepositNFTContract) {
-				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", cfg.GenesisBlockCfg.Engine.APos.DepositContract))
+			if !addr.DecodeString(depositNFTContractAddress) {
+				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", depositNFTContractAddress))
 			}
 			depositContracts[addr] = new(nftdeposit.Contract)
 		}
-		node.depositContract = deposit.NewDeposit(ctx, cfg.GenesisBlockCfg.Engine, bc, chainKv, depositContracts)
+		node.depositContract = deposit.NewDeposit(ctx, bc, chainKv, depositContracts)
 	}
 
 	pool.SetDeposit(node.depositContract)
@@ -360,14 +364,14 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	//
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
-	for _, line := range strings.Split(cfg.GenesisBlockCfg.Config.Description(), "\n") {
+	for _, line := range strings.Split(cfg.GenesisCfg.Config.Description(), "\n") {
 		log.Info(line)
 	}
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
-	node.api = api.NewAPI(pubsubServer, s, peers, bc, chainKv, engine, pool, downloader, node.AccountManager(), cfg.GenesisBlockCfg.Config)
-	node.api.SetGpo(api.NewOracle(bc, miner, cfg.GenesisBlockCfg.Config, gpoParams))
+	node.api = api.NewAPI(pubsubServer, s, peers, bc, chainKv, engine, pool, downloader, node.AccountManager(), cfg.GenesisCfg.Config)
+	node.api.SetGpo(api.NewOracle(bc, miner, cfg.GenesisCfg.Config, gpoParams))
 	return &node, nil
 }
 
@@ -903,13 +907,9 @@ func OpenDatabase(cfg *conf.Config, logger log2.Logger, name string) (kv.RwDB, e
 	return chainKv, nil
 }
 
-func WriteGenesisBlock(db kv.RwTx, genesis *conf.GenesisBlockConfig) (*block.Block, error) {
+func WriteGenesisBlock(db kv.RwTx, genesis *conf.Genesis) (*block.Block, error) {
 	if genesis == nil {
 		return nil, internal.ErrGenesisNoConfig
-	}
-	storedHash, storedErr := rawdb.ReadCanonicalHash(db, 0)
-	if storedErr != nil {
-		return nil, storedErr
 	}
 
 	g := &internal.GenesisBlock{
@@ -917,42 +917,17 @@ func WriteGenesisBlock(db kv.RwTx, genesis *conf.GenesisBlockConfig) (*block.Blo
 		genesis,
 		//config,
 	}
-	if storedHash == (types.Hash{}) {
-		log.Info("Writing default main-net genesis block")
-		block, _, err := g.Write(db)
-		if nil != err {
-			return nil, err
-		}
-		return block, nil
-	} else {
-		if _, err := rawdb.ReadChainConfig(db, storedHash); err != nil {
-			//todo just for now
-			//return nil, err
-			log.Error("cannot get chain config from db", "err", err)
-			rawdb.WriteChainConfig(db, storedHash, genesis.Config)
-		} else {
-
-			//todo
-			//genesis.Config = config
-		}
-
-	}
-	// Check whether the genesis block is already written.
-	if genesis != nil {
-		block, _, err1 := g.ToBlock()
-		if err1 != nil {
-			return nil, err1
-		}
-		hash := block.Hash()
-		if hash != storedHash {
-			return block, fmt.Errorf("database contains incompatible genesis (have %x, new %x)\n", storedHash, hash)
-		}
-	}
-	storedBlock, err := rawdb.ReadBlockByHash(db, storedHash)
-	if err != nil {
+	log.Info("Writing genesis block")
+	block, _, err := g.Write(db)
+	if nil != err {
 		return nil, err
 	}
-	return storedBlock, nil
+	if err := rawdb.WriteChainConfig(db, block.Hash(), genesis.Config); err != nil {
+		log.Error("cannot get chain config from db", "err", err)
+		return nil, err
+	}
+	return block, nil
+
 }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {

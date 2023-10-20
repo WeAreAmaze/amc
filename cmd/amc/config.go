@@ -17,18 +17,12 @@
 package main
 
 import (
-	"embed"
-	"encoding/json"
-	"fmt"
 	"github.com/amazechain/amc/params"
 	"math/big"
 	"time"
 
 	"github.com/amazechain/amc/conf"
 )
-
-//go:embed allocs
-var allocs embed.FS
 
 var DefaultConfig = conf.Config{
 	NodeCfg: conf.NodeConfig{
@@ -74,28 +68,11 @@ var DefaultConfig = conf.Config{
 
 	P2PCfg: &conf.P2PConfig{P2PLimit: &conf.P2PLimit{}},
 
-	GenesisBlockCfg: ReadGenesis("allocs/genesis_mainnet.json"),
-	GPO:             conf.FullNodeGPO,
+	//GenesisCfg: ReadGenesis("allocs/mainnet.json"),
+	GPO: conf.FullNodeGPO,
 	Miner: conf.MinerConfig{
 		GasCeil:  30000000,
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 4 * time.Second,
 	},
-}
-
-func ReadGenesis(filename string) *conf.GenesisBlockConfig {
-	f, err := allocs.Open(filename)
-	defer f.Close()
-
-	if err != nil {
-		panic(fmt.Sprintf("%s not found, use default genesis", filename))
-	}
-
-	decoder := json.NewDecoder(f)
-	gc := new(conf.GenesisBlockConfig)
-	err = decoder.Decode(gc)
-	if err != nil {
-		panic(fmt.Sprintf("Could not parse genesis preallocation for %s: %v", filename, err))
-	}
-	return gc
 }

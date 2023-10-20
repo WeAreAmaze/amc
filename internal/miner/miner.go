@@ -55,7 +55,7 @@ func NewMiner(ctx context.Context, cfg *conf.Config, bc common.IBlockChain, engi
 		stopCh:  make(chan struct{}),
 		group:   group,
 		ctx:     errCtx,
-		worker:  newWorker(errCtx, group, cfg.GenesisCfg.Engine, cfg.GenesisCfg.Config, engine, bc, txsPool, isLocalBlock, false, cfg.Miner),
+		worker:  newWorker(errCtx, group, cfg.ChainCfg, engine, bc, txsPool, isLocalBlock, false, cfg.Miner),
 	}
 
 	return miner

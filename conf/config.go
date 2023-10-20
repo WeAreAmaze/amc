@@ -19,21 +19,22 @@ package conf
 import (
 	"bufio"
 	"fmt"
+	"github.com/amazechain/amc/params"
 	"os"
 
 	"gopkg.in/yaml.v2"
 )
 
 type Config struct {
-	NodeCfg     NodeConfig     `json:"node" yaml:"node"`
-	NetworkCfg  NetWorkConfig  `json:"network" yaml:"network"`
-	LoggerCfg   LoggerConfig   `json:"logger" yaml:"logger"`
-	DatabaseCfg DatabaseConfig `json:"database" yaml:"database"`
-	PprofCfg    PprofConfig    `json:"pprof" yaml:"pprof"`
-	GenesisCfg  *Genesis       `json:"genesis" yaml:"genesis"`
-	AccountCfg  AccountConfig  `json:"account" yaml:"account"`
-	MetricsCfg  MetricsConfig  `json:"metrics" yaml:"metrics"`
-	P2PCfg      *P2PConfig     `json:"p2p" yaml:"p2p"`
+	NodeCfg     NodeConfig          `json:"node" yaml:"node"`
+	NetworkCfg  NetWorkConfig       `json:"network" yaml:"network"`
+	LoggerCfg   LoggerConfig        `json:"logger" yaml:"logger"`
+	DatabaseCfg DatabaseConfig      `json:"database" yaml:"database"`
+	PprofCfg    PprofConfig         `json:"pprof" yaml:"pprof"`
+	ChainCfg    *params.ChainConfig `json:"chain" yaml:"chain"`
+	AccountCfg  AccountConfig       `json:"account" yaml:"account"`
+	MetricsCfg  MetricsConfig       `json:"metrics" yaml:"metrics"`
+	P2PCfg      *P2PConfig          `json:"p2p" yaml:"p2p"`
 	// Gas Price Oracle options
 	GPO   GpoConfig   `json:"gpo" yaml:"gpo"`
 	Miner MinerConfig `json:"miner"`

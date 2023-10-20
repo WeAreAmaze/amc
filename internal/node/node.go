@@ -204,7 +204,8 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 	if genesisHash == (types.Hash{}) {
 		genesisHash = *params.GenesisHashByChainName(cfg.NodeCfg.Chain)
-		genesisConfig = params.GenesisByChainName(cfg.NodeCfg.Chain)
+		genesisConfig = internal.GenesisByChainName(cfg.NodeCfg.Chain)
+		chainConfig = params.ChainConfigByChainName(cfg.NodeCfg.Chain)
 		if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
 			var genesisErr error
 			genesisBlock, genesisErr = WriteGenesisBlock(tx, genesisConfig)
@@ -216,6 +217,8 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 			return nil, err
 		}
 	}
+
+	cfg.ChainCfg = chainConfig
 
 	s, err := network.NewService(ctx, &cfg.NetworkCfg, peers, node.ProtocolHandshake, node.ProtocolHandshakeInfo)
 	if err != nil {
@@ -233,16 +236,16 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
-	switch cfg.GenesisCfg.Config.Consensus {
-	case "APoaEngine":
-		engine = apoa.New(cfg.GenesisCfg.Config.Clique, chainKv)
-	case "APosEngine":
-		engine = apos.New(cfg.GenesisCfg.Config.Apos, chainKv, cfg.GenesisCfg.Config)
+	switch cfg.ChainCfg.Consensus {
+	case params.CliqueConsensus:
+		engine = apoa.New(cfg.ChainCfg.Clique, chainKv)
+	case params.AposConsensu:
+		engine = apos.New(cfg.ChainCfg.Apos, chainKv, cfg.ChainCfg)
 	default:
-		return nil, fmt.Errorf("invalid engine name %s", cfg.GenesisCfg.Config.Consensus)
+		return nil, fmt.Errorf("invalid engine name %s", cfg.ChainCfg.Consensus)
 	}
 
-	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.GenesisCfg.Config)
+	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.ChainCfg)
 	pool, _ := txspool.NewTxsPool(ctx, bc)
 
 	is := initialsync.NewService(c, &initialsync.Config{
@@ -317,7 +320,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		wsAuth:        newHTTPServer(),
 		httpAuth:      newHTTPServer(),
 		ipc:           newIPCServer(&cfg.NodeCfg),
-		etherbase:     types.HexToAddress(cfg.GenesisCfg.Config.Etherbase),
+		etherbase:     types.HexToAddress(cfg.Miner.Etherbase),
 
 		accman:     accman,
 		keyDir:     keyDir,
@@ -328,16 +331,16 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		is:   is,
 	}
 
-	if cfg.GenesisCfg.Config.Apos != nil {
+	if cfg.ChainCfg.Apos != nil {
 		depositContracts := make(map[types.Address]deposit.DepositContract, 0)
-		if depositContractAddress := cfg.GenesisCfg.Config.Apos.DepositContract; depositContractAddress != "" {
+		if depositContractAddress := cfg.ChainCfg.Apos.DepositContract; depositContractAddress != "" {
 			var addr types.Address
 			if !addr.DecodeString(depositContractAddress) {
 				panic(fmt.Sprintf("cannot decode DepositContract address: %s", depositContractAddress))
 			}
 			depositContracts[addr] = new(amtdeposit.Contract)
 		}
-		if depositNFTContractAddress := cfg.GenesisCfg.Config.Apos.DepositNFTContract; depositNFTContractAddress != "" {
+		if depositNFTContractAddress := cfg.ChainCfg.Apos.DepositNFTContract; depositNFTContractAddress != "" {
 			var addr types.Address
 			if !addr.DecodeString(depositNFTContractAddress) {
 				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", depositNFTContractAddress))
@@ -364,14 +367,14 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	//
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
-	for _, line := range strings.Split(cfg.GenesisCfg.Config.Description(), "\n") {
+	for _, line := range strings.Split(cfg.ChainCfg.Description(), "\n") {
 		log.Info(line)
 	}
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
-	node.api = api.NewAPI(pubsubServer, s, peers, bc, chainKv, engine, pool, downloader, node.AccountManager(), cfg.GenesisCfg.Config)
-	node.api.SetGpo(api.NewOracle(bc, miner, cfg.GenesisCfg.Config, gpoParams))
+	node.api = api.NewAPI(pubsubServer, s, peers, bc, chainKv, engine, pool, downloader, node.AccountManager(), cfg.ChainCfg)
+	node.api.SetGpo(api.NewOracle(bc, miner, cfg.ChainCfg, gpoParams))
 	return &node, nil
 }
 

@@ -361,7 +361,7 @@ func (c *Apoa) verifyCascadingFields(chain consensus.ChainHeaderReader, iHeader 
 		return err
 	}
 	// If the block is a checkpoint block, verify the signer list
-	if number%c.config.APoa.Epoch == 0 {
+	if number%c.config.Epoch == 0 {
 		signers := make([]byte, len(snap.Signers)*types.AddressLength)
 		for i, signer := range snap.signers() {
 			copy(signers[i*types.AddressLength:], signer[:])
@@ -396,7 +396,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			if s, err := loadSnapshot(c.config.APoa, c.signatures, tx, hash); err == nil {
+			if s, err := loadSnapshot(c.config, c.signatures, tx, hash); err == nil {
 				log.Debug("Loaded voting snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
@@ -407,7 +407,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
 		h := chain.GetHeaderByNumber(uint256.NewInt(number - 1))
-		if number == 0 || (number%c.config.APoa.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || h == nil)) {
+		if number == 0 || (number%c.config.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || h == nil)) {
 			checkpoint := chain.GetHeaderByNumber(uint256.NewInt(number))
 			if checkpoint != nil {
 				rawCheckpoint := checkpoint.(*block.Header)
@@ -417,7 +417,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 				for i := 0; i < len(signers); i++ {
 					copy(signers[i][:], rawCheckpoint.Extra[extraVanity+i*types.AddressLength:])
 				}
-				snap = newSnapshot(c.config.APoa, c.signatures, number, hash, signers)
+				snap = newSnapshot(c.config, c.signatures, number, hash, signers)
 				if err := c.db.Update(context.Background(), func(tx kv.RwTx) error {
 					if err := snap.store(tx); err != nil {
 						return err
@@ -539,7 +539,7 @@ func (c *Apoa) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 		return err
 	}
 	c.lock.RLock()
-	if number%c.config.APoa.Epoch != 0 {
+	if number%c.config.Epoch != 0 {
 		// Gather all the proposals that make sense voting on
 		addresses := make([]types.Address, 0, len(c.proposals))
 		for address, authorize := range c.proposals {
@@ -571,7 +571,7 @@ func (c *Apoa) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 	}
 	rawHeader.Extra = rawHeader.Extra[:extraVanity]
 
-	if number%c.config.APoa.Epoch == 0 {
+	if number%c.config.Epoch == 0 {
 		for _, signer := range snap.signers() {
 			rawHeader.Extra = append(rawHeader.Extra, signer[:]...)
 		}

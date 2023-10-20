@@ -61,7 +61,6 @@ func (r RewardResponseValues) Swap(i, j int) {
 }
 
 type Reward struct {
-	config      *params.APosConfig
 	chainConfig *params.ChainConfig
 
 	ctx         context.Context
@@ -88,12 +87,12 @@ func (r AccountRewards) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
-func newReward(config *params.APosConfig, chainConfig *params.ChainConfig) *Reward {
-	rewardLimitBig, _ := uint256.FromBig(config.RewardLimit)
+func newReward(chainConfig *params.ChainConfig) *Reward {
+	rewardLimitBig, _ := uint256.FromBig(chainConfig.Apos.RewardLimit)
 	return &Reward{
-		ctx: context.TODO(), config: config, chainConfig: chainConfig,
+		ctx: context.TODO(), chainConfig: chainConfig,
 		rewardLimit: rewardLimitBig,
-		rewardEpoch: uint256.NewInt(config.RewardEpoch),
+		rewardEpoch: uint256.NewInt(chainConfig.Apos.RewardEpoch),
 	}
 }
 

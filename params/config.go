@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common/paths"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/params/networkname"
 	"golang.org/x/crypto/sha3"
@@ -36,14 +35,14 @@ import (
 //go:embed chainspecs
 var chainspecs embed.FS
 
-func readChainSpec(filename string) *conf.Genesis {
+func readChainSpec(filename string) *ChainConfig {
 	f, err := chainspecs.Open(filename)
 	if err != nil {
 		panic(fmt.Sprintf("Could not open chainspec for %s: %v", filename, err))
 	}
 	defer f.Close()
 	decoder := json.NewDecoder(f)
-	spec := &conf.Genesis{}
+	spec := &ChainConfig{}
 	err = decoder.Decode(&spec)
 	if err != nil {
 		panic(fmt.Sprintf("Could not parse chainspec for %s: %v", filename, err))
@@ -59,7 +58,7 @@ const (
 	CliqueConsensus ConsensusType = "clique"
 	ParliaConsensus ConsensusType = "parlia"
 	BorConsensus    ConsensusType = "bor"
-	ApoaConsensu    ConsensusType = "apos"
+	AposConsensu    ConsensusType = "apos"
 	Faker           ConsensusType = "faker" // faker consensus
 )
 
@@ -75,8 +74,6 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Test network.
 	TestnetChainConfig = readChainSpec("chainspecs/testnet.json")
-
-	CliqueSnapshot = NewSnapshotConfig(10, 1024, 16384, true, "")
 
 	TestChainConfig = &ChainConfig{
 		ChainID:               big.NewInt(1),
@@ -99,8 +96,6 @@ var (
 		Clique:                nil,
 	}
 
-	TestRules = TestChainConfig.Rules(0)
-
 	AmazeChainConfig = &ChainConfig{
 		ChainID:               big.NewInt(100100100),
 		HomesteadBlock:        big.NewInt(0),
@@ -119,26 +114,6 @@ var (
 		ArrowGlacierBlock:     big.NewInt(0),
 		GrayGlacierBlock:      big.NewInt(0),
 		BeijingBlock:          big.NewInt(10000),
-	}
-
-	// AmazeChainTrustedCheckpoint contains the light client trusted checkpoint for the main network.
-	AmazeChainTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 413,
-		SectionHead:  types.HexToHash("0x8aa8e64ceadcdc5f23bc41d2acb7295a261a5cf680bb00a34f0e01af08200083"),
-		CHTRoot:      types.HexToHash("0x008af584d385a2610706c5a439d39f15ddd4b691c5d42603f65ae576f703f477"),
-		BloomRoot:    types.HexToHash("0x5a081af71a588f4d90bced242545b08904ad4fb92f7effff2ceb6e50e6dec157"),
-	}
-	// AmazeChainCheckpointOracle contains a set of configs for the main network oracle.
-	AmazeChainCheckpointOracle = &CheckpointOracleConfig{
-		Address: types.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"),
-		Signers: []types.Address{
-			types.HexToAddress("0x1b2C260efc720BE89101890E4Db589b44E950527"), // Peter
-			types.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			types.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			types.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			types.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		},
-		Threshold: 2,
 	}
 )
 
@@ -833,17 +808,6 @@ func (c *ChainConfig) Rules(num uint64) *Rules {
 func ChainConfigByChainName(chain string) *ChainConfig {
 	switch chain {
 	case networkname.MainnetChainName:
-		return MainnetChainConfig.Config
-	case networkname.TestnetChainName:
-		return TestnetChainConfig.Config
-	default:
-		return nil
-	}
-}
-
-func GenesisByChainName(chain string) *conf.Genesis {
-	switch chain {
-	case networkname.MainnetChainName:
 		return MainnetChainConfig
 	case networkname.TestnetChainName:
 		return TestnetChainConfig
@@ -866,9 +830,9 @@ func GenesisHashByChainName(chain string) *types.Hash {
 func ChainConfigByGenesisHash(genesisHash types.Hash) *ChainConfig {
 	switch {
 	case genesisHash == MainnetGenesisHash:
-		return MainnetChainConfig.Config
+		return MainnetChainConfig
 	case genesisHash == TestnetGenesisHash:
-		return TestnetChainConfig.Config
+		return TestnetChainConfig
 	default:
 		return nil
 	}

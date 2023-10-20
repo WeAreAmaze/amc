@@ -34,8 +34,8 @@ type Genesis struct {
 	Coinbase   types.Address       `json:"coinbase"`
 
 	//Engine *ConsensusConfig `json:"engine" yaml:"engine"`
-	Miners []string       `json:"miners" yaml:"miners"`
-	Alloc  []GenesisAlloc `json:"alloc" yaml:"alloc"  gencodec:"required"`
+	Miners []string     `json:"miners" yaml:"miners"`
+	Alloc  GenesisAlloc `json:"alloc" yaml:"alloc"  gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -45,8 +45,11 @@ type Genesis struct {
 	BaseFee    *uint256.Int `json:"baseFeePerGas"`
 }
 
-type GenesisAlloc struct {
-	Address string                    `json:"address" toml:"address"`
+// GenesisAlloc specifies the initial state that is part of the genesis block.
+type GenesisAlloc map[types.Address]GenesisAccount
+
+type GenesisAccount struct {
+	//Address string                    `json:"address" toml:"address"`
 	Balance string                    `json:"balance" toml:"balance"`
 	Code    []byte                    `json:"code,omitempty"`
 	Storage map[types.Hash]types.Hash `json:"storage,omitempty"`

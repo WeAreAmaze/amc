@@ -590,7 +590,7 @@ func (c *APos) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 	}
 	rawHeader.Extra = rawHeader.Extra[:extraVanity]
 
-	if number%c.config.APos.Epoch == 0 {
+	if number%c.config.Epoch == 0 {
 		for _, signer := range snap.signers() {
 			rawHeader.Extra = append(rawHeader.Extra, signer[:]...)
 		}
@@ -621,7 +621,7 @@ func (c *APos) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlock
 		Cmp(uint256.NewInt(0)) == 0 {
 		log.Info("begin setreward", "headnumber", header.Number64().ToBig().String())
 
-		rewardService := newReward(c.config, c.chainConfig)
+		rewardService := newReward(c.chainConfig)
 		accRewards, err := rewardService.SetRewards(tx, header.Number64(), setRewards)
 		if err != nil {
 			log.Error("setreward error", "err", err)
@@ -655,7 +655,7 @@ func (c *APos) Finalize(chain consensus.ChainHeaderReader, header block.IHeader,
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	//chain.Config().IsEIP158(header.Number)
 
-	rewards, unpayMap, err := doReward(c.chainConfig, c.config, state, header.(*block.Header), chain)
+	rewards, unpayMap, err := doReward(c.chainConfig, state, header.(*block.Header), chain)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -145,12 +145,12 @@ var rpcFlags = []cli.Flag{
 }
 
 var consensusFlag = []cli.Flag{
-	&cli.StringFlag{
-		Name:        "engine.type",
-		Usage:       "consensus engine",
-		Value:       "APosEngine", //APoaEngine,APosEngine
-		Destination: &DefaultConfig.GenesisCfg.Engine.EngineName,
-	},
+	//&cli.StringFlag{
+	//	Name:        "engine.type",
+	//	Usage:       "consensus engine",
+	//	Value:       "APosEngine", //APoaEngine,APosEngine
+	//	Destination: &DefaultConfig.ChainCfg.Consensus,
+	//},
 	&cli.BoolFlag{
 		Name:        "engine.miner",
 		Usage:       "miner",
@@ -161,7 +161,7 @@ var consensusFlag = []cli.Flag{
 		Name:        "engine.etherbase",
 		Usage:       "consensus etherbase",
 		Value:       "",
-		Destination: &DefaultConfig.GenesisCfg.Engine.Etherbase,
+		Destination: &DefaultConfig.Miner.Etherbase,
 	},
 }
 

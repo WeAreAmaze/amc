@@ -5,6 +5,6 @@ Archives of pre-compiled binary files ready for Windows, macOS, and Linux are av
 If you use macOS Homebrew or Linuxbrew, you can install amc from Amaze's homebrew tap:
 
 ```text
-brew install amaze/brew/amc 
+brew install amazechain/amc
 ```
 

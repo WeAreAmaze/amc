@@ -142,8 +142,7 @@ type Node struct {
 }
 
 func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
-	//1. init db
-	var name = kv.ChainDB.String()
+
 	c, cancel := context.WithCancel(ctx)
 
 	var (
@@ -174,7 +173,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	}
 
 	//
-	chainKv, err = OpenDatabase(cfg, nil, name)
+	chainKv, err = OpenDatabase(cfg, nil, kv.ChainDB.String())
 	if nil != err {
 		return nil, err
 	}

@@ -5,14 +5,34 @@ BUILD_PATH := ./build/bin/
 APP_NAME := amazechain
 APP_PATH := ./cmd/amc
 SHELL := /bin/bash
+GO = go
 #LDFLAGS := -ldflags "-w -s -X github.com/amazechain/amc/version.BuildNumber=${GIT_COMMIT} -X 'github.com/amazechain/amc/version.BuildTime=${BUILD_TIME}' -X 'github.com/amazechain/amc/version.GoVersion=${GO_VERSION}'"
+
+
+# Variables below for building on host OS, and are ignored for docker
+#
+# Pipe error below to /dev/null since Makefile structure kind of expects
+# Go to be available, but with docker it's not strictly necessary
+CGO_CFLAGS := $(shell $(GO) env CGO_CFLAGS 2>/dev/null) # don't lose default
+CGO_CFLAGS += -DMDBX_FORCE_ASSERTIONS=0 # Enable MDBX's asserts by default in 'devel' branch and disable in releases
+#CGO_CFLAGS += -DMDBX_DISABLE_VALIDATION=1 # This feature is not ready yet
+#CGO_CFLAGS += -DMDBX_ENABLE_PROFGC=0 # Disabled by default, but may be useful for performance debugging
+#CGO_CFLAGS += -DMDBX_ENABLE_PGOP_STAT=0 # Disabled by default, but may be useful for performance debugging
+#CGO_CFLAGS += -DMDBX_ENV_CHECKPID=0 # Erigon doesn't do fork() syscall
+CGO_CFLAGS += -O
+CGO_CFLAGS += -D__BLST_PORTABLE__
+CGO_CFLAGS += -Wno-unknown-warning-option -Wno-enum-int-mismatch -Wno-strict-prototypes
+#CGO_CFLAGS += -Wno-error=strict-prototypes
 
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 GIT_TAG    ?= $(shell git describe --tags '--match=v*' --dirty)
 PACKAGE = github.com/amazechain/amc
-GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
-GOBUILD = go build -v $(GO_FLAGS)
+
+BUILD_TAGS = nosqlite,noboltdb
+GO_FLAGS += -trimpath -tags $(BUILD_TAGS) -buildvcs=false
+GO_FLAGS += -ldflags  "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
+GOBUILD = CGO_CFLAGS="$(CGO_CFLAGS)" go build -v $(GO_FLAGS)
 
 
 # if using volume-mounting data dir, then must exist on host OS

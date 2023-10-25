@@ -50,7 +50,7 @@ type GenesisAlloc map[types.Address]GenesisAccount
 
 type GenesisAccount struct {
 	//Address string                    `json:"address" toml:"address"`
-	Balance string                    `json:"balance" toml:"balance"`
+	Balance string                    `json:"balance"`
 	Code    []byte                    `json:"code,omitempty"`
 	Storage map[types.Hash]types.Hash `json:"storage,omitempty"`
 	Nonce   uint64                    `json:"nonce,omitempty"`

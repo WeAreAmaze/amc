@@ -196,6 +196,10 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		if err != nil {
 			return err
 		}
+		//
+		if genesisBlock, err = rawdb.ReadBlockByHash(tx, genesisHash); genesisBlock == nil {
+			return fmt.Errorf("genesisBlock is missing err:%w", err)
+		}
 
 		return nil
 	}); err != nil {
@@ -231,7 +235,7 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
-	p2p, err := p2p.NewService(c, genesisBlock.Hash(), cfg.P2PCfg)
+	p2p, err := p2p.NewService(c, genesisBlock.Hash(), cfg.P2PCfg, cfg.NodeCfg)
 	if err != nil {
 		return nil, err
 	}

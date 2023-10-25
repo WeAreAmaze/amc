@@ -87,7 +87,7 @@ type Service struct {
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
-func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig) (*Service, error) {
+func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig, nodeCfg conf.NodeConfig) (*Service, error) {
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
@@ -102,7 +102,7 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 		genesisHash:  genesisHash,
 	}
 
-	dv5Nodes := parseBootStrapAddrs(s.cfg.BootstrapNodeAddr)
+	dv5Nodes := parseBootStrapAddrs(cfg.BootstrapNodeAddr, nodeCfg)
 	//
 	cfg.Discv5BootStrapAddr = dv5Nodes
 

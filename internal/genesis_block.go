@@ -45,10 +45,10 @@ import (
 var ErrGenesisNoConfig = errors.New("genesis has no chain configuration")
 
 //go:embed allocs
-var chainspecs embed.FS
+var allocs embed.FS
 
 func readGenesisAlloc(filename string) conf.GenesisAlloc {
-	f, err := chainspecs.Open(filename)
+	f, err := allocs.Open(filename)
 	if err != nil {
 		panic(fmt.Sprintf("Could not open GenesisAlloc for %s: %v", filename, err))
 	}
@@ -260,17 +260,25 @@ func GenesisByChainName(chain string) *conf.Genesis {
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func mainnetGenesisBlock() *conf.Genesis {
 	return &conf.Genesis{
-		Config: params.MainnetChainConfig,
-		Nonce:  0,
-		Alloc:  readGenesisAlloc("mainnet.json"),
+		Config:    params.MainnetChainConfig,
+		Nonce:     0,
+		Alloc:     readGenesisAlloc("allocs/mainnet.json"),
+		Timestamp: 1678174066,
+		Miners:    []string{"AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21"},
+		Number:    0,
+		// genesisBlock Difficulty = params.GenesisDifficulty
+		//Difficulty: uint256.NewInt(0),
 	}
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func testnetGenesisBlock() *conf.Genesis {
 	return &conf.Genesis{
-		Config: params.MainnetChainConfig,
-		Nonce:  0,
-		Alloc:  readGenesisAlloc("testnet.json"),
+		Config:    params.TestnetChainConfig,
+		Nonce:     0,
+		Alloc:     readGenesisAlloc("allocs/testnet.json"),
+		Number:    0,
+		Timestamp: 1678174066,
+		Miners:    []string{"AMCA2142AB3F25EAA9985F22C3F5B1FF9FA378DAC21"},
 	}
 }

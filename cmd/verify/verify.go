@@ -93,7 +93,7 @@ func verify(ctx context.Context, msg *state.EntireCode) types.Hash {
 
 func checkBlock(getHashF func(n uint64) types.Hash, block *block2.Block, ibs *state.IntraBlockState, coinbase types.Address, rewards []*block2.Reward) (types.Hash, error) {
 	header := block.Header().(*block2.Header)
-	chainConfig := params.AmazeChainConfig
+	chainConfig := params.MainnetChainConfig
 	if chainConfig.DAOForkSupport && chainConfig.DAOForkBlock != nil && chainConfig.DAOForkBlock.Cmp(block.Number64().ToBig()) == 0 {
 		misc.ApplyDAOHardFork(ibs)
 	}

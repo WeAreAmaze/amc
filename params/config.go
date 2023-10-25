@@ -95,26 +95,6 @@ var (
 		Ethash:                new(EthashConfig),
 		Clique:                nil,
 	}
-
-	AmazeChainConfig = &ChainConfig{
-		ChainID:               big.NewInt(100100100),
-		HomesteadBlock:        big.NewInt(0),
-		DAOForkBlock:          nil,
-		DAOForkSupport:        false,
-		TangerineWhistleBlock: big.NewInt(0),
-		TangerineWhistleHash:  types.Hash{},
-		SpuriousDragonBlock:   big.NewInt(0),
-		ByzantiumBlock:        big.NewInt(0),
-		ConstantinopleBlock:   big.NewInt(0),
-		PetersburgBlock:       big.NewInt(0),
-		IstanbulBlock:         big.NewInt(0),
-		MuirGlacierBlock:      big.NewInt(0),
-		BerlinBlock:           big.NewInt(0),
-		LondonBlock:           big.NewInt(0),
-		ArrowGlacierBlock:     big.NewInt(0),
-		GrayGlacierBlock:      big.NewInt(0),
-		BeijingBlock:          big.NewInt(10000),
-	}
 )
 
 // ChainConfig is the core config which determines the blockchain settings.

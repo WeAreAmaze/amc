@@ -9,7 +9,7 @@ You can build amc Linux, macOS, Windows, and Windows WSL2.
 ## Dependencies
 
 First, Instructions for installing Go are available at the [Go installation page](https://golang.org/doc/install) and necessary bundles can be downloaded from the [Go download page](https://golang.org/dl/).
-
+Note: Please download version 1.2, as some libraries do not yet support higher versions.
 ## Build amc
 
 With go and the dependencies installed, you're ready to build amc. First, clone the repository:

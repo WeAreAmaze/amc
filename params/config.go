@@ -24,13 +24,12 @@ import (
 	"github.com/amazechain/amc/common/paths"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/common"
+	"github.com/amazechain/amc/params/networkname"
 	"golang.org/x/crypto/sha3"
 	"math/big"
 	"path"
 	"sort"
 	"strconv"
-
-	"github.com/amazechain/amc/params/networkname"
 )
 
 //go:embed chainspecs
@@ -59,118 +58,22 @@ const (
 	CliqueConsensus ConsensusType = "clique"
 	ParliaConsensus ConsensusType = "parlia"
 	BorConsensus    ConsensusType = "bor"
+	AposConsensu    ConsensusType = "apos"
 	Faker           ConsensusType = "faker" // faker consensus
 )
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash    = types.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	SepoliaGenesisHash    = types.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
-	RopstenGenesisHash    = types.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
-	RinkebyGenesisHash    = types.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
-	GoerliGenesisHash     = types.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
-	SokolGenesisHash      = types.HexToHash("0x5b28c1bfd3a15230c9a46b399cd0f9a6920d432e85381cc6a140b06e8410112f")
-	FermionGenesisHash    = types.HexToHash("0x0658360d8680ead416900a552b67b84e6d575c7f0ecab3dbe42406f9f8c34c35")
-	BSCGenesisHash        = types.HexToHash("0x0d21840abff46b96c84b2ac9e10e4f5cdaeb5693cb665db62a2f3b02d2d57b5b")
-	ChapelGenesisHash     = types.HexToHash("0x6d3c66c5357ec91d5c43af47e234a939b22557cbb552dc45bebbceeed90fbe34")
-	RialtoGenesisHash     = types.HexToHash("0xee835a629f9cf5510b48b6ba41d69e0ff7d6ef10f977166ef939db41f59f5501")
-	MumbaiGenesisHash     = types.HexToHash("0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7")
-	BorMainnetGenesisHash = types.HexToHash("0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
-	BorDevnetGenesisHash  = types.HexToHash("0x5a06b25b0c6530708ea0b98a3409290e39dce6be7f558493aeb6e4b99a172a87")
-	GnosisGenesisHash     = types.HexToHash("0x4f1dd23188aab3a76b463e4af801b52b1248ef073c648cbdc4c9333d3da79756")
-)
-
-var (
-	SokolGenesisEpochProof = types.FromHex2Bytes("0xf91a8c80b91a87f91a84f9020da00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a0fad4af258fd11939fae0c6c6eec9d340b1caac0b0196fd9a1bc3f489c5bf00b3a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000830200008083663be080808080b8410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f91871b914c26060604052600436106100fc576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806303aca79214610101578063108552691461016457806340a141ff1461019d57806340c9cdeb146101d65780634110a489146101ff57806345199e0a1461025757806349285b58146102c15780634d238c8e14610316578063752862111461034f578063900eb5a8146103645780639a573786146103c7578063a26a47d21461041c578063ae4b1b5b14610449578063b3f05b971461049e578063b7ab4db5146104cb578063d3e848f114610535578063fa81b2001461058a578063facd743b146105df575b600080fd5b341561010c57600080fd5b6101226004808035906020019091905050610630565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b341561016f57600080fd5b61019b600480803573ffffffffffffffffffffffffffffffffffffffff1690602001909190505061066f565b005b34156101a857600080fd5b6101d4600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091905050610807565b005b34156101e157600080fd5b6101e9610bb7565b6040518082815260200191505060405180910390f35b341561020a57600080fd5b610236600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091905050610bbd565b60405180831515151581526020018281526020019250505060405180910390f35b341561026257600080fd5b61026a610bee565b6040518080602001828103825283818151815260200191508051906020019060200280838360005b838110156102ad578082015181840152602081019050610292565b505050509050019250505060405180910390f35b34156102cc57600080fd5b6102d4610c82565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b341561032157600080fd5b61034d600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091905050610d32565b005b341561035a57600080fd5b610362610fcc565b005b341561036f57600080fd5b61038560048080359060200190919050506110fc565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b34156103d257600080fd5b6103da61113b565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b341561042757600080fd5b61042f6111eb565b604051808215151515815260200191505060405180910390f35b341561045457600080fd5b61045c6111fe565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b34156104a957600080fd5b6104b1611224565b604051808215151515815260200191505060405180910390f35b34156104d657600080fd5b6104de611237565b6040518080602001828103825283818151815260200191508051906020019060200280838360005b83811015610521578082015181840152602081019050610506565b505050509050019250505060405180910390f35b341561054057600080fd5b6105486112cb565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b341561059557600080fd5b61059d6112f1565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b34156105ea57600080fd5b610616600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091905050611317565b604051808215151515815260200191505060405180910390f35b60078181548110151561063f57fe5b90600052602060002090016000915054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b600460029054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff161415156106cb57600080fd5b600460019054906101000a900460ff161515156106e757600080fd5b600073ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff161415151561072357600080fd5b80600a60006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055506001600460016101000a81548160ff0219169083151502179055507f600bcf04a13e752d1e3670a5a9f1c21177ca2a93c6f5391d4f1298d098097c22600a60009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390a150565b600080600061081461113b565b73ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff1614151561084d57600080fd5b83600960008273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000160009054906101000a900460ff1615156108a957600080fd5b600960008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600101549350600160078054905003925060078381548110151561090857fe5b906000526020600020900160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1691508160078581548110151561094657fe5b906000526020600020900160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555083600960008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600101819055506007838154811015156109e557fe5b906000526020600020900160006101000a81549073ffffffffffffffffffffffffffffffffffffffff02191690556000600780549050111515610a2757600080fd5b6007805480919060019003610a3c9190611370565b506000600960008773ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600101819055506000600960008773ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000160006101000a81548160ff0219169083151502179055506000600460006101000a81548160ff0219169083151502179055506001430340600019167f55252fa6eee4741b4e24a74a70e9c11fd2c2281df8d6ea13126ff845f7825c89600760405180806020018281038252838181548152602001915080548015610ba257602002820191906000526020600020905b8160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019060010190808311610b58575b50509250505060405180910390a25050505050565b60085481565b60096020528060005260406000206000915090508060000160009054906101000a900460ff16908060010154905082565b610bf661139c565b6007805480602002602001604051908101604052809291908181526020018280548015610c7857602002820191906000526020600020905b8160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019060010190808311610c2e575b5050505050905090565b6000600a60009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166349285b586000604051602001526040518163ffffffff167c0100000000000000000000000000000000000000000000000000000000028152600401602060405180830381600087803b1515610d1257600080fd5b6102c65a03f11515610d2357600080fd5b50505060405180519050905090565b610d3a61113b565b73ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16141515610d7357600080fd5b80600960008273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000160009054906101000a900460ff16151515610dd057600080fd5b600073ffffffffffffffffffffffffffffffffffffffff168273ffffffffffffffffffffffffffffffffffffffff1614151515610e0c57600080fd5b6040805190810160405280600115158152602001600780549050815250600960008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008201518160000160006101000a81548160ff0219169083151502179055506020820151816001015590505060078054806001018281610ea991906113b0565b9160005260206000209001600084909190916101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550506000600460006101000a81548160ff0219169083151502179055506001430340600019167f55252fa6eee4741b4e24a74a70e9c11fd2c2281df8d6ea13126ff845f7825c89600760405180806020018281038252838181548152602001915080548015610fba57602002820191906000526020600020905b8160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019060010190808311610f70575b50509250505060405180910390a25050565b600560009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff161480156110365750600460009054906101000a900460ff16155b151561104157600080fd5b6001600460006101000a81548160ff0219169083151502179055506007600690805461106e9291906113dc565b506006805490506008819055507f8564cd629b15f47dc310d45bcbfc9bcf5420b0d51bf0659a16c67f91d27632536110a4611237565b6040518080602001828103825283818151815260200191508051906020019060200280838360005b838110156110e75780820151818401526020810190506110cc565b505050509050019250505060405180910390a1565b60068181548110151561110b57fe5b90600052602060002090016000915054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b6000600a60009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16639a5737866000604051602001526040518163ffffffff167c0100000000000000000000000000000000000000000000000000000000028152600401602060405180830381600087803b15156111cb57600080fd5b6102c65a03f115156111dc57600080fd5b50505060405180519050905090565b600460019054906101000a900460ff1681565b600a60009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b600460009054906101000a900460ff1681565b61123f61139c565b60068054806020026020016040519081016040528092919081815260200182805480156112c157602002820191906000526020600020905b8160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019060010190808311611277575b5050505050905090565b600560009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b600460029054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b6000600960008373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060000160009054906101000a900460ff169050919050565b81548183558181151161139757818360005260206000209182019101611396919061142e565b5b505050565b602060405190810160405280600081525090565b8154818355818115116113d7578183600052602060002091820191016113d6919061142e565b5b505050565b82805482825590600052602060002090810192821561141d5760005260206000209182015b8281111561141c578254825591600101919060010190611401565b5b50905061142a9190611453565b5090565b61145091905b8082111561144c576000816000905550600101611434565b5090565b90565b61149391905b8082111561148f57600081816101000a81549073ffffffffffffffffffffffffffffffffffffffff021916905550600101611459565b5090565b905600a165627a7a7230582036ea35935c8246b68074adece2eab70c40e69a0193c08a6277ce06e5b25188510029b86bf869a033aa5d69545785694b808840be50c182dad2ec3636dfccbe6572fb69828742c0b846f8440101a0663ce0d171e545a26aa67e4ca66f72ba96bb48287dbcc03beea282867f80d44ba01f0e7726926cb43c03a0abf48197dba78522ec8ba1b158e2aa30da7d2a2c6f9eb8f3f8f1a08023c0d95fc2364e0bf7593f5ff32e1db8ef9f4b41c0bd474eae62d1af896e99808080a0b47b4f0b3e73b5edc8f9a9da1cbcfed562eb06bf54619b6aefeadebf5b3604c280a0da6ec08940a924cb08c947dd56cdb40076b29a6f0ea4dba4e2d02d9a9a72431b80a030cc4138c9e74b6cf79d624b4b5612c0fd888e91f55316cfee7d1694e1a90c0b80a0c5d54b915b56a888eee4e6eeb3141e778f9b674d1d322962eed900f02c29990aa017256b36ef47f907c6b1378a2636942ce894c17075e56fc054d4283f6846659e808080a03340bbaeafcda3a8672eb83099231dbbfab8dae02a1e8ec2f7180538fac207e080b838f7a03868bdfa8727775661e4ccf117824a175a33f8703d728c04488fbfffcafda9f99594e8ddc5c7a2d2f0d7a9798459c0104fdf5e987acab853f851808080a07bb75cabebdcbd1dbb4331054636d0c6d7a2b08483b9e04df057395a7434c9e080808080808080a0e61e567237b49c44d8f906ceea49027260b4010c10a547b38d8b131b9d3b6f848080808080b853f851808080a0a87d9bb950836582673aa0eecc0ff64aac607870637a2dd2012b8b1b31981f698080a08da6d5c36a404670c553a2c9052df7cd604f04e3863c4c7b9e0027bfd54206d680808080808080808080b86bf869a02080c7b7ae81a58eb98d9c78de4a1fd7fd9535fc953ed2be602daaa41767312ab846f8448080a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470b8d3f8d1a0dc277c93a9f9dcee99aac9b8ba3cfa4c51821998522469c37715644e8fbac0bfa0ab8cdb808c8303bb61fb48e276217be9770fa83ecf3f90f2234d558885f5abf1808080a0fe137c3a474fbde41d89a59dd76da4c55bf696b86d3af64a55632f76cf30786780808080a06301b39b2ea8a44df8b0356120db64b788e71f52e1d7a6309d0d2e5b86fee7cb80a0da5d8b08dea0c5a4799c0f44d8a24d7cdf209f9b7a5588c1ecafb5361f6b9f07a01b7779e149cadf24d4ffb77ca7e11314b8db7097e4d70b2a173493153ca2e5a0808080a3e2a02052222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d3f0180")
-)
-
-var (
-	SokolGenesisStateRoot   = types.HexToHash("0xfad4af258fd11939fae0c6c6eec9d340b1caac0b0196fd9a1bc3f489c5bf00b3")
-	FermionGenesisStateRoot = types.HexToHash("0x08982dc16236c51b6d9aff8b76cd0faa7067eb55eba62395d5a82649d8fb73c4")
-	GnosisGenesisStateRoot  = types.HexToHash("0x40cf4430ecaa733787d1a65154a3b9efb560c95d9e324a23b97f0609b539133b")
+	MainnetGenesisHash = types.HexToHash("0x138734b7044254e5ecbabf8056f5c2b73cd0847aaa5acac7345507cbeab387b8")
+	TestnetGenesisHash = types.HexToHash("0x5c0555d9ec963f58c63112862294e7e4836b12802304c23f2ec480a8f55cc5bb")
 )
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = readChainSpec("chainspecs/mainnet.json")
 
-	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
-	SepoliaChainConfig = readChainSpec("chainspecs/sepolia.json")
-
-	// RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
-	RopstenChainConfig = readChainSpec("chainspecs/ropsten.json")
-
-	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
-	RinkebyChainConfig = readChainSpec("chainspecs/rinkeby.json")
-
-	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
-	GoerliChainConfig = readChainSpec("chainspecs/goerli.json")
-
-	BSCChainConfig = readChainSpec("chainspecs/bsc.json")
-
-	ChapelChainConfig = readChainSpec("chainspecs/chapel.json")
-
-	RialtoChainConfig = readChainSpec("chainspecs/rialto.json")
-
-	SokolChainConfig = readChainSpec("chainspecs/sokol.json")
-
-	FermionChainConfig = readChainSpec("chainspecs/fermion.json")
-
-	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers into the Ethash consensus.
-	AllEthashProtocolChanges = &ChainConfig{
-		ChainID:               big.NewInt(1337),
-		Consensus:             EtHashConsensus,
-		HomesteadBlock:        big.NewInt(0),
-		DAOForkBlock:          nil,
-		DAOForkSupport:        false,
-		TangerineWhistleBlock: big.NewInt(0),
-		TangerineWhistleHash:  types.Hash{},
-		SpuriousDragonBlock:   big.NewInt(0),
-		ByzantiumBlock:        big.NewInt(0),
-		ConstantinopleBlock:   big.NewInt(0),
-		PetersburgBlock:       big.NewInt(0),
-		IstanbulBlock:         big.NewInt(0),
-		MuirGlacierBlock:      big.NewInt(0),
-		BerlinBlock:           big.NewInt(0),
-		LondonBlock:           big.NewInt(0),
-		ArrowGlacierBlock:     big.NewInt(0),
-		Ethash:                new(EthashConfig),
-		Clique:                nil,
-	}
-
-	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers into the Clique consensus.
-	AllCliqueProtocolChanges = &ChainConfig{
-		ChainID:               big.NewInt(1337),
-		Consensus:             CliqueConsensus,
-		HomesteadBlock:        big.NewInt(0),
-		DAOForkBlock:          nil,
-		DAOForkSupport:        false,
-		TangerineWhistleBlock: big.NewInt(0),
-		TangerineWhistleHash:  types.Hash{},
-		SpuriousDragonBlock:   big.NewInt(0),
-		ByzantiumBlock:        big.NewInt(0),
-		ConstantinopleBlock:   big.NewInt(0),
-		PetersburgBlock:       big.NewInt(0),
-		IstanbulBlock:         big.NewInt(0),
-		MuirGlacierBlock:      big.NewInt(0),
-		BerlinBlock:           big.NewInt(0),
-		LondonBlock:           big.NewInt(0),
-		ArrowGlacierBlock:     nil,
-		Ethash:                nil,
-		Clique:                &CliqueConfig{Period: 0, Epoch: 30000},
-	}
-
-	MumbaiChainConfig = readChainSpec("chainspecs/mumbai.json")
-
-	BorMainnetChainConfig = readChainSpec("chainspecs/bor-mainnet.json")
-
-	BorDevnetChainConfig = readChainSpec("chainspecs/bor-devnet.json")
-
-	GnosisChainConfig = readChainSpec("chainspecs/gnosis.json")
-
-	CliqueSnapshot = NewSnapshotConfig(10, 1024, 16384, true, "")
+	// TestnetChainConfig contains the chain parameters to run a node on the Test network.
+	TestnetChainConfig = readChainSpec("chainspecs/testnet.json")
 
 	TestChainConfig = &ChainConfig{
 		ChainID:               big.NewInt(1),
@@ -191,68 +94,6 @@ var (
 		ArrowGlacierBlock:     nil,
 		Ethash:                new(EthashConfig),
 		Clique:                nil,
-	}
-
-	TestChainAuraConfig = &ChainConfig{
-		ChainID:               big.NewInt(1),
-		Consensus:             AuRaConsensus,
-		HomesteadBlock:        big.NewInt(0),
-		DAOForkBlock:          nil,
-		DAOForkSupport:        false,
-		TangerineWhistleBlock: big.NewInt(0),
-		TangerineWhistleHash:  types.Hash{},
-		SpuriousDragonBlock:   big.NewInt(0),
-		ByzantiumBlock:        big.NewInt(0),
-		ConstantinopleBlock:   big.NewInt(0),
-		PetersburgBlock:       big.NewInt(0),
-		IstanbulBlock:         big.NewInt(0),
-		MuirGlacierBlock:      big.NewInt(0),
-		BerlinBlock:           big.NewInt(0),
-		LondonBlock:           nil,
-		ArrowGlacierBlock:     nil,
-		Aura:                  &AuRaConfig{},
-	}
-
-	TestRules = TestChainConfig.Rules(0)
-
-	AmazeChainConfig = &ChainConfig{
-		ChainID:               big.NewInt(100100100),
-		HomesteadBlock:        big.NewInt(0),
-		DAOForkBlock:          nil,
-		DAOForkSupport:        false,
-		TangerineWhistleBlock: big.NewInt(0),
-		TangerineWhistleHash:  types.Hash{},
-		SpuriousDragonBlock:   big.NewInt(0),
-		ByzantiumBlock:        big.NewInt(0),
-		ConstantinopleBlock:   big.NewInt(0),
-		PetersburgBlock:       big.NewInt(0),
-		IstanbulBlock:         big.NewInt(0),
-		MuirGlacierBlock:      big.NewInt(0),
-		BerlinBlock:           big.NewInt(0),
-		LondonBlock:           big.NewInt(0),
-		ArrowGlacierBlock:     big.NewInt(0),
-		GrayGlacierBlock:      big.NewInt(0),
-		BeijingBlock:          big.NewInt(10000),
-	}
-
-	// AmazeChainTrustedCheckpoint contains the light client trusted checkpoint for the main network.
-	AmazeChainTrustedCheckpoint = &TrustedCheckpoint{
-		SectionIndex: 413,
-		SectionHead:  types.HexToHash("0x8aa8e64ceadcdc5f23bc41d2acb7295a261a5cf680bb00a34f0e01af08200083"),
-		CHTRoot:      types.HexToHash("0x008af584d385a2610706c5a439d39f15ddd4b691c5d42603f65ae576f703f477"),
-		BloomRoot:    types.HexToHash("0x5a081af71a588f4d90bced242545b08904ad4fb92f7effff2ceb6e50e6dec157"),
-	}
-	// AmazeChainCheckpointOracle contains a set of configs for the main network oracle.
-	AmazeChainCheckpointOracle = &CheckpointOracleConfig{
-		Address: types.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"),
-		Signers: []types.Address{
-			types.HexToAddress("0x1b2C260efc720BE89101890E4Db589b44E950527"), // Peter
-			types.HexToAddress("0x78d1aD571A1A09D60D9BBf25894b44e4C8859595"), // Martin
-			types.HexToAddress("0x286834935f4A8Cfb4FF4C77D5770C2775aE2b0E7"), // Zsolt
-			types.HexToAddress("0xb86e2B0Ab5A4B1373e40c51A7C712c70Ba2f9f8E"), // Gary
-			types.HexToAddress("0x0DF8fa387C602AE62559cC4aFa4972A7045d6707"), // Guillaume
-		},
-		Threshold: 2,
 	}
 )
 
@@ -322,6 +163,7 @@ type ChainConfig struct {
 	Aura   *AuRaConfig   `json:"aura,omitempty"`
 	Parlia *ParliaConfig `json:"parlia,omitempty" toml:",omitempty"`
 	Bor    *BorConfig    `json:"bor,omitempty"`
+	Apos   *APosConfig   `json:"apos,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -341,6 +183,29 @@ type CliqueConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (c *CliqueConfig) String() string {
 	return "clique"
+}
+
+type APosConfig struct {
+	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+
+	RewardEpoch uint64   `json:"rewardEpoch"`
+	RewardLimit *big.Int `json:"rewardLimit"`
+
+	DepositContract    string `json:"depositContract"`    // Deposit contract
+	DepositNFTContract string `json:"depositNFTContract"` // Deposit NFT contract
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (b *APosConfig) String() string {
+	return fmt.Sprintf("{DepositContract: %v, NFTDepositContract:%v, Period: %v, Epoch: %v, RewardEpoch: %v, RewardLimit: %v}",
+		b.DepositContract,
+		b.DepositNFTContract,
+		b.Period,
+		b.Epoch,
+		b.RewardEpoch,
+		b.RewardLimit,
+	)
 }
 
 // AuRaConfig is the consensus engine configs for proof-of-authority based sealing.
@@ -374,17 +239,6 @@ func (b *ParliaConfig) String() string {
 //
 //	RewardEpoch uint64 `json:"rewardEpoch"`
 //	RewardLimit uint64 `json:"rewardLimit"`
-//}
-
-// String implements the stringer interface, returning the consensus engine details.
-//func (b *AposConfig) String() string {
-//	return fmt.Sprintf("{DepositContract: %v, Period: %v, Epoch: %v, RewardEpoch: %v, RewardLimit: %v}",
-//		b.DepositContract,
-//		b.Period,
-//		b.Epoch,
-//		b.RewardEpoch,
-//		b.RewardLimit,
-//	)
 //}
 
 // BorConfig is the consensus engine configs for Matic bor based sealing.
@@ -436,23 +290,6 @@ func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uin
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-
-	// TODO Covalent: Refactor to more generic approach and potentially introduce tag for "ecosystem" field (Ethereum, BSC, etc.)
-	//if c.Consensus == ParliaConsensus {
-	//	return fmt.Sprintf("{ChainID: %v Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Engine: %v}",
-	//		c.ChainID,
-	//		c.RamanujanBlock,
-	//		c.NielsBlock,
-	//		c.MirrorSyncBlock,
-	//		c.BrunoBlock,
-	//		c.EulerBlock,
-	//		c.GibbsBlock,
-	//		c.NanoBlock,
-	//		c.MoranBlock,
-	//		engine,
-	//	)
-	//}
-
 	return fmt.Sprintf("{ChainID: %v, Homestead: %v, DAO: %v, DAO Support: %v, Tangerine Whistle: %v, Spurious Dragon: %v, Byzantium: %v, Constantinople: %v, Petersburg: %v, Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Gray Glacier: %v, Terminal Total Difficulty: %v, Merge Netsplit: %v, Shanghai: %v, Cancun: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
@@ -506,9 +343,9 @@ func NewSnapshotConfig(checkpointInterval uint64, inmemorySnapshots int, inmemor
 
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
-	"100100100": "localnet",
+	"100100100": "testnet",
 	"94":        "mainnet",
-	"131":       "testnet",
+	//"131":       "testnet",
 }
 
 // Description returns a human-readable description of ChainConfig.
@@ -597,73 +434,6 @@ func (c *ChainConfig) IsConstantinople(num uint64) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
-// // IsRamanujan returns whether num is either equal to the IsRamanujan fork block or greater.
-//
-//	func (c *ChainConfig) IsRamanujan(num uint64) bool {
-//		return isForked(c.RamanujanBlock, num)
-//	}
-//
-// // IsOnRamanujan returns whether num is equal to the Ramanujan fork block
-//
-//	func (c *ChainConfig) IsOnRamanujan(num *big.Int) bool {
-//		return configNumEqual(c.RamanujanBlock, num)
-//	}
-//
-// // IsNiels returns whether num is either equal to the Niels fork block or greater.
-//
-//	func (c *ChainConfig) IsNiels(num uint64) bool {
-//		return isForked(c.NielsBlock, num)
-//	}
-//
-// // IsOnNiels returns whether num is equal to the IsNiels fork block
-//
-//	func (c *ChainConfig) IsOnNiels(num *big.Int) bool {
-//		return configNumEqual(c.NielsBlock, num)
-//	}
-//
-// // IsMirrorSync returns whether num is either equal to the MirrorSync fork block or greater.
-//
-//	func (c *ChainConfig) IsMirrorSync(num uint64) bool {
-//		return isForked(c.MirrorSyncBlock, num)
-//	}
-//
-// // IsOnMirrorSync returns whether num is equal to the MirrorSync fork block
-//
-//	func (c *ChainConfig) IsOnMirrorSync(num *big.Int) bool {
-//		return configNumEqual(c.MirrorSyncBlock, num)
-//	}
-//
-// // IsBruno returns whether num is either equal to the Burn fork block or greater.
-//
-//	func (c *ChainConfig) IsBruno(num uint64) bool {
-//		return isForked(c.BrunoBlock, num)
-//	}
-//
-// // IsOnBruno returns whether num is equal to the Burn fork block
-//
-//	func (c *ChainConfig) IsOnBruno(num *big.Int) bool {
-//		return configNumEqual(c.BrunoBlock, num)
-//	}
-//
-// // IsEuler returns whether num is either equal to the euler fork block or greater.
-//
-//	func (c *ChainConfig) IsEuler(num *big.Int) bool {
-//		return isForked(c.EulerBlock, num.Uint64())
-//	}
-//
-//	func (c *ChainConfig) IsOnEuler(num *big.Int) bool {
-//		return configNumEqual(c.EulerBlock, num)
-//	}
-//
-// // IsGibbs returns whether num is either equal to the euler fork block or greater.
-//
-//	func (c *ChainConfig) IsGibbs(num *big.Int) bool {
-//		return isForked(c.GibbsBlock, num.Uint64())
-//	}
-//
-//	func (c *ChainConfig) IsOnGibbs(num *big.Int) bool {
-//		return configNumEqual(c.GibbsBlock, num)
-//	}
 func (c *ChainConfig) IsMoran(num uint64) bool {
 	return isForked(c.MoranBlock, num)
 }
@@ -1019,28 +789,8 @@ func ChainConfigByChainName(chain string) *ChainConfig {
 	switch chain {
 	case networkname.MainnetChainName:
 		return MainnetChainConfig
-	case networkname.SepoliaChainName:
-		return SepoliaChainConfig
-	case networkname.RinkebyChainName:
-		return RinkebyChainConfig
-	case networkname.GoerliChainName:
-		return GoerliChainConfig
-	case networkname.SokolChainName:
-		return SokolChainConfig
-	case networkname.BSCChainName:
-		return BSCChainConfig
-	case networkname.ChapelChainName:
-		return ChapelChainConfig
-	case networkname.RialtoChainName:
-		return RialtoChainConfig
-	case networkname.MumbaiChainName:
-		return MumbaiChainConfig
-	case networkname.BorMainnetChainName:
-		return BorMainnetChainConfig
-	case networkname.BorDevnetChainName:
-		return BorDevnetChainConfig
-	case networkname.GnosisChainName:
-		return GnosisChainConfig
+	case networkname.TestnetChainName:
+		return TestnetChainConfig
 	default:
 		return nil
 	}
@@ -1050,28 +800,8 @@ func GenesisHashByChainName(chain string) *types.Hash {
 	switch chain {
 	case networkname.MainnetChainName:
 		return &MainnetGenesisHash
-	case networkname.SepoliaChainName:
-		return &SepoliaGenesisHash
-	case networkname.RinkebyChainName:
-		return &RinkebyGenesisHash
-	case networkname.GoerliChainName:
-		return &GoerliGenesisHash
-	case networkname.SokolChainName:
-		return &SokolGenesisHash
-	case networkname.BSCChainName:
-		return &BSCGenesisHash
-	case networkname.ChapelChainName:
-		return &ChapelGenesisHash
-	case networkname.RialtoChainName:
-		return &RialtoGenesisHash
-	case networkname.MumbaiChainName:
-		return &MumbaiGenesisHash
-	case networkname.BorMainnetChainName:
-		return &BorMainnetGenesisHash
-	case networkname.BorDevnetChainName:
-		return &BorDevnetGenesisHash
-	case networkname.GnosisChainName:
-		return &GnosisGenesisHash
+	case networkname.TestnetChainName:
+		return &TestnetGenesisHash
 	default:
 		return nil
 	}
@@ -1081,28 +811,8 @@ func ChainConfigByGenesisHash(genesisHash types.Hash) *ChainConfig {
 	switch {
 	case genesisHash == MainnetGenesisHash:
 		return MainnetChainConfig
-	case genesisHash == SepoliaGenesisHash:
-		return SepoliaChainConfig
-	case genesisHash == RopstenGenesisHash:
-		return RopstenChainConfig
-	case genesisHash == RinkebyGenesisHash:
-		return RinkebyChainConfig
-	case genesisHash == GoerliGenesisHash:
-		return GoerliChainConfig
-	case genesisHash == SokolGenesisHash:
-		return SokolChainConfig
-	case genesisHash == FermionGenesisHash:
-		return FermionChainConfig
-	case genesisHash == BSCGenesisHash:
-		return BSCChainConfig
-	case genesisHash == ChapelGenesisHash:
-		return ChapelChainConfig
-	case genesisHash == RialtoGenesisHash:
-		return RialtoChainConfig
-	case genesisHash == BorMainnetGenesisHash:
-		return BorMainnetChainConfig
-	case genesisHash == GnosisGenesisHash:
-		return GnosisChainConfig
+	case genesisHash == TestnetGenesisHash:
+		return TestnetChainConfig
 	default:
 		return nil
 	}
@@ -1110,10 +820,10 @@ func ChainConfigByGenesisHash(genesisHash types.Hash) *ChainConfig {
 
 func NetworkIDByChainName(chain string) uint64 {
 	switch chain {
-	case networkname.RialtoChainName:
+	case networkname.MainnetChainName:
 		return 97
-	case networkname.DevChainName:
-		return 1337
+	case networkname.TestnetChainName:
+		return 100100100
 	default:
 		config := ChainConfigByChainName(chain)
 		if config == nil {

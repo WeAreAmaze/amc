@@ -29,7 +29,6 @@ import (
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/internal/avm/rlp"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
@@ -176,8 +175,8 @@ func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, er
 // Apoa is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type Apoa struct {
-	config *conf.ConsensusConfig // Consensus engine configuration parameters
-	db     kv.RwDB               // Database to store and retrieve snapshot checkpoints
+	config *params.CliqueConfig // Consensus engine configuration parameters
+	db     kv.RwDB              // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -194,13 +193,13 @@ type Apoa struct {
 
 // New creates a Apoa proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *conf.ConsensusConfig, db kv.RwDB) consensus.Engine {
+func New(config *params.CliqueConfig, db kv.RwDB) consensus.Engine {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
-	if conf.APoa.Epoch == 0 {
-		conf.APoa.Epoch = epochLength
+	if conf.Epoch == 0 {
+		conf.Epoch = epochLength
 	}
-	// Allocate the snapshot caches and create the engine
+	// GenesisAlloc the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
@@ -261,7 +260,7 @@ func (c *Apoa) verifyHeader(chain consensus.ChainHeaderReader, iHeader block.IHe
 		return errors.New("block in the future")
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
-	checkpoint := (number % c.config.APoa.Epoch) == 0
+	checkpoint := (number % c.config.Epoch) == 0
 	if checkpoint && header.Coinbase != (types.Address{}) {
 		return errInvalidCheckpointBeneficiary
 	}
@@ -362,7 +361,7 @@ func (c *Apoa) verifyCascadingFields(chain consensus.ChainHeaderReader, iHeader 
 		return err
 	}
 	// If the block is a checkpoint block, verify the signer list
-	if number%c.config.APoa.Epoch == 0 {
+	if number%c.config.Epoch == 0 {
 		signers := make([]byte, len(snap.Signers)*types.AddressLength)
 		for i, signer := range snap.signers() {
 			copy(signers[i*types.AddressLength:], signer[:])
@@ -397,7 +396,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			if s, err := loadSnapshot(c.config.APoa, c.signatures, tx, hash); err == nil {
+			if s, err := loadSnapshot(c.config, c.signatures, tx, hash); err == nil {
 				log.Debug("Loaded voting snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
@@ -408,7 +407,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
 		h := chain.GetHeaderByNumber(uint256.NewInt(number - 1))
-		if number == 0 || (number%c.config.APoa.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || h == nil)) {
+		if number == 0 || (number%c.config.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || h == nil)) {
 			checkpoint := chain.GetHeaderByNumber(uint256.NewInt(number))
 			if checkpoint != nil {
 				rawCheckpoint := checkpoint.(*block.Header)
@@ -418,7 +417,7 @@ func (c *Apoa) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 				for i := 0; i < len(signers); i++ {
 					copy(signers[i][:], rawCheckpoint.Extra[extraVanity+i*types.AddressLength:])
 				}
-				snap = newSnapshot(c.config.APoa, c.signatures, number, hash, signers)
+				snap = newSnapshot(c.config, c.signatures, number, hash, signers)
 				if err := c.db.Update(context.Background(), func(tx kv.RwTx) error {
 					if err := snap.store(tx); err != nil {
 						return err
@@ -540,7 +539,7 @@ func (c *Apoa) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 		return err
 	}
 	c.lock.RLock()
-	if number%c.config.APoa.Epoch != 0 {
+	if number%c.config.Epoch != 0 {
 		// Gather all the proposals that make sense voting on
 		addresses := make([]types.Address, 0, len(c.proposals))
 		for address, authorize := range c.proposals {
@@ -572,7 +571,7 @@ func (c *Apoa) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 	}
 	rawHeader.Extra = rawHeader.Extra[:extraVanity]
 
-	if number%c.config.APoa.Epoch == 0 {
+	if number%c.config.Epoch == 0 {
 		for _, signer := range snap.signers() {
 			rawHeader.Extra = append(rawHeader.Extra, signer[:]...)
 		}

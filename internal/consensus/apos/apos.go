@@ -37,7 +37,6 @@ import (
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/avm/common"
 	"github.com/amazechain/amc/internal/avm/rlp"
 	mvm_types "github.com/amazechain/amc/internal/avm/types"
@@ -186,7 +185,7 @@ func ecrecover(iHeader block.IHeader, sigcache *lru.ARCCache) (types.Address, er
 // APos is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type APos struct {
-	config      *conf.ConsensusConfig // Consensus engine configuration parameters
+	config      *params.APosConfig // Consensus engine configuration parameters
 	chainConfig *params.ChainConfig
 	db          kv.RwDB // Database to store and retrieve snapshot checkpoints
 
@@ -207,13 +206,13 @@ type APos struct {
 
 // New creates a APos proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *conf.ConsensusConfig, db kv.RwDB, chainConfig *params.ChainConfig) consensus.Engine {
+func New(config *params.APosConfig, db kv.RwDB, chainConfig *params.ChainConfig) consensus.Engine {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
-	if conf.APos.Epoch == 0 {
-		conf.APos.Epoch = epochLength
+	if conf.Epoch == 0 {
+		conf.Epoch = epochLength
 	}
-	// Allocate the snapshot caches and create the engine
+	// GenesisAlloc the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
@@ -279,7 +278,7 @@ func (c *APos) verifyHeader(chain consensus.ChainHeaderReader, iHeader block.IHe
 		return errors.New("block in the future")
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
-	checkpoint := (number % c.config.APos.Epoch) == 0
+	checkpoint := (number % c.config.Epoch) == 0
 	if checkpoint && header.Coinbase != (types.Address{}) {
 		return errInvalidCheckpointBeneficiary
 	}
@@ -380,7 +379,7 @@ func (c *APos) verifyCascadingFields(chain consensus.ChainHeaderReader, iHeader 
 		return err
 	}
 	// If the block is a checkpoint block, verify the signer list
-	if number%c.config.APos.Epoch == 0 {
+	if number%c.config.Epoch == 0 {
 		signers := make([]byte, len(snap.Signers)*types.AddressLength)
 		for i, signer := range snap.signers() {
 			copy(signers[i*types.AddressLength:], signer[:])
@@ -411,7 +410,7 @@ func (c *APos) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		if number%checkpointInterval == 0 {
 			if err := c.db.View(context.Background(), func(tx kv.Tx) error {
 				var err error
-				s, err := loadSnapshot(c.config.APos, c.signatures, tx, hash)
+				s, err := loadSnapshot(c.config, c.signatures, tx, hash)
 				if err == nil {
 					log.Debug("Loaded voting snapshot from disk", "number", number, "hash", hash)
 					snap = s
@@ -426,7 +425,7 @@ func (c *APos) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
 		h := chain.GetHeaderByNumber(uint256.NewInt(number - 1))
-		if number == 0 || (number%c.config.APos.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || h == nil)) {
+		if number == 0 || (number%c.config.Epoch == 0 && (len(headers) > params.FullImmutabilityThreshold || h == nil)) {
 			checkpoint := chain.GetHeaderByNumber(uint256.NewInt(number))
 			if checkpoint != nil {
 				rawCheckpoint := checkpoint.(*block.Header)
@@ -436,7 +435,7 @@ func (c *APos) snapshot(chain consensus.ChainHeaderReader, number uint64, hash t
 				for i := 0; i < len(signers); i++ {
 					copy(signers[i][:], rawCheckpoint.Extra[extraVanity+i*types.AddressLength:])
 				}
-				snap = newSnapshot(c.config.APos, c.signatures, number, hash, signers)
+				snap = newSnapshot(c.config, c.signatures, number, hash, signers)
 				if err := c.db.Update(context.Background(), func(tx kv.RwTx) error {
 					if err := snap.store(tx); err != nil {
 						return err
@@ -559,7 +558,7 @@ func (c *APos) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 		return err
 	}
 	c.lock.RLock()
-	if number%c.config.APos.Epoch != 0 {
+	if number%c.config.Epoch != 0 {
 		// Gather all the proposals that make sense voting on
 		addresses := make([]types.Address, 0, len(c.proposals))
 		for address, authorize := range c.proposals {
@@ -591,7 +590,7 @@ func (c *APos) Prepare(chain consensus.ChainHeaderReader, header block.IHeader) 
 	}
 	rawHeader.Extra = rawHeader.Extra[:extraVanity]
 
-	if number%c.config.APos.Epoch == 0 {
+	if number%c.config.Epoch == 0 {
 		for _, signer := range snap.signers() {
 			rawHeader.Extra = append(rawHeader.Extra, signer[:]...)
 		}
@@ -618,11 +617,11 @@ func (c *APos) Rewards(tx kv.RwTx, header block.IHeader, state *state.IntraBlock
 	var rewards []*block.Reward
 
 	beijing, _ := uint256.FromBig(c.chainConfig.BeijingBlock)
-	if new(uint256.Int).Mod(new(uint256.Int).Sub(header.Number64(), beijing), uint256.NewInt(c.config.APos.RewardEpoch)).
+	if new(uint256.Int).Mod(new(uint256.Int).Sub(header.Number64(), beijing), uint256.NewInt(c.config.RewardEpoch)).
 		Cmp(uint256.NewInt(0)) == 0 {
 		log.Info("begin setreward", "headnumber", header.Number64().ToBig().String())
 
-		rewardService := newReward(c.config, c.chainConfig)
+		rewardService := newReward(c.chainConfig)
 		accRewards, err := rewardService.SetRewards(tx, header.Number64(), setRewards)
 		if err != nil {
 			log.Error("setreward error", "err", err)
@@ -656,7 +655,7 @@ func (c *APos) Finalize(chain consensus.ChainHeaderReader, header block.IHeader,
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	//chain.Config().IsEIP158(header.Number)
 
-	rewards, unpayMap, err := doReward(c.chainConfig, c.config, state, header.(*block.Header), chain)
+	rewards, unpayMap, err := doReward(c.chainConfig, state, header.(*block.Header), chain)
 	if err != nil {
 		return nil, nil, err
 	}

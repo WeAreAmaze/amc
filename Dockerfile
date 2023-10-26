@@ -7,7 +7,6 @@ RUN apk add --no-cache build-base  linux-headers git bash ca-certificates  libst
 WORKDIR /amc
 ADD . .
 ENV GO111MODULE="on"
-
 RUN go mod tidy && go build  -o ./build/bin/amazechain ./cmd/amc
 
 

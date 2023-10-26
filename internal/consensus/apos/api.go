@@ -282,7 +282,7 @@ func (api *API) GetRewards(address common.Address, from jsonrpc.BlockNumberOrHas
 		return nil, err
 	}
 
-	rewardService := newReward(api.apos.config, api.apos.chainConfig)
+	rewardService := newReward(api.apos.chainConfig)
 	resp, err = rewardService.GetRewards(*mvm_types.ToAmcAddress(&address), resolvedFromBlock, resolvedToBlock, api.chain.GetBlockByNumber)
 
 	return resp, err
@@ -466,7 +466,7 @@ func (api *API) VerifiedBlock(address common.Address, from jsonrpc.BlockNumberOr
 			break
 		}
 		searchCount++
-		if searchCount >= int(api.apos.config.APos.RewardEpoch) {
+		if searchCount >= int(api.apos.config.RewardEpoch) {
 			break
 		}
 		currentHeader = api.chain.GetHeaderByNumber(new(uint256.Int).SubUint64(currentBlock.Number64(), 1))
@@ -483,7 +483,7 @@ func (api *API) VerifiedBlock(address common.Address, from jsonrpc.BlockNumberOr
 }
 
 func (api *API) GetAccountRewardUnpaid(address types.Address) (val *uint256.Int, err error) {
-	rewardService := newReward(api.apos.config, api.apos.chainConfig)
+	rewardService := newReward(api.apos.chainConfig)
 
 	api.apos.db.View(context.Background(), func(tx kv.Tx) error {
 		val, err = rewardService.getAccountRewardUnpaid(tx, address)

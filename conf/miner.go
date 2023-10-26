@@ -22,7 +22,8 @@ import (
 )
 
 type MinerConfig struct {
-	GasCeil  uint64        // Target gas ceiling for mined blocks.
-	GasPrice *big.Int      // Minimum gas price for mining a transaction
-	Recommit time.Duration // The time interval for miner to re-create mining work
+	Etherbase string        // Public address for block mining rewards
+	GasCeil   uint64        // Target gas ceiling for mined blocks.
+	GasPrice  *big.Int      // Minimum gas price for mining a transaction
+	Recommit  time.Duration // The time interval for miner to re-create mining work
 }

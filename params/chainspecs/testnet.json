@@ -1,5 +1,5 @@
 {
-  "chainId": 94,
+  "chainId": 100100100,
   "homesteadBlock": 0,
   "daoForkBlock": null,
   "daoForkSupport": false,
@@ -15,14 +15,14 @@
   "berlinBlock": 0,
   "londonBlock": 0,
   "arrowGlacierBlock": 0,
-  "beijingBlock": 770000,
+  "beijingBlock": 40000,
   "consensus": "apos",
   "apos": {
-    "period": 8,
     "epoch": 3000,
+    "period": 8,
     "rewardEpoch": 10800,
     "rewardLimit": 500000000000000000,
-    "depositContract": "AMC85A5E24ef94fe5bDD5055133E6bd00DcEA25F37D",
-    "depositNFTContract": "AMCF762E4Aa8Da0B9FC8113ECBFf6c84B3a6B7B5544"
+    "depositContract": "AMCE78629fCEb0aB8Fb4901AE67d373C061fbd8AA14",
+    "depositNFTContract": "AMC0D06061B9C9F0ccd3dfCdeF943e0F9ae506a8398"
   }
 }

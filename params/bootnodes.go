@@ -22,3 +22,10 @@ var MainnetBootnodes = []string{
 	// United States, Georgia, Atlanta
 	"enr:-JG4QDY9EdRvdnU2Pzf46fC5XLwTvJgoAMmyPUOOw44KQ8frJsiXQb6L-i0S2hlIvVirz6ihkw4IjPZp5NLbehor596GAYnxxVXsgmlkgnY0gmlwhBKqbE6Jc2VjcDI1NmsxoQIX6BYmB9BHfiWcXOO7Z4lAQDcR3WrjXzhS4Xj9Y387coN0Y3CCJ2aDdWRwgidl", // bootnode-aws-us-east-1-001
 }
+
+// TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
+// the testnet AmazeChain network.
+var TestnetBootnodes = []string{
+	// United States, Ashburn, Virginia
+	"enr:-Iu4QHueEtPvrAPTBugWBDmI06cow_TZueImElCeweCFY7v1XJTqio-maM5A34Oak7nSbMIwewU_FkE5Io2h7XFtb3YFgmlkgnY0gmlwhDbzU5iJc2VjcDI1NmsxoQMe8my_5ApPL7TVv5D_0JDbKBqJLSvDGUWA3q2TEVM1jIN0Y3CCJ2aDdWRwgidl", //
+}

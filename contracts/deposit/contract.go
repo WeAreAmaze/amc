@@ -23,7 +23,6 @@ import (
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rawdb"
@@ -111,11 +110,10 @@ type Info struct {
 //}
 
 type Deposit struct {
-	ctx             context.Context
-	cancel          context.CancelFunc
-	consensusConfig *conf.ConsensusConfig
-	blockChain      common.IBlockChain
-	db              kv.RwDB
+	ctx        context.Context
+	cancel     context.CancelFunc
+	blockChain common.IBlockChain
+	db         kv.RwDB
 
 	logsSub   event.Subscription // Subscription for new log event
 	rmLogsSub event.Subscription // Subscription for removed log event
@@ -126,12 +124,11 @@ type Deposit struct {
 	depositContracts map[types.Address]DepositContract
 }
 
-func NewDeposit(ctx context.Context, config *conf.ConsensusConfig, bc common.IBlockChain, db kv.RwDB, depositContracts map[types.Address]DepositContract) *Deposit {
+func NewDeposit(ctx context.Context, bc common.IBlockChain, db kv.RwDB, depositContracts map[types.Address]DepositContract) *Deposit {
 	c, cancel := context.WithCancel(ctx)
 	d := &Deposit{
 		ctx:              c,
 		cancel:           cancel,
-		consensusConfig:  config,
 		blockChain:       bc,
 		db:               db,
 		logsCh:           make(chan common.NewLogsEvent),

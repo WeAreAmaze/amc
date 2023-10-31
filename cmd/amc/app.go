@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/amazechain/amc/log"
-	"golang.org/x/sys/unix"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -173,11 +172,11 @@ func appWait(cancelFunc context.CancelFunc, group *sync.WaitGroup) {
 
 func ListenSignals(f context.CancelFunc, n *node.Node) {
 	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, unix.SIGINT, unix.SIGTERM)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigc)
 
 	usr1 := make(chan os.Signal, 1)
-	signal.Notify(usr1, unix.SIGUSR1)
+	signal.Notify(usr1, syscall.SIGUSR1)
 	for {
 		select {
 		case <-sigc:

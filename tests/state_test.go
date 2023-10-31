@@ -26,7 +26,7 @@ import (
 //go:embed  allocs
 var allocs embed.FS
 
-func ReadGenesis(filename string) *conf.GenesisBlockConfig {
+func ReadGenesis(filename string) *conf.Genesis {
 	f, err := allocs.Open(filename)
 	if err != nil {
 		panic("%s not found, use default genesis")
@@ -34,7 +34,7 @@ func ReadGenesis(filename string) *conf.GenesisBlockConfig {
 	defer f.Close()
 
 	decoder := json.NewDecoder(f)
-	gc := new(conf.GenesisBlockConfig)
+	gc := new(conf.Genesis)
 	err = decoder.Decode(gc)
 	if err != nil {
 		panic(fmt.Sprintf("Could not parse genesis preallocation for %s: %v", filename, err))
@@ -55,8 +55,8 @@ func ReadGenesis(filename string) *conf.GenesisBlockConfig {
 //	r, roop := state.NewPlainStateReader(tx), state.NewNoopWriter()
 //	statedb := state.New(r)
 //
-//	GenesisBlockConfig := ReadGenesis("allocs/genesis_inline.json")
-//	for _, a := range GenesisBlockConfig.Alloc {
+//	Genesis := ReadGenesis("allocs/genesis_inline.json")
+//	for _, a := range Genesis.Alloc {
 //		addr, err := types.HexToString(a.Address)
 //		if err != nil {
 //			panic(err)
@@ -81,7 +81,7 @@ func ReadGenesis(filename string) *conf.GenesisBlockConfig {
 //		}
 //	}
 //
-//	if err := statedb.FinalizeTx(GenesisBlockConfig.Config.Rules(0), roop); err != nil {
+//	if err := statedb.FinalizeTx(Genesis.Config.Rules(0), roop); err != nil {
 //		panic(err)
 //	}
 //

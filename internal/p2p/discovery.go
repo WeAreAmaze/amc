@@ -3,10 +3,12 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/discover"
 	"github.com/amazechain/amc/internal/p2p/enode"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/params"
+	"github.com/amazechain/amc/params/networkname"
 	"github.com/amazechain/amc/utils"
 	"net"
 	"path/filepath"
@@ -315,9 +317,14 @@ func PeersFromStringAddrs(addrs []string) ([]ma.Multiaddr, error) {
 	return allAddrs, nil
 }
 
-func parseBootStrapAddrs(addrs []string) (discv5Nodes []string) {
+func parseBootStrapAddrs(addrs []string, nodeCfg conf.NodeConfig) (discv5Nodes []string) {
 	if len(addrs) == 0 {
-		addrs = params.MainnetBootnodes
+		switch nodeCfg.Chain {
+		case networkname.MainnetChainName:
+			addrs = params.MainnetBootnodes
+		case networkname.TestnetChainName:
+			addrs = params.TestnetBootnodes
+		}
 	}
 	discv5Nodes, _ = parseGenericAddrs(addrs)
 	if len(discv5Nodes) == 0 {

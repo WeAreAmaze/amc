@@ -17,7 +17,7 @@
 package main
 
 import (
-	"github.com/amazechain/amc/version"
+	"github.com/amazechain/amc/params/networkname"
 	"github.com/urfave/cli/v2"
 )
 
@@ -35,16 +35,7 @@ var (
 	p2pDenyList      = cli.NewStringSlice()
 )
 
-var rootCmd = []*cli.Command{
-	{
-		Name:    "version",
-		Aliases: []string{"v"},
-		Action: func(context *cli.Context) error {
-			version.PrintVersion()
-			return nil
-		},
-	},
-}
+var rootCmd []*cli.Command
 
 var networkFlags = []cli.Flag{
 	&cli.StringSliceFlag{
@@ -154,12 +145,12 @@ var rpcFlags = []cli.Flag{
 }
 
 var consensusFlag = []cli.Flag{
-	&cli.StringFlag{
-		Name:        "engine.type",
-		Usage:       "consensus engine",
-		Value:       "APosEngine", //APoaEngine,APosEngine
-		Destination: &DefaultConfig.GenesisBlockCfg.Engine.EngineName,
-	},
+	//&cli.StringFlag{
+	//	Name:        "engine.type",
+	//	Usage:       "consensus engine",
+	//	Value:       "APosEngine", //APoaEngine,APosEngine
+	//	Destination: &DefaultConfig.ChainCfg.Consensus,
+	//},
 	&cli.BoolFlag{
 		Name:        "engine.miner",
 		Usage:       "miner",
@@ -170,7 +161,7 @@ var consensusFlag = []cli.Flag{
 		Name:        "engine.etherbase",
 		Usage:       "consensus etherbase",
 		Value:       "",
-		Destination: &DefaultConfig.GenesisBlockCfg.Engine.Etherbase,
+		Destination: &DefaultConfig.Miner.Etherbase,
 	},
 }
 
@@ -413,6 +404,13 @@ var (
 		Name:  "chaindata.to",
 		Usage: "to data  dir",
 	}
+
+	ChainFlag = &cli.StringFlag{
+		Name:        "chain",
+		Usage:       "Name of the testnet to join (value:[mainnet,testnet,private])",
+		Value:       networkname.MainnetChainName,
+		Destination: &DefaultConfig.NodeCfg.Chain,
+	}
 )
 
 var (
@@ -498,64 +496,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		// Category: flags.MetricsCategory,
 		Destination: &DefaultConfig.MetricsCfg.Port,
 	}
-
-	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
-		Name:        "metrics.influxdb",
-		Usage:       "Enable metrics export/push to an external InfluxDB database",
-		Value:       false,
-		Destination: &DefaultConfig.MetricsCfg.EnableInfluxDB,
-	}
-	MetricsInfluxDBEndpointFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.endpoint",
-		Usage:       "InfluxDB API endpoint to report metrics to",
-		Value:       DefaultConfig.MetricsCfg.InfluxDBEndpoint,
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBEndpoint,
-	}
-
-	MetricsInfluxDBDatabaseFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.database",
-		Usage:       "InfluxDB database name to push reported metrics to",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBDatabase,
-	}
-	MetricsInfluxDBUsernameFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.username",
-		Usage:       "Username to authorize access to the database",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBUsername,
-	}
-	MetricsInfluxDBPasswordFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.password",
-		Usage:       "Password to authorize access to the database",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBPassword,
-	}
-
-	MetricsInfluxDBTagsFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.tags",
-		Usage:       "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBTags,
-	}
-	//
-	//MetricsEnableInfluxDBV2Flag = &cli.BoolFlag{
-	//	Name:  "metrics.influxdbv2",
-	//	Usage: "Enable metrics export/push to an external InfluxDB v2 database",
-	//}
-
-	MetricsInfluxDBTokenFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.token",
-		Usage:       "Token to authorize access to the database (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBToken,
-	}
-
-	MetricsInfluxDBBucketFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.bucket",
-		Usage:       "InfluxDB bucket name to push reported metrics to (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBBucket,
-	}
-
-	MetricsInfluxDBOrganizationFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.organization",
-		Usage:       "InfluxDB organization name (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBOrganization,
-	}
 )
 
 var (
@@ -567,6 +507,7 @@ var (
 	}
 	settingFlag = []cli.Flag{
 		DataDirFlag,
+		ChainFlag,
 	}
 	accountFlag = []cli.Flag{
 		PasswordFileFlag,
@@ -580,16 +521,6 @@ var (
 		MetricsEnabledFlag,
 		MetricsHTTPFlag,
 		MetricsPortFlag,
-		MetricsEnableInfluxDBFlag,
-		MetricsInfluxDBEndpointFlag,
-		MetricsInfluxDBTokenFlag,
-		MetricsInfluxDBBucketFlag,
-		MetricsInfluxDBOrganizationFlag,
-		MetricsInfluxDBTagsFlag,
-
-		MetricsInfluxDBPasswordFlag,
-		MetricsInfluxDBUsernameFlag,
-		MetricsInfluxDBDatabaseFlag,
 	}
 
 	p2pFlags = []cli.Flag{

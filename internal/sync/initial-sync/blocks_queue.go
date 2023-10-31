@@ -162,6 +162,7 @@ func (q *blocksQueue) loop() {
 	}
 
 	// Define initial state machines.
+	// currentblock update?
 	startBlockNr := new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
 	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {

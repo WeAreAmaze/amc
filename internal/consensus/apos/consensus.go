@@ -4,7 +4,6 @@ import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/math"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules/state"
@@ -95,15 +94,15 @@ func AccumulateRewards(r *Reward, number *uint256.Int, chain consensus.ChainHead
 	return rewardMap, unpayMap, nil
 }
 
-func doReward(chainConf *params.ChainConfig, consConf *conf.ConsensusConfig, state *state.IntraBlockState, header *block.Header, chain consensus.ChainHeaderReader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
+func doReward(chainConf *params.ChainConfig, state *state.IntraBlockState, header *block.Header, chain consensus.ChainHeaderReader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
 	beijing, _ := uint256.FromBig(chainConf.BeijingBlock)
 	number := header.Number64()
 	var rewards block.Rewards
 	var upayMap map[types.Address]*uint256.Int
 
-	if chainConf.IsBeijing(number.Uint64()) && new(uint256.Int).Mod(new(uint256.Int).Sub(number, beijing), uint256.NewInt(consConf.APos.RewardEpoch)).
+	if chainConf.IsBeijing(number.Uint64()) && new(uint256.Int).Mod(new(uint256.Int).Sub(number, beijing), uint256.NewInt(chainConf.Apos.RewardEpoch)).
 		Cmp(uint256.NewInt(0)) == 0 {
-		r := newReward(consConf, chainConf)
+		r := newReward(chainConf)
 		var (
 			err    error
 			payMap map[types.Address]*uint256.Int

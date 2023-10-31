@@ -3,22 +3,20 @@ package olddb
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/amazechain/amc/modules"
-	"sync"
-	"time"
-	"unsafe"
-
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/log/v3"
-
-	"github.com/amazechain/amc/modules/ethdb"
+	"sync"
+	"time"
+	"unsafe"
 )
 
-type mapmutation struct {
+type Mapmutation struct {
 	puts   map[string]map[string][]byte // table -> key -> value ie. blocks -> hash -> blockBod
-	db     kv.RwTx
+	db     kv.Tx
 	quit   <-chan struct{}
 	clean  func()
 	mu     sync.RWMutex
@@ -27,15 +25,19 @@ type mapmutation struct {
 	tmpdir string
 }
 
+func (m *Mapmutation) BucketSize(table string) (uint64, error) {
+	panic("not used")
+}
+
 // NewBatch - starts in-mem batch
 //
 // Common pattern:
 //
 // batch := db.NewBatch()
-// defer batch.Rollback()
+// defer batch.Close()
 // ... some calculations on `batch`
 // batch.Commit()
-func NewHashBatch(tx kv.RwTx, quit <-chan struct{}, tmpdir string) *mapmutation {
+func NewHashBatch(tx kv.Tx, quit <-chan struct{}, tmpdir string) *Mapmutation {
 	clean := func() {}
 	if quit == nil {
 		ch := make(chan struct{})
@@ -43,7 +45,7 @@ func NewHashBatch(tx kv.RwTx, quit <-chan struct{}, tmpdir string) *mapmutation 
 		quit = ch
 	}
 
-	return &mapmutation{
+	return &Mapmutation{
 		db:     tx,
 		puts:   make(map[string]map[string][]byte),
 		quit:   quit,
@@ -52,14 +54,7 @@ func NewHashBatch(tx kv.RwTx, quit <-chan struct{}, tmpdir string) *mapmutation 
 	}
 }
 
-func (m *mapmutation) RwKV() kv.RwDB {
-	if casted, ok := m.db.(ethdb.HasRwKV); ok {
-		return casted.RwKV()
-	}
-	return nil
-}
-
-func (m *mapmutation) getMem(table string, key []byte) ([]byte, bool) {
+func (m *Mapmutation) getMem(table string, key []byte) ([]byte, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if _, ok := m.puts[table]; !ok {
@@ -72,7 +67,7 @@ func (m *mapmutation) getMem(table string, key []byte) ([]byte, bool) {
 	return nil, false
 }
 
-func (m *mapmutation) IncrementSequence(bucket string, amount uint64) (res uint64, err error) {
+func (m *Mapmutation) IncrementSequence(bucket string, amount uint64) (res uint64, err error) {
 	v, ok := m.getMem(modules.Sequence, []byte(bucket))
 	if !ok && m.db != nil {
 		v, err = m.db.GetOne(modules.Sequence, []byte(bucket))
@@ -94,7 +89,7 @@ func (m *mapmutation) IncrementSequence(bucket string, amount uint64) (res uint6
 
 	return currentV, nil
 }
-func (m *mapmutation) ReadSequence(bucket string) (res uint64, err error) {
+func (m *Mapmutation) ReadSequence(bucket string) (res uint64, err error) {
 	v, ok := m.getMem(modules.Sequence, []byte(bucket))
 	if !ok && m.db != nil {
 		v, err = m.db.GetOne(modules.Sequence, []byte(bucket))
@@ -111,7 +106,7 @@ func (m *mapmutation) ReadSequence(bucket string) (res uint64, err error) {
 }
 
 // Can only be called from the worker thread
-func (m *mapmutation) GetOne(table string, key []byte) ([]byte, error) {
+func (m *Mapmutation) GetOne(table string, key []byte) ([]byte, error) {
 	if value, ok := m.getMem(table, key); ok {
 		return value, nil
 	}
@@ -126,21 +121,7 @@ func (m *mapmutation) GetOne(table string, key []byte) ([]byte, error) {
 	return nil, nil
 }
 
-// Can only be called from the worker thread
-func (m *mapmutation) Get(table string, key []byte) ([]byte, error) {
-	value, err := m.GetOne(table, key)
-	if err != nil {
-		return nil, err
-	}
-
-	if value == nil {
-		return nil, ethdb.ErrKeyNotFound
-	}
-
-	return value, nil
-}
-
-func (m *mapmutation) Last(table string) ([]byte, []byte, error) {
+func (m *Mapmutation) Last(table string) ([]byte, []byte, error) {
 	c, err := m.db.Cursor(table)
 	if err != nil {
 		return nil, nil, err
@@ -149,7 +130,7 @@ func (m *mapmutation) Last(table string) ([]byte, []byte, error) {
 	return c.Last()
 }
 
-func (m *mapmutation) Has(table string, key []byte) (bool, error) {
+func (m *Mapmutation) Has(table string, key []byte) (bool, error) {
 	if _, ok := m.getMem(table, key); ok {
 		return ok, nil
 	}
@@ -160,7 +141,7 @@ func (m *mapmutation) Has(table string, key []byte) (bool, error) {
 }
 
 // puts a table key with a value and if the table is not found then it appends a table
-func (m *mapmutation) Put(table string, k, v []byte) error {
+func (m *Mapmutation) Put(table string, k, v []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.puts[table]; !ok {
@@ -182,47 +163,47 @@ func (m *mapmutation) Put(table string, k, v []byte) error {
 	return nil
 }
 
-func (m *mapmutation) Append(table string, key []byte, value []byte) error {
+func (m *Mapmutation) Append(table string, key []byte, value []byte) error {
 	return m.Put(table, key, value)
 }
 
-func (m *mapmutation) AppendDup(table string, key []byte, value []byte) error {
+func (m *Mapmutation) AppendDup(table string, key []byte, value []byte) error {
 	return m.Put(table, key, value)
 }
 
-func (m *mapmutation) BatchSize() int {
+func (m *Mapmutation) BatchSize() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.size
 }
 
-func (m *mapmutation) ForEach(bucket string, fromPrefix []byte, walker func(k, v []byte) error) error {
+func (m *Mapmutation) ForEach(bucket string, fromPrefix []byte, walker func(k, v []byte) error) error {
 	m.panicOnEmptyDB()
 	return m.db.ForEach(bucket, fromPrefix, walker)
 }
 
-func (m *mapmutation) ForPrefix(bucket string, prefix []byte, walker func(k, v []byte) error) error {
+func (m *Mapmutation) ForPrefix(bucket string, prefix []byte, walker func(k, v []byte) error) error {
 	m.panicOnEmptyDB()
 	return m.db.ForPrefix(bucket, prefix, walker)
 }
 
-func (m *mapmutation) ForAmount(bucket string, prefix []byte, amount uint32, walker func(k, v []byte) error) error {
+func (m *Mapmutation) ForAmount(bucket string, prefix []byte, amount uint32, walker func(k, v []byte) error) error {
 	m.panicOnEmptyDB()
 	return m.db.ForAmount(bucket, prefix, amount, walker)
 }
 
-func (m *mapmutation) Delete(table string, k []byte) error {
+func (m *Mapmutation) Delete(table string, k []byte) error {
 	return m.Put(table, k, nil)
 }
 
-func (m *mapmutation) doCommit(tx kv.RwTx) error {
+func (m *Mapmutation) doCommit(tx kv.RwTx) error {
 	logEvery := time.NewTicker(30 * time.Second)
 	defer logEvery.Stop()
 	count := 0
 	total := float64(m.count)
 	for table, bucket := range m.puts {
-		logger := log.New()
-		collector := etl.NewCollector("", m.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize), logger)
+		l := log.New()
+		collector := etl.NewCollector("", m.tmpdir, etl.NewSortableBuffer(etl.BufferOptimalSize), l)
 		defer collector.Close()
 		for key, value := range bucket {
 			collector.Collect([]byte(key), value)
@@ -231,11 +212,11 @@ func (m *mapmutation) doCommit(tx kv.RwTx) error {
 			default:
 			case <-logEvery.C:
 				progress := fmt.Sprintf("%.1fM/%.1fM", float64(count)/1_000_000, total/1_000_000)
-				log.Info("Write to db", "progress", progress, "current table", table)
+				l.Info("Write to db", "progress", progress, "current table", table)
 				tx.CollectMetrics()
 			}
 		}
-		if err := collector.Load(m.db, table, etl.IdentityLoadFunc, etl.TransformArgs{Quit: m.quit}); err != nil {
+		if err := collector.Load(tx, table, etl.IdentityLoadFunc, etl.TransformArgs{Quit: m.quit}); err != nil {
 			return err
 		}
 	}
@@ -244,24 +225,26 @@ func (m *mapmutation) doCommit(tx kv.RwTx) error {
 	return nil
 }
 
-func (m *mapmutation) Commit() error {
-	if m.db == nil {
-		return nil
+func (m *Mapmutation) Flush(ctx context.Context, tx kv.RwTx) error {
+	if tx == nil {
+		return errors.New("rwTx needed")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := m.doCommit(m.db); err != nil {
+	if err := m.doCommit(tx); err != nil {
 		return err
 	}
 
 	m.puts = map[string]map[string][]byte{}
 	m.size = 0
 	m.count = 0
-	m.clean()
 	return nil
 }
 
-func (m *mapmutation) Rollback() {
+func (m *Mapmutation) Close() {
+	if m.clean == nil {
+		return
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.puts = map[string]map[string][]byte{}
@@ -269,26 +252,21 @@ func (m *mapmutation) Rollback() {
 	m.count = 0
 	m.size = 0
 	m.clean()
+	m.clean = nil
 }
+func (m *Mapmutation) Commit() error { panic("not db txn, use .Flush method") }
+func (m *Mapmutation) Rollback()     { panic("not db txn, use .Close method") }
 
-func (m *mapmutation) Close() {
-	m.Rollback()
-}
-
-func (m *mapmutation) Begin(ctx context.Context, flags ethdb.TxFlags) (ethdb.DbWithPendingMutations, error) {
-	panic("mutation can't start transaction, because doesn't own it")
-}
-
-func (m *mapmutation) panicOnEmptyDB() {
+func (m *Mapmutation) panicOnEmptyDB() {
 	if m.db == nil {
 		panic("Not implemented")
 	}
 }
 
-func (m *mapmutation) SetRwKV(kv kv.RwDB) {
-	hasRwKV, ok := m.db.(ethdb.HasRwKV)
-	if !ok {
-		log.Warn("Failed to convert mapmutation type to HasRwKV interface")
+func (m *Mapmutation) ResetTx(tx kv.Tx) {
+	if m.db != nil {
+		m.db.Rollback()
 	}
-	hasRwKV.SetRwKV(kv)
+
+	m.db = tx
 }

@@ -1328,6 +1328,7 @@ func (pool *TxsPool) ResetState(blockHash types.Hash) error {
 	if nil != err {
 		return err
 	}
+	defer tx.Rollback()
 	blockNr := rawdb.ReadHeaderNumber(tx, blockHash)
 	if nil == blockNr {
 		return fmt.Errorf("invaild block hash")

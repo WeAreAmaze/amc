@@ -20,11 +20,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/amazechain/amc/log"
+	"golang.org/x/sys/unix"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"syscall"
@@ -140,12 +142,13 @@ func appRun(ctx *cli.Context) error {
 		}
 	}()
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	appWait(cancel, &wg)
-	n.Close()
-	wg.Wait()
-
+	//wg := sync.WaitGroup{}
+	//wg.Add(1)
+	// appWait(cancel, &wg)
+	//n.Close()
+	//wg.Wait()
+	go ListenSignals(cancel, n)
+	n.Wait()
 	return nil
 }
 
@@ -166,6 +169,33 @@ func appWait(cancelFunc context.CancelFunc, group *sync.WaitGroup) {
 	log.Info("app quit ...")
 	cancelFunc()
 	group.Done()
+}
+
+func ListenSignals(f context.CancelFunc, n *node.Node) {
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, unix.SIGINT, unix.SIGTERM)
+	defer signal.Stop(sigc)
+
+	usr1 := make(chan os.Signal, 1)
+	signal.Notify(usr1, unix.SIGUSR1)
+	for {
+		select {
+		case <-sigc:
+			log.Info("Got interrupt, shutting down...")
+			if n != nil {
+				f()
+				n.Close()
+			}
+			for i := 10; i > 0; i-- {
+				<-sigc
+				if i > 1 {
+					log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
+				}
+			}
+		case <-usr1:
+			pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+		}
+	}
 }
 
 // unlockAccounts unlocks any account specifically requested.

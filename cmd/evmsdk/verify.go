@@ -73,7 +73,7 @@ func verify(ctx context.Context, msg *state.EntireCode) types.Hash {
 
 	block := block2.NewBlockFromStorage(msg.Entire.Header.Hash(), msg.Entire.Header, body)
 	batch := olddb.NewHashBatch(nil, ctx.Done(), "")
-	defer batch.Rollback()
+	defer batch.Close()
 	old := make(map[string][]byte, len(msg.Entire.Snap.Items))
 	for _, v := range msg.Entire.Snap.Items {
 		old[*(*string)(unsafe.Pointer(&v.Key))] = v.Value

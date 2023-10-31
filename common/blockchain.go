@@ -44,7 +44,7 @@ type IBlockChain interface {
 	GenesisBlock() block.IBlock
 	NewBlockHandler(payload []byte, peer peer.ID) error
 	InsertChain(blocks []block.IBlock) (int, error)
-	InsertBlock(blocks []block.IBlock, isSync bool) (int, error)
+	// InsertBlock(blocks []block.IBlock, isSync bool) (int, error)
 	SetEngine(engine consensus.Engine)
 	GetBlocksFromHash(hash types.Hash, n int) (blocks []block.IBlock)
 	SealedBlock(b block.IBlock) error
@@ -65,7 +65,7 @@ type IBlockChain interface {
 	DB() kv.RwDB
 	Quit() <-chan struct{}
 
-	WriteBlockWithState(block block.IBlock, receipts []*block.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error
+	WriteBlockAndSetHead(block block.IBlock, receipts []*block.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error
 
 	GetDepositInfo(address types.Address) (*uint256.Int, *uint256.Int)
 	GetAccountRewardUnpaid(account types.Address) (*uint256.Int, error)

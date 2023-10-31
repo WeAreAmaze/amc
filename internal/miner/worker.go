@@ -24,7 +24,9 @@ import (
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/amazechain/amc/internal/metrics/prometheus"
+	"github.com/amazechain/amc/modules/ethdb/olddb"
 	"github.com/holiman/uint256"
+	"os"
 	"sort"
 	"sync"
 
@@ -247,7 +249,10 @@ func (w *worker) stop() {
 }
 
 func (w *worker) close() {
-
+	if w.isRunning() {
+		atomic.StoreInt32(&w.running, 0)
+	}
+	w.cancel()
 }
 
 func (w *worker) isRunning() bool {
@@ -335,7 +340,7 @@ func (w *worker) resultLoop() error {
 			}
 
 			// Commit block and state to database.
-			err := w.chain.WriteBlockWithState(blk, receipts, task.state, task.nopay)
+			err := w.chain.WriteBlockAndSetHead(blk, receipts, task.state, task.nopay)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
@@ -441,8 +446,12 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 		return err
 	}
 	defer tx.Rollback()
+	batch := olddb.NewHashBatch(tx, nil, os.TempDir())
+	defer func() {
+		batch.Close()
+	}()
 
-	stateReader := state.NewPlainStateReader(tx)
+	stateReader := state.NewPlainStateReader(batch)
 	stateWriter := state.NewNoopWriter()
 	ibs := state.New(stateReader)
 	// generate state for mobile verify

@@ -766,6 +766,7 @@ func (n *Node) Close() {
 	//	n.db.Close()
 	//}
 	n.cancel()
+	n.miner.Close()
 	n.stopRPC()
 	n.db.Close()
 	close(n.shutDown)

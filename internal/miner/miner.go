@@ -70,7 +70,6 @@ func (m *Miner) Start() {
 }
 
 func (m *Miner) Close() {
-	m.worker.close()
 	m.cancel()
 }
 
@@ -84,6 +83,8 @@ func (m *Miner) runLoop() error {
 	defer func() {
 		start.Unsubscribe()
 		done.Unsubscribe()
+		close(startCh)
+		close(doneCh)
 	}()
 
 	defer func() {
@@ -131,8 +132,6 @@ func (m *Miner) runLoop() error {
 			if m.Mining() {
 				m.worker.stop()
 			}
-		case <-m.ctx.Done():
-			return m.ctx.Err()
 		}
 	}
 }

@@ -209,6 +209,7 @@ func newWorker(ctx context.Context, group *errgroup.Group, chainConfig *params.C
 		recommit = minPeriodInterval
 	}
 
+	worker.wg.Add(4)
 	// machine verify
 	group.Go(func() error {
 		return api.MachineVerify(ctx)
@@ -248,9 +249,10 @@ func (w *worker) stop() {
 
 func (w *worker) close() {
 	if w.isRunning() {
-		atomic.StoreInt32(&w.running, 0)
+		w.stop()
 	}
 	w.cancel()
+	w.wg.Wait()
 }
 
 func (w *worker) isRunning() bool {
@@ -263,12 +265,12 @@ func (w *worker) setCoinbase(addr types.Address) {
 }
 
 func (w *worker) runLoop() error {
-	defer w.cancel()
+	defer w.wg.Done()
 	defer w.stop()
 	for {
 		select {
 		case <-w.ctx.Done():
-			return w.ctx.Err()
+			return nil
 		case req := <-w.newWorkCh:
 			err := w.commitWork(req.interrupt, req.noempty, req.timestamp)
 			if err != nil {
@@ -280,13 +282,13 @@ func (w *worker) runLoop() error {
 }
 
 func (w *worker) resultLoop() error {
-	defer w.cancel()
+	defer w.wg.Done()
 	defer w.stop()
 
 	for {
 		select {
 		case <-w.ctx.Done():
-			return w.ctx.Err()
+			return nil
 		case blk := <-w.resultCh:
 			if blk == nil {
 				continue
@@ -371,7 +373,7 @@ func (w *worker) resultLoop() error {
 }
 
 func (w *worker) taskLoop() error {
-	defer w.cancel()
+	defer w.wg.Done()
 	defer w.stop()
 
 	var (
@@ -389,7 +391,8 @@ func (w *worker) taskLoop() error {
 	for {
 		select {
 		case <-w.ctx.Done():
-			return w.ctx.Err()
+			interrupt()
+			return nil
 		case task := <-w.taskCh:
 
 			if w.newTaskHook != nil {
@@ -519,7 +522,7 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 }
 
 func (w *worker) workLoop(recommit time.Duration) error {
-	defer w.cancel()
+	defer w.wg.Done()
 	defer w.stop()
 	var (
 		interrupt   *atomic.Int32
@@ -564,7 +567,7 @@ func (w *worker) workLoop(recommit time.Duration) error {
 	for {
 		select {
 		case <-w.ctx.Done():
-			return w.ctx.Err()
+			return nil
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().Number64())
 			timestamp = time.Now().Unix()

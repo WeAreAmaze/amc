@@ -110,3 +110,13 @@ func GetOneWrapper(dat []byte, err error) ([]byte, error) {
 	}
 	return dat, nil
 }
+
+type PendingMutations interface {
+	kv.StatelessRwTx
+
+	ResetTx(tx kv.Tx)
+	// Flush all in-memory data into `tx`
+	Flush(ctx context.Context, tx kv.RwTx) error
+	Close()
+	BatchSize() int
+}

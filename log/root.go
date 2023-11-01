@@ -171,7 +171,6 @@ func Critf(msg string, ctx ...interface{}) {
 type Logger interface {
 	// New returns a new Logger that has this logger's context plus the given context
 	New(ctx ...interface{}) Logger
-
 	// Log a message at the given level with context key/value pairs
 	Trace(msg string, ctx ...interface{})
 	Debug(msg string, ctx ...interface{})

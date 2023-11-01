@@ -69,6 +69,10 @@ func (m *Miner) Start() {
 	m.startCh <- m.coinbase
 }
 
+func (m *Miner) Close() {
+	m.cancel()
+}
+
 func (m *Miner) runLoop() error {
 	defer m.cancel()
 	startCh := make(chan common.DownloaderFinishEvent)
@@ -79,6 +83,8 @@ func (m *Miner) runLoop() error {
 	defer func() {
 		start.Unsubscribe()
 		done.Unsubscribe()
+		close(startCh)
+		close(doneCh)
 	}()
 
 	defer func() {
@@ -126,8 +132,6 @@ func (m *Miner) runLoop() error {
 			if m.Mining() {
 				m.worker.stop()
 			}
-		case <-m.ctx.Done():
-			return m.ctx.Err()
 		}
 	}
 }

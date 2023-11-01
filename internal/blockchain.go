@@ -23,8 +23,10 @@ import (
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/internal/metrics/prometheus"
 	"github.com/amazechain/amc/internal/p2p"
+	"github.com/amazechain/amc/modules/ethdb/olddb"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
+	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -240,7 +242,7 @@ func (bc *BlockChain) Start() error {
 	//	return ErrInvalidPubSub
 	//}
 
-	bc.wg.Add(3)
+	bc.wg.Add(2)
 	go bc.runLoop()
 	//go bc.newBlockLoop()
 	go bc.updateFutureBlocksLoop()
@@ -298,102 +300,6 @@ func (bc *BlockChain) GetLogs(blockHash types.Hash) ([][]*block2.Log, error) {
 		logs[i] = receipt.Logs
 	}
 	return logs, nil
-}
-
-// InsertBlock
-// Deprecated:
-func (bc *BlockChain) InsertBlock(blocks []block2.IBlock, isSync bool) (int, error) {
-	//bc.lock.Lock()
-	//defer bc.lock.Unlock()
-	//runBlock := func(b block2.IBlock) error {
-	//	//todo copy?
-	//	stateDB := statedb.NewStateDB(b.ParentHash(), bc.chainDB, bc.changeDB)
-	//
-	//	receipts, logs, usedGas, err := bc.process.Processor(b, stateDB)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	//verify state
-	//	if err = bc.verifyState(b, stateDB, receipts, usedGas); err != nil {
-	//		return err
-	//	}
-	//	_, err = stateDB.Commit(b.Number64())
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	rawdb.StoreReceipts(bc.chainDB, b.Hash(), receipts)
-	//
-	//	if len(logs) > 0 {
-	//		event.GlobalEvent.Send(&common.NewLogsEvent{Logs: logs})
-	//	}
-	//	if len(receipts) > 0 {
-	//		log.Infof("Receipt len(%d), receipts: [%v]", len(receipts), receipts)
-	//	}
-	//	return nil
-	//}
-	//
-	//current := bc.CurrentBlock()
-	//var insertBlocks []block2.IBlock
-	//for i, block := range blocks {
-	//	if block.Number64() == current.Number64() && block.Difficulty().Compare(current.Difficulty()) == 1 {
-	//		if err := bc.engine.VerifyHeader(bc, block.Header(), false); err != nil {
-	//			log.Errorf("failed verify block err: %v", err)
-	//			continue
-	//		}
-	//		//verify body
-	//		if err := bc.verifyBody(block); err != nil {
-	//			log.Errorf("failed verify block err: %v", err)
-	//			continue
-	//		}
-	//		if err := runBlock(block); err != nil {
-	//			log.Errorf("failed runblock, err:%v", err)
-	//		}
-	//		insertBlocks = append(insertBlocks, block)
-	//		current = blocks[i]
-	//
-	//	} else if block.Number64().Equal(current.Number64().Add(uint256.NewInt(1))) && block.ParentHash().String() == current.Hash().String() {
-	//		if err := bc.engine.VerifyHeader(bc, block.Header(), false); err != nil {
-	//			log.Errorf("failed verify block err: %v", err)
-	//			continue
-	//		}
-	//
-	//		if err := runBlock(block); err != nil {
-	//			log.Errorf("failed runblock, err:%v", err)
-	//		} else {
-	//			insertBlocks = append(insertBlocks, block)
-	//			current = blocks[i]
-	//		}
-	//	} else {
-	//		author, _ := bc.engine.Author(block.Header())
-	//		log.Errorf("failed instert mew block, hash: %s, number: %s, diff: %s, miner: %s, txs: %d", block.Hash(), block.Number64().String(), block.Difficulty().String(), author.String(), len(block.Transactions()))
-	//		log.Errorf("failed instert cur block, hash: %s, number: %s, diff: %s, miner: %s, txs: %d", current.Hash(), current.Number64().String(), current.Difficulty().String(), author.String(), len(current.Transactions()))
-	//	}
-	//
-	//}
-	//
-	//if len(insertBlocks) > 0 {
-	//	if _, err := rawdb.SaveBlocks(bc.chainDB, insertBlocks); err != nil {
-	//		log.Errorf("failed to save blocks, err: %v", err)
-	//		return 0, err
-	//	}
-	//
-	//	if err := rawdb.SaveLatestBlock(bc.chainDB, current); err != nil {
-	//		log.Errorf("failed to save lates blocks, err: %v", err)
-	//		return 0, err
-	//	}
-	//	bc.currentBlock = current
-	//
-	//	if !isSync {
-	//		i := event.GlobalEvent.Send(&current)
-	//		author, _ := bc.engine.Author(current.Header())
-	//		log.Debugf("current number:%d, miner: %s, feed send count: %d", current.Number64().Uint64(), author, i)
-	//	}
-	//
-	//	return len(insertBlocks), nil
-	//}
-
-	return 0, fmt.Errorf("invalid block len(%d)", len(blocks))
 }
 
 func (bc *BlockChain) LatestBlockCh() (block2.IBlock, error) {
@@ -899,10 +805,10 @@ func (bc *BlockChain) InsertChain(chain []block2.IBlock) (int, error) {
 	}
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
-	return bc.insertChain(chain)
+	return bc.insertChain(chain, true)
 }
 
-func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
+func (bc *BlockChain) insertChain(chain []block2.IBlock, setHead bool) (int, error) {
 	if bc.insertStopped() {
 		return 0, nil
 	}
@@ -978,9 +884,15 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	switch {
 	// First block is pruned
 	case errors.Is(err, ErrPrunedAncestor):
-		// First block is pruned, insert as sidechain and reorg only if TD grows enough
-		log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number64(), "hash", block.Hash())
-		return bc.insertSideChain(block, it)
+		if setHead {
+			// First block is pruned, insert as sidechain and reorg only if TD grows enough
+			log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number64(), "hash", block.Hash())
+			return bc.insertSideChain(block, it)
+		} else {
+			log.Debug("Pruned ancestor", "number", block.Number64(), "hash", block.Hash())
+			_, err := bc.recoverAncestors(block)
+			return it.index, err
+		}
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, ErrFutureBlock) || (errors.Is(err, ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
@@ -1022,20 +934,9 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 	//	batch.Rollback()
 	//}()
 
-	evmRecord := func(ctx context.Context, db kv.RwDB, blockNr uint64, f func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error)) (*state.IntraBlockState, map[types.Address]*uint256.Int, error) {
-		tx, err := db.BeginRo(ctx)
-		if nil != err {
-			return nil, nil, err
-		}
-		defer tx.Rollback()
-		//batch := olddb.NewHashBatch(tx, bc.Quit(), paths.DefaultDataDir())
-		//defer batch.Rollback()
-		//stateReader, stateWriter, err := NewStateReaderWriter(batch, tx, blockNr, true)
-		//if nil != err {
-		//	return err
-		//}
+	evmRecord := func(tx kv.Tx, batch kv.StatelessRwTx, blockNr uint64, f func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error)) (*state.IntraBlockState, map[types.Address]*uint256.Int, error) {
 
-		stateReader := state.NewPlainStateReader(tx)
+		stateReader := state.NewPlainStateReader(batch)
 		ibs := state.New(stateReader)
 		//stateWriter := state.NewPlainStateWriter(tx, tx, block.Number64().Uint64())
 		stateWriter := state.NewNoopWriter()
@@ -1053,6 +954,17 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		// return tx.Commit()
 	}
 
+	tx, err := bc.ChainDB.BeginRo(bc.ctx)
+	if nil != err {
+		return it.index, err
+	}
+	defer tx.Rollback()
+	batch := olddb.NewHashBatch(tx, nil, os.TempDir())
+	defer func() {
+		batch.Close()
+	}()
+
+	var checkPoint = bc.currentBlock.Load()
 	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
@@ -1064,18 +976,12 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 			bc.CurrentBlock().Number64(), bc.CurrentBlock().Hash(), bc.CurrentBlock().Difficulty(), block.Number64(), block.Hash(), block.Difficulty())
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
-		// TODO
-		//stateDB := statedb.NewStateDB(block.ParentHash(), bc.chainDB, bc.changeDB)
-		//stateReader, stateWriter, err := NewStateReaderWriter(batch, wtx, block.Number64().Uint64(), true)
-		//if nil != err {
-		//	return it.index, err
-		//}
-		//ibs := state.New(stateReader)
 
 		var receipts block2.Receipts
 		var logs []*block2.Log
 		var usedGas uint64
-		ibs, nopay, err := evmRecord(bc.ctx, bc.ChainDB, block.Number64().Uint64(), func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error) {
+		var currentStateGas uint64
+		ibs, nopay, err := evmRecord(tx, batch, block.Number64().Uint64(), func(tx kv.Tx, ibs *state.IntraBlockState, reader state.StateReader, writer state.WriterWithChangeSets) (map[types.Address]*uint256.Int, error) {
 			getHeader := func(hash types.Hash, number uint64) *block2.Header {
 				return rawdb.ReadHeader(tx, hash, number)
 			}
@@ -1108,33 +1014,14 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		if nil != err {
 			return it.index, err
 		}
-		//var followupInterrupt uint32
-		//receipts, logs, usedGas, err := bc.process.Process(block.(*block2.Block), ibs, stateReader, stateWriter, blockHashFunc)
-		//if err != nil {
-		//	bc.reportBlock(block, receipts, err)
-		//	//atomic.StoreUint32(&followupInterrupt, 1)
-		//	return it.index, err
-		//}
 
-		//if err := bc.validator.ValidateState(block, ibs, receipts, usedGas); err != nil {
-		//	bc.reportBlock(block, receipts, err)
-		//	//atomic.StoreUint32(&followupInterrupt, 1)
-		//	return it.index, err
-		//}
-
-		// write state
-		//if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-		//	stateWrite := state.NewPlainStateWriter(batch, tx, block.Number64().Uint64())
-		//	if err := ibs.CommitBlock(params.AmazeChainConfig.Rules(block.Number64().Uint64()), stateWrite); nil != err {
-		//		return err
-		//	}
-		//	return nil
-		//}); nil != err {
-		//	return it.index, err
-		//}
 		wstart := time.Now()
 		var status WriteStatus
-		status, err = bc.writeBlockWithState(block, receipts, ibs, nopay)
+		if !setHead {
+			err = bc.writeBlockWithState(batch, block, receipts, ibs, nopay)
+		} else {
+			status, err = bc.writeBlockWithStateSetHead(batch, block, receipts, ibs, nopay)
+		}
 		//atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
@@ -1144,6 +1031,27 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += usedGas
+		currentStateGas += usedGas
+		if batch.BatchSize() >= int(LimitCacheSize) {
+			log.Info("Committed State", "gas reached", stats.usedGas)
+			currentStateGas = 0
+			if err := bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+				return batch.Flush(bc.ctx, tx)
+			}); nil != err {
+				return int(checkPoint.Number64().Uint64()), err
+			}
+
+			checkPoint = bc.currentBlock.Load()
+			tx.Rollback()
+
+			tx, err = bc.ChainDB.BeginRo(bc.ctx)
+			if err != nil {
+				return it.index, err
+			}
+			defer tx.Rollback()
+
+			batch = olddb.NewHashBatch(tx, nil, os.TempDir())
+		}
 
 		switch status {
 		case CanonStatTy:
@@ -1172,6 +1080,12 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 				"txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.StateRoot())
 		}
+	}
+
+	if err := bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+		return batch.Flush(bc.ctx, tx)
+	}); nil != err {
+		return int(checkPoint.Number64().Uint64()), fmt.Errorf("batch commit: %w", err)
 	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
@@ -1292,7 +1206,7 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 		// memory here.
 		if len(blocks) >= 2048 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].Number64(), "end", block.Number64())
-			if _, err := bc.insertChain(blocks); err != nil {
+			if _, err := bc.insertChain(blocks, true); err != nil {
 				return 0, err
 			}
 			blocks = blocks[:0]
@@ -1305,7 +1219,7 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].Number64(), "end", blocks[len(blocks)-1].Number64())
-		return bc.insertChain(blocks)
+		return bc.insertChain(blocks, true)
 	}
 	return 0, nil
 }
@@ -1333,7 +1247,7 @@ func (bc *BlockChain) recoverAncestors(block block2.IBlock) (types.Hash, error) 
 		} else {
 			b = bc.GetBlock(hashes[i], numbers[i].Uint64())
 		}
-		if _, err := bc.insertChain([]block2.IBlock{b}); err != nil {
+		if _, err := bc.insertChain([]block2.IBlock{b}, false); err != nil {
 			return b.ParentHash(), err
 		}
 	}
@@ -1349,70 +1263,91 @@ func (bc *BlockChain) WriteBlockWithoutState(block block2.IBlock) (err error) {
 	//	return err
 	//}
 	return bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-		if err := rawdb.WriteBlock(tx, block.(*block2.Block)); err != nil {
-			return err
-		}
-		return nil
+		return rawdb.WriteBlock(tx, block.(*block2.Block))
 	})
 }
 
-func (bc *BlockChain) WriteBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error {
+func (bc *BlockChain) WriteBlockAndSetHead(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
-	_, err := bc.writeBlockWithState(block, receipts, ibs, nopay)
-	return err
+	tx, err := bc.DB().BeginRo(bc.ctx)
+	if nil != err {
+		return err
+	}
+	defer tx.Rollback()
+
+	batch := olddb.NewHashBatch(tx, nil, os.TempDir())
+	defer func() {
+		batch.Close()
+	}()
+	if _, err := bc.writeBlockWithStateSetHead(batch, block, receipts, ibs, nopay); nil != err {
+		return err
+	}
+	return bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+		return batch.Flush(bc.ctx, tx)
+	})
 }
 
-// writeBlockWithState
-func (bc *BlockChain) writeBlockWithState(block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) (status WriteStatus, err error) {
-	if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-		//ptd := bc.GetTd(block.ParentHash(), block.Number64().Sub(uint256.NewInt(1)))
-		ptd, err := rawdb.ReadTd(tx, block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)).Uint64())
-		if nil != err {
-			log.Errorf("ReadTd failed err: %v", err)
-		}
-		if ptd == nil {
-			return consensus.ErrUnknownAncestor
-		}
+func (bc *BlockChain) writeBlockWithState(batch kv.StatelessWriteTx, block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error {
+	tx, err := bc.DB().BeginRw(bc.ctx)
+	if nil != err {
+		return err
+	}
+	defer tx.Rollback()
 
+	ptd, err := rawdb.ReadTd(tx, block.ParentHash(), uint256.NewInt(0).Sub(block.Number64(), uint256.NewInt(1)).Uint64())
+	if nil != err {
+		log.Errorf("ReadTd failed err: %v", err)
+	}
+	if ptd == nil {
+		return consensus.ErrUnknownAncestor
+	}
+
+	//if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
+	externTd := uint256.NewInt(0).Add(ptd, block.Difficulty())
+	if err := rawdb.WriteTd(tx, block.Hash(), block.Number64().Uint64(), externTd); nil != err {
+		return err
+	}
+	log.Trace("writeTd:", "number", block.Number64().Uint64(), "hash", block.Hash(), "td", externTd.Uint64())
+	if len(receipts) > 0 {
 		//if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-		externTd := uint256.NewInt(0).Add(ptd, block.Difficulty())
-		if err := rawdb.WriteTd(tx, block.Hash(), block.Number64().Uint64(), externTd); nil != err {
+		if err := rawdb.AppendReceipts(tx, block.Number64().Uint64(), receipts); nil != err {
+			log.Errorf("rawdb.AppendReceipts failed err= %v", err)
 			return err
 		}
-		log.Trace("writeTd:", "number", block.Number64().Uint64(), "hash", block.Hash(), "td", externTd.Uint64())
-		if len(receipts) > 0 {
-			//if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
-			if err := rawdb.AppendReceipts(tx, block.Number64().Uint64(), receipts); nil != err {
-				log.Errorf("rawdb.AppendReceipts failed err= %v", err)
-				return err
-			}
-		}
-		if err := rawdb.WriteBlock(tx, block.(*block2.Block)); err != nil {
-			return err
-		}
+	}
+	if err := rawdb.WriteBlock(tx, block.(*block2.Block)); err != nil {
+		return err
+	}
 
-		stateWriter := state.NewPlainStateWriter(tx, tx, block.Number64().Uint64())
-		if err := ibs.CommitBlock(bc.chainConfig.Rules(block.Number64().Uint64()), stateWriter); nil != err {
-			return err
-		}
+	stateWriter := state.NewPlainStateWriter(batch, tx, block.Number64().Uint64())
+	if err := ibs.CommitBlock(bc.chainConfig.Rules(block.Number64().Uint64()), stateWriter); nil != err {
+		return err
+	}
 
-		if err := stateWriter.WriteChangeSets(); err != nil {
-			return fmt.Errorf("writing changesets for block %d failed: %w", block.Number64().Uint64(), err)
-		}
+	if err := stateWriter.WriteChangeSets(); err != nil {
+		return fmt.Errorf("writing changesets for block %d failed: %w", block.Number64().Uint64(), err)
+	}
 
-		if err := stateWriter.WriteHistory(); err != nil {
-			return fmt.Errorf("writing history for block %d failed: %w", block.Number64().Uint64(), err)
-		}
+	if err := stateWriter.WriteHistory(); err != nil {
+		return fmt.Errorf("writing history for block %d failed: %w", block.Number64().Uint64(), err)
+	}
 
-		if nil != nopay {
-			for addr, v := range nopay {
-				rawdb.PutAccountReward(tx, addr, v)
-			}
+	if nil != nopay {
+		for addr, v := range nopay {
+			rawdb.PutAccountReward(tx, addr, v)
 		}
+	}
 
-		return nil
-	}); nil != err {
+	return tx.Commit()
+}
+
+// writeBlockWithStateSetHead
+func (bc *BlockChain) writeBlockWithStateSetHead(batch kv.StatelessWriteTx, block block2.IBlock, receipts []*block2.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) (status WriteStatus, err error) {
+	//if err := bc.ChainDB.Update(bc.ctx, func(tx kv.RwTx) error {
+	//ptd := bc.GetTd(block.ParentHash(), block.Number64().Sub(uint256.NewInt(1)))
+	err = bc.writeBlockWithState(batch, block, receipts, ibs, nopay)
+	if nil != err {
 		return NonStatTy, err
 	}
 
@@ -1462,7 +1397,6 @@ func (bc *BlockChain) writeHeadBlock(tx kv.RwTx, block block2.IBlock) error {
 	//	log.Errorf("failed to save last block, err: %v", err)
 	//	return err
 	//}
-	rawdb.WriteHeadBlockHash(tx, block.Hash())
 	rawdb.WriteHeadBlockHash(tx, block.Hash())
 	rawdb.WriteTxLookupEntries(tx, block.(*block2.Block))
 
@@ -1747,4 +1681,11 @@ func (bc *BlockChain) GetAccountRewardUnpaid(account types.Address) (*uint256.In
 		return nil
 	})
 	return value, err
+}
+
+func (bc *BlockChain) InsertChainWithoutSetHead(blocks []block2.IBlock) (int, error) {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+
+	return bc.insertChain(blocks, false)
 }

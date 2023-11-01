@@ -260,6 +260,7 @@ LOOP:
 
 func MachineVerify(ctx context.Context) error {
 	entire := make(chan common.MinedEntireEvent)
+	defer close(entire)
 	blocksSub := event.GlobalEvent.Subscribe(entire)
 	defer blocksSub.Unsubscribe()
 

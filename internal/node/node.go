@@ -73,7 +73,6 @@ import (
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/internal/consensus/apoa"
 	"github.com/amazechain/amc/internal/consensus/apos"
-	"github.com/amazechain/amc/internal/download"
 	"github.com/amazechain/amc/internal/miner"
 	"github.com/amazechain/amc/internal/network"
 	"github.com/amazechain/amc/internal/pubsub"
@@ -282,9 +281,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 
 	//bc.SetEngine(engine)
 
-	downloader = download.NewDownloader(ctx, bc, s, pubsubServer, peers)
-
-	_ = s.SetHandler(message.MsgDownloader, downloader.ConnHandler)
 	_ = s.SetHandler(message.MsgTransaction, txsFetcher.ConnHandler)
 
 	miner := miner.NewMiner(ctx, cfg, bc, engine, pool, nil)
@@ -430,11 +426,6 @@ func (n *Node) Start() error {
 		pos.SetBlockChain(n.blocks)
 	}
 
-	if err := n.downloader.Start(); err != nil {
-		log.Errorf("failed setup downloader service, err: %v", err)
-		return err
-	}
-
 	n.rpcAPIs = append(n.rpcAPIs, n.engine.APIs(n.blocks)...)
 	n.rpcAPIs = append(n.rpcAPIs, n.api.Apis()...)
 	n.rpcAPIs = append(n.rpcAPIs, tracers.APIs(n.api)...)
@@ -463,7 +454,7 @@ func (n *Node) Start() error {
 		n.depositContract.Start()
 	}
 
-	n.is.Start()
+	go n.is.Start()
 
 	//rwTx, _ := n.db.BeginRw(n.ctx)
 	//defer rwTx.Rollback()
@@ -520,6 +511,7 @@ func (n *Node) txsBroadcastLoop() {
 	// local txs
 	txsCh := make(chan common.NewLocalTxsEvent)
 	txsSub := event.GlobalEvent.Subscribe(txsCh)
+	defer txsSub.Unsubscribe()
 
 	for {
 		select {
@@ -531,7 +523,8 @@ func (n *Node) txsBroadcastLoop() {
 		case err := <-txsSub.Err():
 			log.Error("NewLocalTxsEvent chan has a error:%v", err)
 			return
-		case <-n.shutDown:
+		case <-n.ctx.Done():
+			close(txsCh)
 			return
 		}
 	}
@@ -546,6 +539,7 @@ func (n *Node) txsMessageFetcherLoop() {
 		log.Error("cannot join in ")
 	}
 	sub, _ := topic.Subscribe()
+	defer sub.Cancel()
 
 	for {
 		select {
@@ -729,6 +723,7 @@ func (n *Node) newBlockSubLoop() {
 	if err != nil {
 		return
 	}
+	defer sub.Cancel()
 
 	for {
 		select {
@@ -762,14 +757,23 @@ func (n *Node) newBlockSubLoop() {
 }
 
 func (n *Node) Close() {
-	select {
-	case <-n.ctx.Done():
-		return
-	default:
-		n.cancel()
-		close(n.shutDown)
-		n.db.Close()
-	}
+	//select {
+	//case <-n.ctx.Done():
+	//	return
+	//default:
+	//	n.cancel()
+	//	close(n.shutDown)
+	//	n.db.Close()
+	//}
+	n.cancel()
+	n.miner.Close()
+	n.stopRPC()
+	n.db.Close()
+	close(n.shutDown)
+}
+
+func (n *Node) Wait() {
+	<-n.shutDown
 }
 
 // AccountManager retrieves the account manager used by the protocol stack.

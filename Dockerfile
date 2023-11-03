@@ -36,3 +36,4 @@ WORKDIR /home/amc
 RUN echo $UID
 
 EXPOSE 20012 20013 20014 61015/udp 61016  6060
+ENTRYPOINT ["amazechain"]

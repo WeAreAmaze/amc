@@ -33,9 +33,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/amazechain/amc/modules/rawdb"
-	"github.com/amazechain/amc/modules/state"
-
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/prque"
@@ -125,7 +122,8 @@ type TxsPool struct {
 
 	bc common.IBlockChain
 
-	currentState  *state.IntraBlockState
+	//currentState  *state.IntraBlockState
+	currentState  ReadState
 	pendingNonces *txNoncer
 	currentMaxGas uint64
 
@@ -193,6 +191,7 @@ func NewTxsPool(ctx context.Context, bc common.IBlockChain) (txs_pool.ITxsPool, 
 	}
 
 	//
+	pool.currentState = StateClient(ctx, bc.DB())
 	pool.pendingNonces = newTxNoncer(pool.currentState)
 
 	pool.priced = newTxPricedList(pool.all)
@@ -211,7 +210,7 @@ func NewTxsPool(ctx context.Context, bc common.IBlockChain) (txs_pool.ITxsPool, 
 	//pool.wg.Add(1)
 	//go pool.ethImportTxPoolLoop()
 
-	pool.wg.Add(1)
+	//pool.wg.Add(1)
 	//go pool.ethTxPoolCheckLoop()
 
 	return pool, nil
@@ -730,11 +729,11 @@ func (pool *TxsPool) reset(oldBlock, newBlock block.IBlock) {
 		newBlock = pool.bc.CurrentBlock() // Special case during testing
 	}
 
-	if err := pool.ResetState(newBlock.Header().Hash()); nil != err {
-		log.Errorf("reset current state faild, %v", err)
-		return
-	}
-	pool.pendingNonces = newTxNoncer(pool.currentState) //newTxNoncer(statedb)
+	//if err := pool.ResetState(newBlock.Header().Hash()); nil != err {
+	//	log.Errorf("reset current state faild, %v", err)
+	//	return
+	//}
+	// pool.pendingNonces = newTxNoncer(pool.currentState) //newTxNoncer(statedb)
 	pool.currentMaxGas = newBlock.GasLimit()
 
 	// Inject any transactions discarded due to reorgs
@@ -1315,25 +1314,25 @@ func (pool *TxsPool) Stats() (int, int, int, int) {
 }
 
 func (pool *TxsPool) ResetState(blockHash types.Hash) error {
-	if pool.currentState != nil {
-		reader := pool.currentState.GetStateReader()
-		if reader != nil {
-			if hreader, ok := reader.(*state.HistoryStateReader); ok {
-				hreader.Rollback()
-			}
-		}
-	}
-
-	tx, err := pool.bc.DB().BeginRo(pool.ctx)
-	if nil != err {
-		return err
-	}
-	blockNr := rawdb.ReadHeaderNumber(tx, blockHash)
-	if nil == blockNr {
-		return fmt.Errorf("invaild block hash")
-	}
-	stateReader := state.NewStateHistoryReader(tx, tx, *blockNr+1)
-	pool.currentState = state.New(stateReader)
+	//if pool.currentState != nil {
+	//	reader := pool.currentState.GetStateReader()
+	//	if reader != nil {
+	//		if hreader, ok := reader.(*state.HistoryStateReader); ok {
+	//			hreader.Rollback()
+	//		}
+	//	}
+	//}
+	//
+	//tx, err := pool.bc.DB().BeginRo(pool.ctx)
+	//if nil != err {
+	//	return err
+	//}
+	//blockNr := rawdb.ReadHeaderNumber(tx, blockHash)
+	//if nil == blockNr {
+	//	return fmt.Errorf("invaild block hash")
+	//}
+	//stateReader := state.NewStateHistoryReader(tx, tx, *blockNr+1)
+	//pool.currentState = state.New(stateReader)
 	return nil
 }
 

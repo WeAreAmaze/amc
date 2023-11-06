@@ -24,4 +24,5 @@
    1. [rpc](./jsonrpc/rpc.md)
 1. [CLI Reference](./cli/cli.md)   
 1. [Developers](./developers/developers.md)
-   1. [Contribute](./developers/contribute.md)
+   1. [Code Submission Standards](./developers/codesubmission.md)
+   2. [Contribute](./developers/contribute.md)

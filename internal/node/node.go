@@ -155,7 +155,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		engine        consensus.Engine
 		genesisHash   types.Hash
 		genesisConfig *conf.Genesis
-		chainConfig   *params.ChainConfig
 		chainKv       kv.RwDB
 		err           error
 	)
@@ -178,50 +177,84 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, err
 	}
 
-	if err := chainKv.View(ctx, func(tx kv.Tx) error {
-		//
-		genesisHash, err = rawdb.ReadCanonicalHash(tx, 0)
-		//
-		if genesisHash == (types.Hash{}) && err != nil {
-			//return fmt.Errorf("GenesisHash is missing err:%w", err)
-			return internal.ErrGenesisNoConfig
-		}
-		if genesisHash == (types.Hash{}) && err == nil {
-			//needs WriteGenesisBlock
-			return nil
-		}
-		//
-		chainConfig, err = rawdb.ReadChainConfig(tx, genesisHash)
-		if err != nil {
-			return err
-		}
-		//
-		if genesisBlock, err = rawdb.ReadBlockByHash(tx, genesisHash); genesisBlock == nil {
-			return fmt.Errorf("genesisBlock is missing err:%w", err)
+	if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
+		var h types.Hash
+		h, err = rawdb.ReadCanonicalHash(tx, 0)
+		if nil != err {
+			panic(err)
 		}
 
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	if genesisHash == (types.Hash{}) {
 		genesisHash = *params.GenesisHashByChainName(cfg.NodeCfg.Chain)
 		genesisConfig = internal.GenesisByChainName(cfg.NodeCfg.Chain)
-		chainConfig = params.ChainConfigByChainName(cfg.NodeCfg.Chain)
-		if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
+		if h == (types.Hash{}) {
+			log.Warnf("miss genesis, write %s genesis", cfg.NodeCfg.Chain)
 			var genesisErr error
 			genesisBlock, genesisErr = WriteGenesisBlock(tx, genesisConfig)
 			if nil != genesisErr {
 				return genesisErr
 			}
 			return nil
-		}); err != nil {
-			return nil, err
 		}
-	}
 
-	cfg.ChainCfg = chainConfig
+		if h != genesisHash {
+			return fmt.Errorf("incompilite genesis hash, stored: %s, now: %s", h, genesisHash)
+		}
+
+		number := rawdb.ReadHeaderNumber(tx, h)
+		if number != nil {
+			genesisBlock = rawdb.ReadBlock(tx, h, *number)
+		}
+
+		if err := genesisConfig.Config.CheckConfigForkOrder(); nil != err {
+			return err
+		}
+
+		storedCfg, err := rawdb.ReadChainConfig(tx, h)
+		if nil != err {
+			return err
+		}
+
+		if storedCfg == nil {
+			log.Warn("Found genesis block without chain config")
+			err1 := rawdb.WriteChainConfig(tx, h, genesisConfig.Config)
+			if err1 != nil {
+				return err1
+			}
+			return  nil
+		}
+
+		height := rawdb.ReadHeaderNumber(tx, rawdb.ReadHeadHeaderHash(tx))
+		if height != nil {
+			compatibilityErr := storedCfg.CheckCompatible(genesisConfig.Config, *height)
+			if compatibilityErr != nil && *height != 0 && compatibilityErr.RewindTo != 0 {
+				return compatibilityErr
+			}
+		}
+		if err := rawdb.WriteChainConfig(tx, h, genesisConfig.Config); err != nil {
+			return  err
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	cfg.ChainCfg = genesisConfig.Config
+	//if genesisHash == (types.Hash{}) {
+	//	genesisHash = *params.GenesisHashByChainName(cfg.NodeCfg.Chain)
+	//	genesisConfig = internal.GenesisByChainName(cfg.NodeCfg.Chain)
+	//	chainConfig = params.ChainConfigByChainName(cfg.NodeCfg.Chain)
+	//	if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
+	//		var genesisErr error
+	//		genesisBlock, genesisErr = WriteGenesisBlock(tx, genesisConfig)
+	//		if nil != genesisErr {
+	//			return genesisErr
+	//		}
+	//		return nil
+	//	}); err != nil {
+	//		return nil, err
+	//	}
+	//}
+
+
 
 	s, err := network.NewService(ctx, &cfg.NetworkCfg, peers, node.ProtocolHandshake, node.ProtocolHandshakeInfo)
 	if err != nil {
@@ -923,7 +956,7 @@ func WriteGenesisBlock(db kv.RwTx, genesis *conf.Genesis) (*block.Block, error) 
 		genesis,
 		//config,
 	}
-	log.Info("Writing genesis block")
+	// log.Info("Writing genesis block")
 	block, _, err := g.Write(db)
 	if nil != err {
 		return nil, err

@@ -36,7 +36,7 @@ func (e nonCanonocalHashError) Error() string {
 
 func GetBlockNumber(blockNrOrHash jsonrpc.BlockNumberOrHash, tx kv.Tx) (*uint256.Int, types.Hash, error) {
 	if tx == nil {
-
+		return nil, types.Hash{}, fmt.Errorf("tx is nil")
 	}
 	return _GetBlockNumber(blockNrOrHash.RequireCanonical, blockNrOrHash, tx)
 }

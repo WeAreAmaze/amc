@@ -463,7 +463,7 @@ func (n *Node) Start() error {
 		n.depositContract.Start()
 	}
 
-	n.is.Start()
+	go n.is.Start()
 
 	//rwTx, _ := n.db.BeginRw(n.ctx)
 	//defer rwTx.Rollback()

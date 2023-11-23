@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/account"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/api/filters"
@@ -1416,4 +1417,58 @@ func batchTxs(api *API, start, end uint64) error {
 		}
 	}
 	return nil
+}
+
+func (s *BlockChainAPI) GetProof(ctx context.Context, address types.Address, storageKeys []types.Hash, blockNrOrHash jsonrpc.BlockNumberOrHash) (*account.AccProofResult, error) {
+
+	tx, err := s.api.db.BeginRo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	number, _, err := rpchelper.GetBlockNumber(blockNrOrHash, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	latest, err := rpchelper.GetLatestBlockNumber(tx)
+	if nil != err {
+		return nil, err
+	}
+
+	var reader state.StateReader
+	if number.Cmp(latest) < 0 {
+		reader = state.NewPlainState(tx, number.Uint64()+1)
+	} else {
+		reader = state.NewPlainStateReader(tx)
+	}
+
+	a, err := reader.ReadAccountData(address)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		a = &account.StateAccount{}
+	}
+
+	result := &account.AccProofResult{
+		Address:  address,
+		Balance:  (*hexutil.Big)(a.Balance.ToBig()),
+		Nonce:    hexutil.Uint64(a.Nonce),
+		CodeHash: a.CodeHash,
+	}
+
+	for _, sk := range storageKeys {
+		stv, err := reader.ReadAccountStorage(address, a.Incarnation, &sk)
+		if nil != err {
+			return nil, err
+		}
+		storageV := new(hexutil.Big)
+		if err := storageV.UnmarshalJSON(stv); nil != err {
+			return nil, err
+		}
+		result.StorageProof = append(result.StorageProof, account.StorProofResult{Key: sk, Value: storageV})
+	}
+	return result, nil
 }

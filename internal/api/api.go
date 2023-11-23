@@ -1464,11 +1464,9 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address types.Address, sto
 		if nil != err {
 			return nil, err
 		}
-		storageV := new(hexutil.Big)
-		if err := storageV.UnmarshalJSON(stv); nil != err {
-			return nil, err
-		}
-		result.StorageProof = append(result.StorageProof, account.StorProofResult{Key: sk, Value: storageV})
+		storageV := new(uint256.Int)
+		storageV.SetBytes(stv)
+		result.StorageProof = append(result.StorageProof, account.StorProofResult{Key: sk, Value: (*hexutil.Big)(storageV.ToBig())})
 	}
 	return result, nil
 }

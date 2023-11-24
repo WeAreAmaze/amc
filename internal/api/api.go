@@ -1453,10 +1453,11 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address types.Address, sto
 	}
 
 	result := &account.AccProofResult{
-		Address:  address,
-		Balance:  (*hexutil.Big)(a.Balance.ToBig()),
-		Nonce:    hexutil.Uint64(a.Nonce),
-		CodeHash: a.CodeHash,
+		Address:      address,
+		AccountProof: []hexutil.Bytes{},
+		Balance:      (*hexutil.Big)(a.Balance.ToBig()),
+		Nonce:        hexutil.Uint64(a.Nonce),
+		CodeHash:     a.CodeHash,
 	}
 
 	for _, sk := range storageKeys {
@@ -1466,7 +1467,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address types.Address, sto
 		}
 		storageV := new(uint256.Int)
 		storageV.SetBytes(stv)
-		result.StorageProof = append(result.StorageProof, account.StorProofResult{Key: sk, Value: (*hexutil.Big)(storageV.ToBig())})
+		result.StorageProof = append(result.StorageProof, account.StorProofResult{Key: sk, Value: (*hexutil.Big)(storageV.ToBig()), Proof: []hexutil.Bytes{}})
 	}
 	return result, nil
 }

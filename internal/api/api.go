@@ -1458,6 +1458,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address types.Address, sto
 		Balance:      (*hexutil.Big)(a.Balance.ToBig()),
 		Nonce:        hexutil.Uint64(a.Nonce),
 		CodeHash:     a.CodeHash,
+		StorageProof: []account.StorProofResult{},
 	}
 
 	for _, sk := range storageKeys {

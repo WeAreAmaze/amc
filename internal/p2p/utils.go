@@ -5,8 +5,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/amazechain/amc/api/protocol/sync_pb"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/p2p/enr"
 	"github.com/amazechain/amc/utils"
@@ -21,6 +23,8 @@ import (
 
 const keyPath = "network-keys"
 
+const seqPath = "network-seq"
+
 const dialTimeout = 1 * time.Second
 
 // SerializeENR takes the enr record in its key-value form and serializes it.
@@ -34,6 +38,53 @@ func SerializeENR(record *enr.Record) (string, error) {
 	}
 	enrString := base64.RawURLEncoding.EncodeToString(buf.Bytes())
 	return enrString, nil
+}
+
+func getSeqNumber(cfg *conf.P2PConfig) (*sync_pb.Ping, error) {
+	defaultSeqPath := path.Join(cfg.DataDir, seqPath)
+
+	_, err := os.Stat(defaultSeqPath)
+	defaultKeysExist := !os.IsNotExist(err)
+	if err != nil && defaultKeysExist {
+		log.Error("Error reading network seqNumber from file", "err", err)
+		return nil, err
+	}
+
+	if defaultKeysExist {
+		src, err := os.ReadFile(defaultSeqPath) // #nosec G304
+		if err != nil {
+			log.Error("Error reading network seqNumber from file", "err", err)
+			return nil, err
+		}
+		//dst := make([]byte, hex.DecodedLen(len(src)))
+		//_, err = hex.Decode(dst, src)
+		//if err != nil {
+		//	return nil, errors.Wrap(err, "failed to decode hex string")
+		//}
+
+		seqNumber := binary.LittleEndian.Uint64(src)
+		if seqNumber > 0 {
+			log.Info("Load seq number from file", "seqNumber", seqNumber)
+			return &sync_pb.Ping{SeqNumber: seqNumber}, nil
+		}
+
+	}
+	return &sync_pb.Ping{SeqNumber: 0}, nil
+}
+
+func saveSeqNumber(cfg *conf.P2PConfig, seqNumber *sync_pb.Ping) error {
+
+	defaultSeqPath := path.Join(cfg.DataDir, seqPath)
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, seqNumber.SeqNumber)
+
+	if err := os.WriteFile(defaultSeqPath, b, 0600); err != nil {
+		log.Error("Failed to save p2p seq number", "err", err)
+		return err
+	}
+	log.Info("Wrote seq number to file", "seqNumber", seqNumber.SeqNumber)
+	return nil
 }
 
 // Determines a private key for p2p networking from the p2p service's

@@ -40,7 +40,6 @@ import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/transaction"
-	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 
@@ -150,7 +149,7 @@ type worker struct {
 	minerConf conf.MinerConfig
 	engine    consensus.Engine
 	chain     common.IBlockChain
-	txsPool   txs_pool.ITxsPool
+	txsPool   common.ITxsPool
 
 	coinbase    types.Address
 	chainConfig *params.ChainConfig
@@ -182,7 +181,7 @@ type worker struct {
 	snapshotReceipts block.Receipts
 }
 
-func newWorker(ctx context.Context, group *errgroup.Group, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
+func newWorker(ctx context.Context, group *errgroup.Group, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool common.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
 	c, cancel := context.WithCancel(ctx)
 	worker := &worker{
 		engine:           engine,

@@ -201,7 +201,7 @@ func importWallet(ctx *cli.Context) error {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	stack, err := node.NewNode(ctx.Context, &DefaultConfig)
+	stack, err := node.NewNode(ctx, &DefaultConfig)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func accountList(ctx *cli.Context) error {
 		}
 	}
 
-	stack, err := node.NewNode(ctx.Context, &cfg)
+	stack, err := node.NewNode(ctx, &cfg)
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func accountUpdate(ctx *cli.Context) error {
 		utils.Fatalf("No accounts specified to update")
 	}
 
-	stack, err := node.NewNode(ctx.Context, &DefaultConfig)
+	stack, err := node.NewNode(ctx, &DefaultConfig)
 	if err != nil {
 		return err
 	}
@@ -369,7 +369,7 @@ func accountImport(ctx *cli.Context) error {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
 
-	stack, err := node.NewNode(ctx.Context, &DefaultConfig)
+	stack, err := node.NewNode(ctx, &DefaultConfig)
 	if err != nil {
 		return err
 	}

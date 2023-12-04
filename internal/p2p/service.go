@@ -1,5 +1,5 @@
-// Package p2p defines the network protocol implementation for Ethereum consensus
-// used by beacon nodes, including peer discovery using discv5, gossip-sub
+// Package p2p defines the network protocol implementation for amc consensus
+// used by amc, including peer discovery using discv5, gossip-sub
 // using libp2p, and handing peer lifecycles + handshakes.
 package p2p
 
@@ -83,6 +83,7 @@ type Service struct {
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
 	ping                  *sync_pb.Ping
+	wg                    sync.WaitGroup
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
@@ -96,10 +97,15 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 		ctx:          ctx,
 		cancel:       cancel,
 		cfg:          cfg,
-		ping:         &sync_pb.Ping{SeqNumber: 0},
 		isPreGenesis: true,
 		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
 		genesisHash:  genesisHash,
+	}
+
+	s.ping, err = getSeqNumber(s.cfg)
+	if err != nil {
+		log.Error("Failed to generate p2p seq number", "err", err)
+		return nil, err
 	}
 
 	dv5Nodes := parseBootStrapAddrs(cfg.BootstrapNodeAddr, nodeCfg)
@@ -319,15 +325,36 @@ func (s *Service) Start() {
 	}
 	//todo
 	//go s.forkWatcher()
+	go s.loop()
+	s.wg.Add(1)
+}
+
+func (s *Service) loop() {
+	defer log.Debug("Context closed, exiting goroutine")
+	for {
+		select {
+		case <-s.ctx.Done():
+			log.Info("start write seq number to file")
+			err := saveSeqNumber(s.cfg, s.GetPing())
+			if err != nil {
+				//log.Error("")
+			}
+			s.wg.Done()
+			return
+
+		}
+	}
 }
 
 // Stop the p2p service and terminate all peer connections.
 func (s *Service) Stop() error {
-	defer s.cancel()
+	s.cancel()
 	s.started = false
 	if s.dv5Listener != nil {
 		s.dv5Listener.Close()
 	}
+	s.wg.Wait()
+	log.Info("P2P service stopped")
 	return nil
 }
 

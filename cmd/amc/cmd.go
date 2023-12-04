@@ -396,6 +396,13 @@ var (
 		Destination: &DefaultConfig.NodeCfg.DataDir,
 	}
 
+	MinFreeDiskSpaceFlag = &cli.IntFlag{
+		Name:        "data.dir.minfreedisk",
+		Usage:       "Minimum free disk space in GB, once reached triggers auto shut down (default = 10GB, 0 = disabled)",
+		Value:       10,
+		Destination: &DefaultConfig.NodeCfg.MinFreeDiskSpace,
+	}
+
 	FromDataDirFlag = &cli.StringFlag{
 		Name:  "chaindata.from",
 		Usage: "source data  dir",
@@ -508,6 +515,7 @@ var (
 	settingFlag = []cli.Flag{
 		DataDirFlag,
 		ChainFlag,
+		MinFreeDiskSpaceFlag,
 	}
 	accountFlag = []cli.Flag{
 		PasswordFileFlag,

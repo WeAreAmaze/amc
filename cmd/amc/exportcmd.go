@@ -89,7 +89,7 @@ var (
 
 func exportTransactions(ctx *cli.Context) error {
 
-	stack, err := node.NewNode(ctx.Context, &DefaultConfig)
+	stack, err := node.NewNode(ctx, &DefaultConfig)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func exportTransactions(ctx *cli.Context) error {
 
 func exportBalance(ctx *cli.Context) error {
 
-	stack, err := node.NewNode(ctx.Context, &DefaultConfig)
+	stack, err := node.NewNode(ctx, &DefaultConfig)
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func exportBalance(ctx *cli.Context) error {
 
 func exportDBState(ctx *cli.Context) error {
 
-	stack, err := node.NewNode(ctx.Context, &DefaultConfig)
+	stack, err := node.NewNode(ctx, &DefaultConfig)
 	if err != nil {
 		return err
 	}

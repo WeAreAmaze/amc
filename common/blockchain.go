@@ -65,6 +65,8 @@ type IBlockChain interface {
 	DB() kv.RwDB
 	Quit() <-chan struct{}
 
+	Close() error
+
 	WriteBlockWithState(block block.IBlock, receipts []*block.Receipt, ibs *state.IntraBlockState, nopay map[types.Address]*uint256.Int) error
 
 	GetDepositInfo(address types.Address) (*uint256.Int, *uint256.Int)

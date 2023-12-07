@@ -29,6 +29,7 @@ import (
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
+	"sync"
 )
 
 const (
@@ -112,6 +113,7 @@ type Info struct {
 type Deposit struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
+	wg         sync.WaitGroup
 	blockChain common.IBlockChain
 	db         kv.RwDB
 
@@ -146,11 +148,14 @@ func NewDeposit(ctx context.Context, bc common.IBlockChain, db kv.RwDB, depositC
 }
 
 func (d *Deposit) Start() {
+	d.wg.Add(1)
 	go d.eventLoop()
 }
 
-func (d *Deposit) Stop() {
+func (d *Deposit) Stop() error {
 	d.cancel()
+	d.wg.Wait()
+	return nil
 }
 
 func (d *Deposit) IsDepositAction(txs *transaction.Transaction) bool {
@@ -184,6 +189,8 @@ func (d *Deposit) eventLoop() {
 	defer func() {
 		d.logsSub.Unsubscribe()
 		d.rmLogsSub.Unsubscribe()
+		d.wg.Done()
+		log.Info("Context closed, exiting goroutine (eventLoop)")
 	}()
 
 	for {

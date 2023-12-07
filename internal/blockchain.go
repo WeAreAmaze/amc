@@ -35,10 +35,8 @@ import (
 	"github.com/ledgerwatch/erigon-lib/kv"
 
 	"github.com/amazechain/amc/api/protocol/msg_proto"
-	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common"
 	block2 "github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/log"
@@ -105,12 +103,9 @@ type BlockChain struct {
 
 	peers map[peer.ID]bool
 
-	downloader common.IDownloader
-
 	chBlocks chan block2.IBlock
 
-	pubsub common.IPubSub
-	p2p    p2p.P2P
+	p2p p2p.P2P
 
 	errorCh chan error
 
@@ -146,7 +141,7 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, p2p p2p.P2P, config *params.ChainConfig) (common.IBlockChain, error) {
+func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, db kv.RwDB, p2p p2p.P2P, config *params.ChainConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	var current *block2.Block
 	_ = db.View(c, func(tx kv.Tx) error {
@@ -176,7 +171,6 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		chBlocks:      make(chan block2.IBlock, 100),
 		errorCh:       make(chan error),
 		p2p:           p2p,
-		downloader:    downloader,
 		latestBlockCh: make(chan block2.IBlock, 50),
 		engine:        engine,
 		blockCache:    blockCache,
@@ -407,70 +401,6 @@ func (bc *BlockChain) LatestBlockCh() (block2.IBlock, error) {
 
 		return block, nil
 	}
-}
-
-func (bc *BlockChain) newBlockLoop() {
-	bc.wg.Done()
-	//if bc.pubsub == nil {
-	//	bc.errorCh <- ErrInvalidPubSub
-	//	return
-	//}
-
-	topic, err := bc.pubsub.JoinTopic(message.GossipBlockMessage)
-	if err != nil {
-		bc.errorCh <- ErrInvalidPubSub
-		return
-	}
-
-	sub, err := topic.Subscribe()
-	if err != nil {
-		bc.errorCh <- ErrInvalidPubSub
-		return
-	}
-
-	for {
-		select {
-		case <-bc.ctx.Done():
-			log.Infof("block chain quit...")
-			return
-		default:
-			msg, err := sub.Next(bc.ctx)
-			if err != nil {
-				//todo panic: send on closed channel
-				bc.errorCh <- err
-				return
-			}
-
-			var newBlock types_pb.Block
-			if err := proto.Unmarshal(msg.Data, &newBlock); err == nil {
-				var block block2.Block
-				if err := block.FromProtoMessage(&newBlock); err == nil {
-					var inserted bool
-					// if future block
-					if block.Number64().Uint64() > bc.CurrentBlock().Number64().Uint64()+1 {
-						inserted = false
-						bc.AddFutureBlock(&block)
-					} else {
-						if _, err := bc.InsertChain([]block2.IBlock{&block}); err != nil {
-							inserted = false
-							log.Errorf("failed to inster new block in blockchain, err:%v", err)
-						} else {
-							log.Info("Imported new chain segment", "hash", block.Hash(), "number", block.Number64().Uint64(), "stateRoot", block.StateRoot(), "txs", len(block.Body().Transactions()))
-							inserted = true
-						}
-					}
-					event.GlobalEvent.Send(common.ChainHighestBlock{Block: block, Inserted: inserted})
-
-				} else {
-					log.Errorf("unmarshal err: %v", err)
-				}
-
-			} else {
-				log.Warnf("failed to unmarshal pubsub message, err:%v", err)
-			}
-		}
-	}
-
 }
 
 func (bc *BlockChain) runLoop() {
@@ -1714,6 +1644,11 @@ func (bc *BlockChain) reorg(tx kv.RwTx, oldBlock, newBlock block2.IBlock) error 
 
 	return nil
 }
+func (bc *BlockChain) Close() error {
+	bc.Quit()
+	return nil
+}
+
 func (bc *BlockChain) Quit() <-chan struct{} {
 	return bc.ctx.Done()
 }

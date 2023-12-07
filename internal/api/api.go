@@ -42,7 +42,6 @@ import (
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/common/transaction"
-	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/abi"
 	mvm_common "github.com/amazechain/amc/internal/avm/common"
@@ -52,7 +51,6 @@ import (
 	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"github.com/amazechain/amc/params"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -64,14 +62,10 @@ const (
 
 // API compatible EthereumAPI provides an API to access related information.
 type API struct {
-	db         kv.RwDB
-	pubsub     common.IPubSub
-	p2pserver  common.INetwork
-	peers      map[peer.ID]common.Peer
-	bc         common.IBlockChain
-	engine     consensus.Engine
-	txspool    txs_pool.ITxsPool
-	downloader common.IDownloader
+	db      kv.RwDB
+	bc      common.IBlockChain
+	engine  consensus.Engine
+	txspool common.ITxsPool
 
 	accountManager *accounts.Manager
 	chainConfig    *params.ChainConfig
@@ -80,16 +74,12 @@ type API struct {
 }
 
 // NewAPI creates a new protocol API.
-func NewAPI(pubsub common.IPubSub, p2pserver common.INetwork, peers map[peer.ID]common.Peer, bc common.IBlockChain, db kv.RwDB, engine consensus.Engine, txspool txs_pool.ITxsPool, downloader common.IDownloader, accountManager *accounts.Manager, config *params.ChainConfig) *API {
+func NewAPI(bc common.IBlockChain, db kv.RwDB, engine consensus.Engine, txspool common.ITxsPool, accountManager *accounts.Manager, config *params.ChainConfig) *API {
 	return &API{
 		db:             db,
-		pubsub:         pubsub,
-		p2pserver:      p2pserver,
-		peers:          peers,
 		bc:             bc,
 		engine:         engine,
 		txspool:        txspool,
-		downloader:     downloader,
 		accountManager: accountManager,
 		chainConfig:    config,
 	}
@@ -132,10 +122,7 @@ func (api *API) Apis() []jsonrpc.API {
 	}
 }
 
-func (n *API) TxsPool() txs_pool.ITxsPool     { return n.txspool }
-func (n *API) Downloader() common.IDownloader { return n.downloader }
-func (n *API) P2pServer() common.INetwork     { return n.p2pserver }
-func (n *API) Peers() map[peer.ID]common.Peer { return n.peers }
+func (n *API) TxsPool() common.ITxsPool       { return n.txspool }
 func (n *API) Database() kv.RwDB              { return n.db }
 func (n *API) Engine() consensus.Engine       { return n.engine }
 func (n *API) BlockChain() common.IBlockChain { return n.bc }
@@ -1315,7 +1302,6 @@ func NewDebugAPI(api *API) *DebugAPI {
 
 // SetHead rewinds the head of the blockchain to a previous block.
 func (api *DebugAPI) SetHead(number hexutil.Uint64) {
-	api.api.Downloader().Close()
 	api.api.BlockChain().SetHead(uint64(number))
 }
 
@@ -1341,7 +1327,8 @@ func (s *NetAPI) Listening() bool {
 
 // PeerCount returns the number of connected peers
 func (s *NetAPI) PeerCount() hexutil.Uint {
-	return hexutil.Uint(s.api.P2pServer().PeerCount())
+	//return hexutil.Uint(s.api.P2pServer().PeerCount())
+	return 0
 }
 
 // Version returns the current ethereum protocol version.

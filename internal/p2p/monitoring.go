@@ -44,26 +44,6 @@ var (
 		Name: "p2p_status_message_missing",
 		Help: "The number of attempts the connection handler rejects a peer for a missing status message.",
 	})
-	savedAttestationBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "p2p_attestation_subnet_recovered_broadcasts",
-		Help: "The number of attestations that were attempted to be broadcast with no peers on " +
-			"the subnet. The beacon node increments this counter when the broadcast is blocked " +
-			"until a subnet peer can be found.",
-	})
-	attestationBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "p2p_attestation_subnet_attempted_broadcasts",
-		Help: "The number of attestations that were attempted to be broadcast.",
-	})
-	savedSyncCommitteeBroadcasts = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "p2p_sync_committee_subnet_recovered_broadcasts",
-		Help: "The number of sync committee messages that were attempted to be broadcast with no peers on " +
-			"the subnet. The beacon node increments this counter when the broadcast is blocked " +
-			"until a subnet peer can be found.",
-	})
-	syncCommitteeBroadcastAttempts = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "p2p_sync_committee_subnet_attempted_broadcasts",
-		Help: "The number of sync committee that were attempted to be broadcast.",
-	})
 
 	// Gossip Tracer Metrics
 	pubsubTopicsActive = promauto.NewGaugeVec(prometheus.GaugeOpts{

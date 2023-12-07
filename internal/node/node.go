@@ -30,10 +30,10 @@ import (
 	amcsync "github.com/amazechain/amc/internal/sync"
 	initialsync "github.com/amazechain/amc/internal/sync/initial-sync"
 	"github.com/amazechain/amc/internal/tracers"
-	"github.com/holiman/uint256"
+	"github.com/gofrs/flock"
 	"github.com/ledgerwatch/erigon-lib/common/cmp"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
+	"github.com/urfave/cli/v2"
 	"hash/crc32"
 	"net"
 	"path"
@@ -56,67 +56,54 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"sync"
-	"time"
-
 	"github.com/amazechain/amc/accounts"
 	"github.com/amazechain/amc/accounts/keystore"
-	"github.com/amazechain/amc/api/protocol/types_pb"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/transaction"
-	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
+	"sync"
 
 	"github.com/amazechain/amc/internal/consensus"
 	"github.com/amazechain/amc/internal/consensus/apoa"
 	"github.com/amazechain/amc/internal/consensus/apos"
-	"github.com/amazechain/amc/internal/download"
 	"github.com/amazechain/amc/internal/miner"
-	"github.com/amazechain/amc/internal/network"
-	"github.com/amazechain/amc/internal/pubsub"
 	"github.com/amazechain/amc/internal/txspool"
-	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/modules/rawdb"
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"github.com/amazechain/amc/params"
 	"github.com/amazechain/amc/utils"
-	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"go.uber.org/zap"
 )
 
 const datadirJWTKey = "jwtsecret" // Path within the datadir to the node's jwt secret
 
 type Node struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	config *conf.Config
+	cliCtx       *cli.Context
+	ctx          context.Context
+	cancel       context.CancelFunc
+	config       *conf.Config
+	genesisBlock block.IBlock
+	etherbase    types.Address
 
-	//engine       consensus.IEngine
+	lock          sync.RWMutex  // Protects the variadic fields (e.g. gas price and etherbase)
+	startStopLock sync.Mutex    // Start/Stop are protected by an additional lock
+	state         int           // Tracks state of node lifecycle
+	shutDown      chan struct{} // Channel to wait for termination notifications
+	dirLock       *flock.Flock  // prevents concurrent use of instance directory
+
+	// s
 	miner           *miner.Miner
-	pubsubServer    common.IPubSub
-	genesisBlock    block.IBlock
-	service         common.INetwork
-	peers           map[peer.ID]common.Peer
-	blocks          common.IBlockChain
+	blockChain      common.IBlockChain
 	engine          consensus.Engine
 	db              kv.RwDB
-	txspool         txs_pool.ITxsPool
-	txsFetcher      *txspool.TxsFetcher
-	nodeKey         crypto.PrivKey
+	txspool         common.ITxsPool
 	depositContract *deposit.Deposit
-	//nodeKey      *ecdsa.PrivateKey
-
-	//downloader
-	downloader common.IDownloader
-
-	shutDown chan struct{}
-
-	peerLock sync.RWMutex
-	//feed     *event.Event
+	p2p             p2p.P2P
+	sync            *amcsync.Service
+	is              *initialsync.Service
+	accman          *accounts.Manager
 
 	api     *api.API
 	rpcAPIs []jsonrpc.API
@@ -128,49 +115,32 @@ type Node struct {
 	wsAuth        *httpServer //
 	inprocHandler *jsonrpc.Server
 
-	//n.config.GenesisCfg.Engine.Etherbase
-	etherbase types.Address
-	lock      sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-
-	accman     *accounts.Manager
 	keyDir     string // key store directory
 	keyDirTemp bool   // If true, key directory will be removed by Stop
 
-	p2p  p2p.P2P
-	sync *amcsync.Service
-	is   *initialsync.Service
 }
 
-func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
+const (
+	initializingState = iota
+	runningState
+	closedState
+)
 
-	c, cancel := context.WithCancel(ctx)
+func NewNode(cliCtx *cli.Context, cfg *conf.Config) (*Node, error) {
+
+	ctx, cancel := context.WithCancel(cliCtx.Context)
 
 	var (
-		genesisBlock  block.IBlock
-		privateKey    crypto.PrivKey
-		pubsubServer  common.IPubSub
-		node          Node
-		downloader    common.IDownloader
-		peers         = map[peer.ID]common.Peer{}
-		engine        consensus.Engine
-		genesisHash   types.Hash
-		genesisConfig *conf.Genesis
-		chainConfig   *params.ChainConfig
-		chainKv       kv.RwDB
-		err           error
+		genesisBlock    block.IBlock
+		node            Node
+		engine          consensus.Engine
+		depositContract *deposit.Deposit
+		genesisHash     types.Hash
+		genesisConfig   *conf.Genesis
+		chainConfig     *params.ChainConfig
+		chainKv         kv.RwDB
+		err             error
 	)
-
-	if len(cfg.NodeCfg.NodePrivate) <= 0 {
-		privateKey, _, err = crypto.GenerateECDSAKeyPair(rand.Reader)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		privateKey, err = utils.StringToPrivate(cfg.NodeCfg.NodePrivate)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	//
 	chainKv, err = OpenDatabase(cfg, nil, kv.ChainDB.String())
@@ -221,20 +191,14 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		}
 	}
 
-	cfg.ChainCfg = chainConfig
-
-	s, err := network.NewService(ctx, &cfg.NetworkCfg, peers, node.ProtocolHandshake, node.ProtocolHandshakeInfo)
-	if err != nil {
-		panic("new service failed")
-	}
-
-	//todo deal chainid？
-	pubsubServer, err = pubsub.NewPubSub(ctx, s, 1)
-	if err != nil {
+	// Acquire the instance directory lock.
+	if err := node.openDataDir(cfg); err != nil {
 		return nil, err
 	}
 
-	p2p, err := p2p.NewService(c, genesisBlock.Hash(), cfg.P2PCfg, cfg.NodeCfg)
+	cfg.ChainCfg = chainConfig
+
+	p2p, err := p2p.NewService(ctx, genesisBlock.Hash(), cfg.P2PCfg, cfg.NodeCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -248,10 +212,30 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		return nil, fmt.Errorf("invalid engine name %s", cfg.ChainCfg.Consensus)
 	}
 
-	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, downloader, chainKv, p2p, cfg.ChainCfg)
-	pool, _ := txspool.NewTxsPool(ctx, bc)
+	bc, _ := internal.NewBlockChain(ctx, genesisBlock, engine, chainKv, p2p, cfg.ChainCfg)
 
-	is := initialsync.NewService(c, &initialsync.Config{
+	if cfg.ChainCfg.Apos != nil {
+		depositContracts := make(map[types.Address]deposit.DepositContract, 0)
+		if depositContractAddress := cfg.ChainCfg.Apos.DepositContract; depositContractAddress != "" {
+			var addr types.Address
+			if !addr.DecodeString(depositContractAddress) {
+				panic(fmt.Sprintf("cannot decode DepositContract address: %s", depositContractAddress))
+			}
+			depositContracts[addr] = new(amtdeposit.Contract)
+		}
+		if depositNFTContractAddress := cfg.ChainCfg.Apos.DepositNFTContract; depositNFTContractAddress != "" {
+			var addr types.Address
+			if !addr.DecodeString(depositNFTContractAddress) {
+				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", depositNFTContractAddress))
+			}
+			depositContracts[addr] = new(nftdeposit.Contract)
+		}
+		depositContract = deposit.NewDeposit(ctx, bc, chainKv, depositContracts)
+	}
+
+	pool, _ := txspool.NewTxsPool(ctx, bc, depositContract)
+
+	is := initialsync.NewService(ctx, &initialsync.Config{
 		Chain: bc,
 		P2P:   p2p,
 	})
@@ -278,15 +262,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		}
 	}
 
-	txsFetcher := txspool.NewTxsFetcher(ctx, pool.GetTx, pool.AddRemotes, pool.Pending, s, peers, bloom)
-
-	//bc.SetEngine(engine)
-
-	downloader = download.NewDownloader(ctx, bc, s, pubsubServer, peers)
-
-	_ = s.SetHandler(message.MsgDownloader, downloader.ConnHandler)
-	_ = s.SetHandler(message.MsgTransaction, txsFetcher.ConnHandler)
-
 	miner := miner.NewMiner(ctx, cfg, bc, engine, pool, nil)
 
 	keyDir, isEphem, err := getKeyStoreDir(&cfg.NodeCfg)
@@ -300,22 +275,18 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	log.Info("new node", "GenesisHash", genesisBlock.Hash(), "CurrentBlockNr", bc.CurrentBlock().Number64().Uint64())
 
 	node = Node{
-		ctx:          c,
-		cancel:       cancel,
-		config:       cfg,
-		miner:        miner,
-		genesisBlock: genesisBlock,
-		service:      s,
-		nodeKey:      privateKey,
-		blocks:       bc,
-		db:           chainKv,
-		shutDown:     make(chan struct{}),
-		pubsubServer: pubsubServer,
-		peers:        peers,
-		downloader:   downloader,
-		txspool:      pool,
-		txsFetcher:   txsFetcher,
-		engine:       engine,
+		cliCtx:          cliCtx,
+		ctx:             ctx,
+		cancel:          cancel,
+		config:          cfg,
+		miner:           miner,
+		genesisBlock:    genesisBlock,
+		blockChain:      bc,
+		db:              chainKv,
+		shutDown:        make(chan struct{}),
+		txspool:         pool,
+		engine:          engine,
+		depositContract: depositContract,
 
 		inprocHandler: jsonrpc.NewServer(),
 		http:          newHTTPServer(),
@@ -333,27 +304,6 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 		sync: syncServer,
 		is:   is,
 	}
-
-	if cfg.ChainCfg.Apos != nil {
-		depositContracts := make(map[types.Address]deposit.DepositContract, 0)
-		if depositContractAddress := cfg.ChainCfg.Apos.DepositContract; depositContractAddress != "" {
-			var addr types.Address
-			if !addr.DecodeString(depositContractAddress) {
-				panic(fmt.Sprintf("cannot decode DepositContract address: %s", depositContractAddress))
-			}
-			depositContracts[addr] = new(amtdeposit.Contract)
-		}
-		if depositNFTContractAddress := cfg.ChainCfg.Apos.DepositNFTContract; depositNFTContractAddress != "" {
-			var addr types.Address
-			if !addr.DecodeString(depositNFTContractAddress) {
-				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", depositNFTContractAddress))
-			}
-			depositContracts[addr] = new(nftdeposit.Contract)
-		}
-		node.depositContract = deposit.NewDeposit(ctx, bc, chainKv, depositContracts)
-	}
-
-	pool.SetDeposit(node.depositContract)
 
 	// Apply flags.
 	//SetNodeConfig(ctx, &cfg)
@@ -376,24 +326,29 @@ func NewNode(ctx context.Context, cfg *conf.Config) (*Node, error) {
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
-	node.api = api.NewAPI(pubsubServer, s, peers, bc, chainKv, engine, pool, downloader, node.AccountManager(), cfg.ChainCfg)
+	node.api = api.NewAPI(bc, chainKv, engine, pool, node.AccountManager(), cfg.ChainCfg)
 	node.api.SetGpo(api.NewOracle(bc, miner, cfg.ChainCfg, gpoParams))
 	return &node, nil
 }
 
 func (n *Node) Start() error {
-	//if err := n.service.Start(); err != nil {
-	//	log.Errorf("failed setup p2p service, err: %v", err)
-	//	return err
-	//}
-	//
-	//if err := n.pubsubServer.Start(); err != nil {
-	//	log.Errorf("failed setup amc pubsub service, err: %v", err)
-	//	return err
-	//}
+	n.startStopLock.Lock()
+	defer n.startStopLock.Unlock()
 
-	if err := n.blocks.Start(); err != nil {
-		log.Errorf("failed setup blocks service, err: %v", err)
+	n.lock.Lock()
+	switch n.state {
+	case runningState:
+		n.lock.Unlock()
+		return ErrNodeRunning
+	case closedState:
+		n.lock.Unlock()
+		return ErrNodeStopped
+	}
+	n.state = runningState
+	n.lock.Unlock()
+
+	if err := n.blockChain.Start(); err != nil {
+		log.Errorf("failed setup blockChain service, err: %v", err)
 		return err
 	}
 
@@ -427,15 +382,10 @@ func (n *Node) Start() error {
 	}
 
 	if pos, ok := n.engine.(*apos.APos); ok {
-		pos.SetBlockChain(n.blocks)
+		pos.SetBlockChain(n.blockChain)
 	}
 
-	if err := n.downloader.Start(); err != nil {
-		log.Errorf("failed setup downloader service, err: %v", err)
-		return err
-	}
-
-	n.rpcAPIs = append(n.rpcAPIs, n.engine.APIs(n.blocks)...)
+	n.rpcAPIs = append(n.rpcAPIs, n.engine.APIs(n.blockChain)...)
 	n.rpcAPIs = append(n.rpcAPIs, n.api.Apis()...)
 	n.rpcAPIs = append(n.rpcAPIs, tracers.APIs(n.api)...)
 	n.rpcAPIs = append(n.rpcAPIs, debug.APIs()...)
@@ -451,124 +401,15 @@ func (n *Node) Start() error {
 
 	n.SetupMetrics(n.config.MetricsCfg)
 
-	if err := n.txsFetcher.Start(); err != nil {
-		log.Error("failed start txsFetcher service", zap.Error(err))
-		return err
-	}
-
-	//go n.txsBroadcastLoop()
-	//go n.txsMessageFetcherLoop()
-
 	if n.depositContract != nil {
 		n.depositContract.Start()
 	}
 
-	n.is.Start()
-
-	//rwTx, _ := n.db.BeginRw(n.ctx)
-	//defer rwTx.Rollback()
-	//rawdb.PutDeposit(rwTx, types.HexToAddress("0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9").Bytes(), []byte("1111"))
-	//data, _ := rawdb.GetDeposit(rwTx, types.HexToAddress("0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9").Bytes())
-	//log.Info(string(data))
-
-	//_ = n.db.View(context.Background(), func(tx kv.Tx) error {
-	//	info := deposit.GetDepositInfo(tx, types.HexToAddress("0x7Ac869Ff8b6232f7cfC4370A2df4a81641Cba3d9"))
-	//	if info != nil {
-	//		log.Info("load deposit info", "pubkey", info.PublicKey.Marshal(), "amount", info.DepositAmount.String())
-	//	}
-	//	return nil
-	//
-	//})
+	go n.is.Start()
 
 	log.Debug("node setup success!")
 
 	return nil
-}
-
-func (n *Node) ProtocolHandshake(peer common.IPeer, genesisHash types.Hash, currentHeight *uint256.Int) (common.Peer, bool) {
-	if n.blocks.GenesisBlock().Hash().String() != genesisHash.String() {
-		return common.Peer{}, false
-	}
-
-	if _, ok := n.peers[peer.ID()]; !ok {
-		return common.Peer{
-			IPeer:         peer,
-			CurrentHeight: currentHeight,
-			AddTimer:      time.Now(),
-		}, true
-	}
-
-	return common.Peer{}, false
-}
-
-func (n *Node) ProtocolHandshakeInfo() (types.Hash, *uint256.Int, error) {
-	current := n.blocks.CurrentBlock()
-	log.Infof("local peer info: height %d, genesis hash %v", current.Number64().Uint64(), n.blocks.GenesisBlock().Hash())
-	return n.blocks.GenesisBlock().Hash(), current.Number64(), nil
-}
-
-func (n *Node) Network() common.INetwork {
-	if n.service != nil {
-		return n.service
-	}
-
-	return nil
-}
-
-// txBroadcastLoop announces new transactions to all.
-func (n *Node) txsBroadcastLoop() {
-	// local txs
-	txsCh := make(chan common.NewLocalTxsEvent)
-	txsSub := event.GlobalEvent.Subscribe(txsCh)
-
-	for {
-		select {
-		case event := <-txsCh:
-			for _, tx := range event.Txs {
-				//log.Infof("start Broadcast local txs")
-				n.pubsubServer.Publish(message.GossipTransactionMessage, tx.ToProtoMessage())
-			}
-		case err := <-txsSub.Err():
-			log.Error("NewLocalTxsEvent chan has a error:%v", err)
-			return
-		case <-n.shutDown:
-			return
-		}
-	}
-}
-
-// txBroadcastLoop announces new transactions to all.
-func (n *Node) txsMessageFetcherLoop() {
-
-	topic, err := n.pubsubServer.JoinTopic(message.GossipTransactionMessage)
-
-	if err != nil {
-		log.Error("cannot join in ")
-	}
-	sub, _ := topic.Subscribe()
-
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		default:
-			msg, _ := sub.Next(n.ctx)
-			var protoMsg types_pb.Transaction
-			if err := proto.Unmarshal(msg.Data, &protoMsg); err == nil {
-				tx, err := transaction.FromProtoMessage(&protoMsg)
-				if err == nil {
-					errs := n.txspool.AddRemotes([]*transaction.Transaction{tx})
-					if errs[0] != nil {
-						//log.Errorf("add Remotes err: %v", errs[0])
-					}
-				} else {
-					log.Errorf("cannot transfer proto msg to transaction.Transaction err: %v", err)
-				}
-			} else {
-				log.Errorf("cannot Unmarshal new_transaction msg err: %v", err)
-			}
-		}
-	}
 }
 
 // getAPIs return two sets of APIs, both the ones that do not require
@@ -593,6 +434,34 @@ func (n *Node) startInProc() error {
 
 func (n *Node) stopInProc() {
 	n.inprocHandler.Stop()
+}
+
+func (n *Node) openDataDir(cfg *conf.Config) error {
+	if cfg.NodeCfg.DataDir == "" {
+		return nil // ephemeral
+	}
+
+	if err := os.MkdirAll(cfg.NodeCfg.DataDir, 0700); err != nil {
+		return err
+	}
+	// Lock the instance directory to prevent concurrent use by another instance as well as
+	// accidental use of the instance directory as a database.
+	n.dirLock = flock.New(filepath.Join(cfg.NodeCfg.DataDir, "LOCK"))
+
+	if locked, err := n.dirLock.TryLock(); err != nil {
+		return err
+	} else if !locked {
+		return ErrDatadirUsed
+	}
+	return nil
+}
+
+func (n *Node) closeDataDir() {
+	// Release instance directory lock.
+	if n.dirLock != nil && n.dirLock.Locked() {
+		n.dirLock.Unlock()
+		n.dirLock = nil
+	}
 }
 
 // obtainJWTSecret loads the jwt-secret, either from the provided config,
@@ -717,59 +586,112 @@ func (n *Node) stopRPC() {
 	n.stopInProc()
 }
 
-func (n *Node) newBlockSubLoop() {
-	defer n.cancel()
+// InstanceDir retrieves the instance directory used by the protocol stack.
+func (n *Node) InstanceDir() string {
+	return n.config.NodeCfg.DataDir
+}
 
-	topic, err := n.pubsubServer.JoinTopic(message.GossipBlockMessage)
-	if err != nil {
-		return
-	}
+func (n *Node) Close() error {
+	n.startStopLock.Lock()
+	defer n.startStopLock.Unlock()
 
-	sub, err := topic.Subscribe()
-	if err != nil {
-		return
-	}
-
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		default:
-			msg, err := sub.Next(n.ctx)
-			if err != nil {
-				return
-			}
-
-			var blockMsg types_pb.Block
-			if err := proto.Unmarshal(msg.Data, &blockMsg); err == nil {
-				var block block.Block
-				if err := block.FromProtoMessage(&blockMsg); err == nil {
-					log.Infof("receive pubsub new block msg number:%v", block.Number64().String())
-					currentBlock := n.blocks.CurrentBlock()
-					if block.Number64().Cmp(uint256.NewInt(0).Add(currentBlock.Number64(), uint256.NewInt(1))) == 0 || block.Number64().Cmp(currentBlock.Number64()) == 0 {
-
-					} else {
-
-					}
-					//if block.Number64().Compare(n.blocks.CurrentBlock().Number64().Add(uint256.NewInt(1))) == 1 && block.Number64().Compare(d.highestNumber) == 1 {
-					//	d.highestNumber = block.Number64()
-					//}
-				}
-			}
-
+	n.lock.Lock()
+	state := n.state
+	n.lock.Unlock()
+	switch state {
+	case initializingState:
+		// The node was never started.
+		return n.doClose(nil)
+	case runningState:
+		// The node was started, release resources acquired by Start().
+		var errs []error
+		if err := n.stopServices(); err != nil {
+			errs = append(errs, err...)
 		}
+		return n.doClose(errs)
+	case closedState:
+		return ErrNodeStopped
+	default:
+		panic(fmt.Sprintf("node is in unknown state %d", state))
 	}
 }
 
-func (n *Node) Close() {
-	select {
-	case <-n.ctx.Done():
-		return
-	default:
-		n.cancel()
-		close(n.shutDown)
-		n.db.Close()
+// stopServices terminates running services, RPC and p2p networking.
+// It is the inverse of Start.
+func (n *Node) stopServices() []error {
+	var errs []error
+	n.stopRPC()
+
+	n.miner.Close()
+
+	if err := n.blockChain.Close(); err != nil {
+		errs = append(errs, err)
 	}
+
+	if err := n.engine.Close(); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := n.txspool.Stop(); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := n.depositContract.Stop(); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := n.is.Stop(); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := n.p2p.Stop(); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := n.sync.Stop(); err != nil {
+		errs = append(errs, err)
+	}
+
+	return errs
+}
+
+// doClose releases resources acquired by New(), collecting errors.
+func (n *Node) doClose(errs []error) error {
+	// Close databases. This needs the lock because it needs to
+	// synchronize with OpenDatabase*.
+	n.lock.Lock()
+	n.state = closedState
+	n.db.Close()
+	n.lock.Unlock()
+
+	if err := n.accman.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if n.keyDirTemp {
+		if err := os.RemoveAll(n.keyDir); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	// Release instance directory lock.
+	n.closeDataDir()
+
+	// Unblock n.Wait.
+	close(n.shutDown)
+
+	// Report any errors that might have occurred.
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		return fmt.Errorf("%v", errs)
+	}
+}
+
+func (n *Node) Wait() {
+	<-n.shutDown
 }
 
 // AccountManager retrieves the account manager used by the protocol stack.
@@ -779,7 +701,7 @@ func (n *Node) AccountManager() *accounts.Manager {
 
 // AccountManager retrieves the account manager used by the protocol stack.
 func (n *Node) BlockChain() common.IBlockChain {
-	return n.blocks
+	return n.blockChain
 }
 
 func (n *Node) Database() kv.RwDB {

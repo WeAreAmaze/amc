@@ -46,7 +46,7 @@ func (r *BlockByRootsReq) MarshalSSZTo(dst []byte) ([]byte, error) {
 // MarshalSSZ Marshals the block by roots request type into the serialized object.
 func (r *BlockByRootsReq) MarshalSSZ() ([]byte, error) {
 	if len(*r) > maxRequestBlocks {
-		return nil, errors.Errorf("beacon block by roots request exceeds max size: %d > %d", len(*r), maxRequestBlocks)
+		return nil, errors.Errorf("block by roots request exceeds max size: %d > %d", len(*r), maxRequestBlocks)
 	}
 	buf := make([]byte, 0, r.SizeSSZ())
 	for _, r := range *r {

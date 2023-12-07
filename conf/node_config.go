@@ -43,11 +43,12 @@ type NodeConfig struct {
 	// WSOrigins is the list of domain to accept websocket requests from. Please be
 	// aware that the server can only act upon the HTTP request the client sends and
 	// cannot verify the validity of the request header.
-	WSOrigins string `toml:",omitempty"`
-	IPCPath   string `json:"ipc_path" yaml:"ipc_path"`
-	DataDir   string `json:"data_dir" yaml:"data_dir"`
-	Chain     string `json:"chain" yaml:"chain"`
-	Miner     bool   `json:"miner" yaml:"miner"`
+	WSOrigins        string `toml:",omitempty"`
+	IPCPath          string `json:"ipc_path" yaml:"ipc_path"`
+	DataDir          string `json:"data_dir" yaml:"data_dir"`
+	MinFreeDiskSpace int    `json:"min_free_disk_space" yaml:"min_free_disk_space"`
+	Chain            string `json:"chain" yaml:"chain"`
+	Miner            bool   `json:"miner" yaml:"miner"`
 
 	AuthRPC bool `json:"auth_rpc" yaml:"auth_rpc"`
 	// AuthAddr is the listening address on which authenticated APIs are provided.

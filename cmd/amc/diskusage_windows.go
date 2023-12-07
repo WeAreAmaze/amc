@@ -14,23 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the AmazeChain library. If not, see <http://www.gnu.org/licenses/>.
 
-package txs_pool
+package main
 
 import (
-	"github.com/amazechain/amc/common/transaction"
-	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/contracts/deposit"
+	"fmt"
+
+	"golang.org/x/sys/windows"
 )
 
-type ITxsPool interface {
-	Has(hash types.Hash) bool
-	Pending(enforceTips bool) map[types.Address][]*transaction.Transaction
-	GetTransaction() ([]*transaction.Transaction, error)
-	GetTx(hash types.Hash) *transaction.Transaction
-	AddRemotes(txs []*transaction.Transaction) []error
-	AddLocal(tx *transaction.Transaction) error
-	Stats() (int, int, int, int)
-	Nonce(addr types.Address) uint64
-	Content() (map[types.Address][]*transaction.Transaction, map[types.Address][]*transaction.Transaction)
-	SetDeposit(deposit *deposit.Deposit)
+func getFreeDiskSpace(path string) (uint64, error) {
+
+	cwd, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, fmt.Errorf("failed to call UTF16PtrFromString: %v", err)
+	}
+
+	var freeBytesAvailableToCaller, totalNumberOfBytes, totalNumberOfFreeBytes uint64
+	if err := windows.GetDiskFreeSpaceEx(cwd, &freeBytesAvailableToCaller, &totalNumberOfBytes, &totalNumberOfFreeBytes); err != nil {
+		return 0, fmt.Errorf("failed to call GetDiskFreeSpaceEx: %v", err)
+	}
+
+	return freeBytesAvailableToCaller, nil
 }

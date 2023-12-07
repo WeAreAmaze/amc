@@ -29,6 +29,18 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Service is a struct that can be registered into a ServiceRegistry for
+// easy dependency management.
+type Service interface {
+	// Start spawns any goroutines required by the service.
+	//Start()
+	// Stop terminates all goroutines belonging to the service,
+	// blocking until they are all terminated.
+	Stop() error
+	// Status returns error if the service is not considered healthy.
+	//Status() error
+}
+
 type IDownloader interface {
 	SyncHeader() error
 	SyncBody() error
@@ -122,4 +134,17 @@ type ChainStateReader interface {
 	StorageAt(ctx context.Context, account types.Address, key types.Hash, blockNumber uint256.Int) ([]byte, error)
 	CodeAt(ctx context.Context, account types.Address, blockNumber uint256.Int) ([]byte, error)
 	NonceAt(ctx context.Context, account types.Address, blockNumber uint256.Int) (uint64, error)
+}
+
+type ITxsPool interface {
+	Service
+	Has(hash types.Hash) bool
+	Pending(enforceTips bool) map[types.Address][]*transaction.Transaction
+	GetTransaction() ([]*transaction.Transaction, error)
+	GetTx(hash types.Hash) *transaction.Transaction
+	AddRemotes(txs []*transaction.Transaction) []error
+	AddLocal(tx *transaction.Transaction) error
+	Stats() (int, int, int, int)
+	Nonce(addr types.Address) uint64
+	Content() (map[types.Address][]*transaction.Transaction, map[types.Address][]*transaction.Transaction)
 }

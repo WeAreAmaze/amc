@@ -37,7 +37,6 @@ import (
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/prque"
 	"github.com/amazechain/amc/common/transaction"
-	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
 	event "github.com/amazechain/amc/modules/event/v2"
@@ -159,7 +158,7 @@ type TxsPool struct {
 	deposit *deposit.Deposit
 }
 
-func NewTxsPool(ctx context.Context, bc common.IBlockChain) (txs_pool.ITxsPool, error) {
+func NewTxsPool(ctx context.Context, bc common.IBlockChain, depositContract *deposit.Deposit) (common.ITxsPool, error) {
 
 	c, cancel := context.WithCancel(ctx)
 	// for test
@@ -170,7 +169,8 @@ func NewTxsPool(ctx context.Context, bc common.IBlockChain) (txs_pool.ITxsPool, 
 		ctx:         c,
 		cancel:      cancel,
 
-		bc: bc,
+		bc:      bc,
+		deposit: depositContract,
 		// todo
 		//currentMaxGas: bc.CurrentBlock().GasLimit(),
 		//
@@ -1186,10 +1186,11 @@ func (pool *TxsPool) blockChangeLoop() {
 }
 
 // Stop terminates the transaction pool.
-func (pool *TxsPool) Stop() {
+func (pool *TxsPool) Stop() error {
 	pool.cancel()
 	pool.wg.Wait()
 	log.Info("Transaction pool stopped")
+	return nil
 }
 
 // txDifference
@@ -1334,8 +1335,4 @@ func (pool *TxsPool) ResetState(blockHash types.Hash) error {
 	//stateReader := state.NewStateHistoryReader(tx, tx, *blockNr+1)
 	//pool.currentState = state.New(stateReader)
 	return nil
-}
-
-func (pool *TxsPool) SetDeposit(deposit *deposit.Deposit) {
-	pool.deposit = deposit
 }

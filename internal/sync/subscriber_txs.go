@@ -36,7 +36,7 @@ func (s *Service) validateTransactionsPubSub(ctx context.Context, pid peer.ID, m
 		return pubsub.ValidationAccept, nil
 	}
 
-	ctx, span := trace.StartSpan(ctx, "sync.validateBlockPubSub")
+	ctx, span := trace.StartSpan(ctx, "sync.validateTransactionsPubSub")
 	defer span.End()
 
 	m, err := s.decodePubsubMessage(msg)

@@ -119,7 +119,8 @@ type TxsPool struct {
 	config      TxsPoolConfig
 	chainconfig *params.ChainConfig
 
-	bc common.IBlockChain
+	bc     common.IBlockChain
+	txFeed event.Feed
 
 	//currentState  *state.IntraBlockState
 	currentState  ReadState
@@ -751,6 +752,12 @@ func (pool *TxsPool) reset(oldBlock, newBlock block.IBlock) {
 	pool.eip1559 = pool.chainconfig.IsLondon(next.Uint64())
 }
 
+// SubscribeTransactions registers a subscription for new transaction events,
+// supporting feeding only newly seen or also resurrected transactions.
+func (pool *TxsPool) SubscribeTransactions(ch chan<- common.NewTxsEvent) event.Subscription {
+	return pool.txFeed.Subscribe(ch)
+}
+
 // promoteExecutables moves transactions that have become processable from the
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
@@ -1077,7 +1084,7 @@ func (pool *TxsPool) runReorg(done chan struct{}, reset *txspoolResetRequest, di
 		for _, set := range events {
 			txs = append(txs, set.Flatten()...)
 		}
-		event.GlobalEvent.Send(common.NewTxsEvent{Txs: txs})
+		pool.txFeed.Send(common.NewTxsEvent{Txs: txs})
 	}
 }
 

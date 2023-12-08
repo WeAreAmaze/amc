@@ -99,6 +99,8 @@ func (s *Service) topicScoreParams(topic string) (*pubsub.TopicScoreParams, erro
 		return defaultBlockTopicParams(), nil
 	case strings.Contains(topic, GossipExitMessage):
 		return defaultVoluntaryExitTopicParams(), nil
+	case strings.Contains(topic, GossipTransactionMessage):
+		return defaultBlockTopicParams(), nil
 	default:
 		return nil, errors.Errorf("unrecognized topic provided for parameter registration: %s", topic)
 	}

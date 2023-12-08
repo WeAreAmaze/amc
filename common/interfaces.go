@@ -22,6 +22,7 @@ import (
 	"github.com/amazechain/amc/common/message"
 	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
+	event "github.com/amazechain/amc/modules/event/v2"
 	"github.com/holiman/uint256"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -147,4 +148,5 @@ type ITxsPool interface {
 	Stats() (int, int, int, int)
 	Nonce(addr types.Address) uint64
 	Content() (map[types.Address][]*transaction.Transaction, map[types.Address][]*transaction.Transaction)
+	SubscribeTransactions(ch chan<- NewTxsEvent) event.Subscription
 }

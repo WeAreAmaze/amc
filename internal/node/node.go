@@ -245,6 +245,7 @@ func NewNode(cliCtx *cli.Context, cfg *conf.Config) (*Node, error) {
 		amcsync.WithP2P(p2p),
 		amcsync.WithChainService(bc),
 		amcsync.WithInitialSync(is),
+		amcsync.WithTxpool(pool),
 	)
 
 	//todo

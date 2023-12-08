@@ -27,3 +27,10 @@ func WithInitialSync(initialSync Checker) Option {
 		return nil
 	}
 }
+
+func WithTxpool(pool common.ITxsPool) Option {
+	return func(s *Service) error {
+		s.txpool = pool
+		return nil
+	}
+}

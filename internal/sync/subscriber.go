@@ -49,10 +49,12 @@ func (s *Service) registerSubscribers(digest [4]byte) {
 		digest,
 	)
 	//todo txs?
-	//s.subscribe(
-	//	p2p.TransactionTopicFormat,
-	//	digest,
-	//)
+	s.subscribe(
+		p2p.TransactionTopicFormat,
+		s.validateTransactionsPubSub,
+		s.transactionSubscriber,
+		digest,
+	)
 }
 
 // subscribe to a given topic with a given validator and subscription handler.
@@ -118,7 +120,7 @@ func (s *Service) subscribeWithBase(topic string, validator wrappedVal, handle s
 		span.AddAttributes(trace.StringAttribute("topic", topic))
 
 		if msg.ValidatorData == nil {
-			log.Error("Received nil message on pubsub")
+			log.Error("Received nil message on pubsub", "ID", msg.ID, "received from", msg.ReceivedFrom, "topic", *msg.Topic)
 			messageFailedProcessingCounter.WithLabelValues(topic).Inc()
 			return
 		}

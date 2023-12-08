@@ -10,6 +10,7 @@ import (
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/p2p"
+	v2 "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/utils"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"sync"
@@ -75,6 +76,11 @@ type Service struct {
 	badBlockLock   sync.RWMutex
 	badBlockCache  *lru.Cache[types.Hash, bool]
 
+	txpool common.ITxsPool
+	txsSub v2.Subscription
+	txsCh chan common.NewTxsEvent
+
+
 	validateBlockLock               sync.RWMutex
 	seenExitLock                    sync.RWMutex
 	seenSyncMessageLock             sync.RWMutex
@@ -129,6 +135,10 @@ func (s *Service) Start() {
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
 
+	s.txsCh = make( chan common.NewTxsEvent)
+	s.txsSub = s.txpool.SubscribeTransactions(s.txsCh)
+	go s.broadcastTransactions()
+
 	// Update sync metrics.
 	utils.RunEvery(s.ctx, syncMetricsInterval, s.updateMetrics)
 }
@@ -148,6 +158,9 @@ func (s *Service) Stop() error {
 	for _, t := range s.cfg.p2p.PubSub().GetTopics() {
 		s.unSubscribeFromTopic(t)
 	}
+	// unsubscribe
+	s.txsSub.Unsubscribe()
+
 	defer s.cancel()
 	return nil
 }

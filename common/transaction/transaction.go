@@ -83,6 +83,34 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	proto, _ := tx.Marshal()
 	w.Write(proto)
 }
+func TransactionsToProtoMessage(txs Transactions) proto.Message {
+	var out types_pb.Transactions
+	for _, tx :=  range txs {
+		out.Transactions = append(out.Transactions, tx.ToProtoMessage().(*types_pb.Transaction))
+	}
+	return &out
+}
+
+func TransactionsFromProtoMessage(msg proto.Message) (Transactions, error) {
+	var (
+		pbTxs *types_pb.Transactions
+		ok bool
+		txs Transactions
+	)
+
+	if pbTxs, ok =  msg.(*types_pb.Transactions); !ok {
+		return txs, fmt.Errorf("type error for Transactions")
+	}
+
+	for _, pbT :=  range pbTxs.Transactions {
+		tx, err := FromProtoMessage(pbT)
+		if nil != err {
+			return txs, err
+		}
+		txs = append(txs, tx)
+	}
+	return txs, nil
+}
 
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction

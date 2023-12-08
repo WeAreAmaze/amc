@@ -123,6 +123,10 @@ message Transaction {
   H256 v = 16;
 }
 
+message Transactions {
+  repeated Transaction transactions = 1 [(ext.ssz_max) = "536870912"];
+}
+
 message Receipts {
   repeated Receipt receipts = 1;
 }

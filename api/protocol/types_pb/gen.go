@@ -18,4 +18,4 @@ package types_pb
 
 ////go:generate protoc --plugin=/Users/mac/go/bin/protoc-gen-go-cast -I=../ -I=. -I=../include --go-cast_out=plugins=protoc-gen-go-cast,paths=source_relative:. types.proto
 //go:generate protoc  -I=../ -I=. -I=../include --go-cast_out=paths=source_relative:. types.proto
-//go:generate sszgen -path=. -objs=H128,H160,H256,H384,H768,H512,H1024,H2048,Header,Body,Block,Transaction -output=generated.ssz.go
+//go:generate sszgen -path=. -objs=H128,H160,H256,H384,H768,H512,H1024,H2048,Header,Body,Block,Transaction,Transactions -output=generated.ssz.go

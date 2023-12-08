@@ -11,7 +11,7 @@ const (
 	// GossipExitMessage is the name for the voluntary exit message type.
 	GossipExitMessage = "voluntary_exit"
 	// GossipTransactionMessage is the name for the transaction message type.
-	GossipTransactionMessage = "transaction"
+	GossipTransactionMessage = "transactions"
 
 	// Topic Formats
 

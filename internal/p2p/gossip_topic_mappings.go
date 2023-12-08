@@ -11,7 +11,7 @@ import (
 // lookup.
 var gossipTopicMappings = map[string]proto.Message{
 	BlockTopicFormat:       &types_pb.Block{},
-	TransactionTopicFormat: &types_pb.Transaction{},
+	TransactionTopicFormat: &types_pb.Transactions{},
 }
 
 // GossipTopicMappings is a function to return the assigned data type

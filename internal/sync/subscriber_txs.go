@@ -58,7 +58,19 @@ func (s *Service) validateTransactionsPubSub(ctx context.Context, pid peer.ID, m
 		return pubsub.ValidationReject,err
 	}
 
-	msg.ValidatorData = transaction.TransactionsToProtoMessage(transactions)
+	// filter dup transaction
+	var newTxs transaction.Transactions
+	for _, tx := range transactions {
+		if !s.txpool.Has(tx.Hash()) {
+			newTxs = append(newTxs, tx)
+		}
+	}
+
+	if len(newTxs) == 0 {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	msg.ValidatorData = transaction.TransactionsToProtoMessage(newTxs)
 
 	return pubsub.ValidationAccept, nil
 }

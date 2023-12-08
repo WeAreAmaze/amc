@@ -34,7 +34,7 @@ import (
 	"sync"
 	"time"
 
-	mdbx1 "github.com/torquem-ch/mdbx-go/mdbx"
+	mdbx1 "github.com/erigontech/mdbx-go/mdbx"
 	/*
 		"github.com/syndtr/goleveldb/leveldb"
 		"github.com/syndtr/goleveldb/leveldb/errors"

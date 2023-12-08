@@ -20,7 +20,6 @@ import (
 	"context"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal/consensus"
@@ -34,7 +33,7 @@ type Miner struct {
 	coinbase types.Address
 	engine   consensus.Engine
 	worker   *worker
-	txsPool  txs_pool.ITxsPool
+	txsPool  common.ITxsPool
 
 	startCh chan types.Address
 	stopCh  chan struct{}
@@ -46,7 +45,7 @@ type Miner struct {
 	group *errgroup.Group
 }
 
-func NewMiner(ctx context.Context, cfg *conf.Config, bc common.IBlockChain, engine consensus.Engine, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool) *Miner {
+func NewMiner(ctx context.Context, cfg *conf.Config, bc common.IBlockChain, engine consensus.Engine, txsPool common.ITxsPool, isLocalBlock func(header *block.Header) bool) *Miner {
 	group, errCtx := errgroup.WithContext(ctx)
 	miner := &Miner{
 		engine:  engine,
@@ -55,7 +54,7 @@ func NewMiner(ctx context.Context, cfg *conf.Config, bc common.IBlockChain, engi
 		stopCh:  make(chan struct{}),
 		group:   group,
 		ctx:     errCtx,
-		worker:  newWorker(errCtx, group, cfg.GenesisBlockCfg.Config.Engine, cfg.GenesisBlockCfg.Config, engine, bc, txsPool, isLocalBlock, false, cfg.Miner),
+		worker:  newWorker(errCtx, group, cfg.ChainCfg, engine, bc, txsPool, isLocalBlock, false, cfg.Miner),
 	}
 
 	return miner
@@ -130,6 +129,11 @@ func (m *Miner) runLoop() error {
 			return m.ctx.Err()
 		}
 	}
+}
+
+func (miner *Miner) Close() {
+	//close(miner.exitCh)
+	//miner.wg.Wait()
 }
 
 func (m *Miner) Mining() bool {

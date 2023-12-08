@@ -1,5 +1,5 @@
-// Package p2p defines the network protocol implementation for Ethereum consensus
-// used by beacon nodes, including peer discovery using discv5, gossip-sub
+// Package p2p defines the network protocol implementation for amc consensus
+// used by amc, including peer discovery using discv5, gossip-sub
 // using libp2p, and handing peer lifecycles + handshakes.
 package p2p
 
@@ -84,11 +84,12 @@ type Service struct {
 	genesisValidatorsRoot []byte
 	activeValidatorCount  uint64
 	ping                  *sync_pb.Ping
+	wg                    sync.WaitGroup
 }
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
-func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig) (*Service, error) {
+func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig, nodeCfg conf.NodeConfig) (*Service, error) {
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
@@ -97,13 +98,18 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 		ctx:          ctx,
 		cancel:       cancel,
 		cfg:          cfg,
-		ping:         &sync_pb.Ping{SeqNumber: 0},
 		isPreGenesis: true,
 		joinedTopics: make(map[string]*pubsub.Topic, len(gossipTopicMappings)),
 		genesisHash:  genesisHash,
 	}
 
-	dv5Nodes := parseBootStrapAddrs(s.cfg.BootstrapNodeAddr)
+	s.ping, err = getSeqNumber(s.cfg)
+	if err != nil {
+		log.Error("Failed to generate p2p seq number", "err", err)
+		return nil, err
+	}
+
+	dv5Nodes := parseBootStrapAddrs(cfg.BootstrapNodeAddr, nodeCfg)
 	//
 	cfg.Discv5BootStrapAddr = dv5Nodes
 
@@ -277,6 +283,10 @@ func (s *Service) Start() {
 			if validationError := s.peers.Scorers().ValidationError(p); validationError != nil {
 				params = append(params, "validationError", validationError)
 			}
+			if ping, err := s.peers.GetPing(p); err == nil && ping != nil {
+				params = append(params, "ping", ping.String())
+			}
+
 			params = append(params, "processedBlocks", s.peers.Scorers().BlockProviderScorer().ProcessedBlocks(p))
 
 			// hexutil.Encode([]byte(p))
@@ -319,15 +329,36 @@ func (s *Service) Start() {
 	}
 	//todo
 	//go s.forkWatcher()
+	go s.loop()
+	s.wg.Add(1)
+}
+
+func (s *Service) loop() {
+	defer log.Debug("Context closed, exiting goroutine")
+	for {
+		select {
+		case <-s.ctx.Done():
+			log.Info("start write seq number to file")
+			err := saveSeqNumber(s.cfg, s.GetPing())
+			if err != nil {
+				//log.Error("")
+			}
+			s.wg.Done()
+			return
+
+		}
+	}
 }
 
 // Stop the p2p service and terminate all peer connections.
 func (s *Service) Stop() error {
-	defer s.cancel()
+	s.cancel()
 	s.started = false
 	if s.dv5Listener != nil {
 		s.dv5Listener.Close()
 	}
+	s.wg.Wait()
+	log.Info("P2P service stopped")
 	return nil
 }
 
@@ -422,7 +453,7 @@ func (s *Service) pingPeers() {
 	for _, pid := range s.peers.Connected() {
 		go func(id peer.ID) {
 			if err := s.pingMethod(s.ctx, id); err != nil {
-				log.Debug("Failed to ping peer", "peer", id)
+				log.Debug("Failed to ping peer", "peer", id, "err", err)
 			}
 		}(pid)
 	}

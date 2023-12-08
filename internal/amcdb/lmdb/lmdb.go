@@ -28,7 +28,7 @@ import (
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/utils"
 	"github.com/c2h5oh/datasize"
-	"github.com/torquem-ch/mdbx-go/mdbx"
+	"github.com/erigontech/mdbx-go/mdbx"
 )
 
 var (
@@ -132,7 +132,7 @@ func (m *Lmdb) Open(dbName string) (rw db.IDatabaseWriterReader, err error) {
 }
 
 /*
-	Snapshot:
+Snapshot:
 */
 func (m *Lmdb) Snapshot() (db.ISnapshot, error) {
 	return newSnapshot(m.ctx, nil, m.Env)

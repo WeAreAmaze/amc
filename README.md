@@ -67,6 +67,8 @@ directory.
 | 20013 |   TCP    |    Json rpc/Websocket    |       Public       |
 | 20014 |   TCP    | Json rpc/HTTP/Websocket  | JWT Authentication |
 | 4000  |   TCP    |   BlockChain Explorer    |       Public       |
+| 6060  |   TCP    |         Metrics          |      Private       | 
+| 6060  |   TCP    |          Pprof           |      Private       | 
 
 ## License
 The AmazeChain library is licensed under the

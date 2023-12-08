@@ -1349,7 +1349,3 @@ func StorePoaSnapshot(db kv.Putter, hash types.Hash, data []byte) error {
 
 	return db.Put(modules.PoaSnapshot, hash.Bytes(), data)
 }
-
-func StoreSigners(db kv.Putter, data []byte) error {
-	return db.Put(modules.SignersDB, []byte(modules.SignersDB), data)
-}

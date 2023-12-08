@@ -23,6 +23,7 @@ import (
 	"github.com/amazechain/amc/core"
 	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/internal/consensus/misc"
+	"github.com/amazechain/amc/internal/metrics/prometheus"
 	"github.com/holiman/uint256"
 	"sort"
 	"sync"
@@ -39,7 +40,6 @@ import (
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/transaction"
-	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/conf"
 
@@ -50,6 +50,10 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"golang.org/x/sync/errgroup"
+)
+
+var (
+	blockSignGauge = prometheus.GetOrCreateCounter("block_sign_counter", true)
 )
 
 type task struct {
@@ -146,10 +150,9 @@ type worker struct {
 	minerConf conf.MinerConfig
 	engine    consensus.Engine
 	chain     common.IBlockChain
-	txsPool   txs_pool.ITxsPool
+	txsPool   common.ITxsPool
 
 	coinbase    types.Address
-	conf        *params.ConsensusConfig
 	chainConfig *params.ChainConfig
 
 	isLocalBlock func(header *block.Header) bool
@@ -181,13 +184,12 @@ type worker struct {
 	snapshotReceipts block.Receipts
 }
 
-func newWorker(ctx context.Context, group *errgroup.Group, conf *params.ConsensusConfig, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool txs_pool.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
+func newWorker(ctx context.Context, group *errgroup.Group, chainConfig *params.ChainConfig, engine consensus.Engine, bc common.IBlockChain, txsPool common.ITxsPool, isLocalBlock func(header *block.Header) bool, init bool, minerConf conf.MinerConfig) *worker {
 	c, cancel := context.WithCancel(ctx)
 	worker := &worker{
 		engine:           engine,
 		chain:            bc,
 		txsPool:          txsPool,
-		conf:             conf,
 		chainConfig:      chainConfig,
 		startCh:          make(chan struct{}, 1),
 		group:            group,
@@ -337,6 +339,7 @@ func (w *worker) resultLoop() error {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
+			blockSignGauge.Set(uint64(len(blk.Body().Verifier())))
 
 			if len(logs) > 0 {
 				event.GlobalEvent.Send(common.NewLogsEvent{Logs: logs})
@@ -574,10 +577,10 @@ func (w *worker) workLoop(recommit time.Duration) error {
 		case <-timer.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && (w.conf == nil || w.conf.Period > 0) {
-				continue
-				commit(false, commitInterruptResubmit)
-			}
+			//if w.isRunning() && (w.chainConfig.Apos == nil && w.chainConfig.Clique == nil) {
+			//	continue
+			//	commit(false, commitInterruptResubmit)
+			//}
 		case adjust := <-w.resubmitAdjustCh:
 			// Adjust resubmit interval by feedback.
 			if adjust.inc {
@@ -679,7 +682,7 @@ func (w *worker) prepareWork(param *generateParams) (*environment, error) {
 		ParentHash: parent.Hash(),
 		Coinbase:   param.coinbase,
 		Number:     uint256.NewInt(0).Add(parent.Number64(), uint256.NewInt(1)),
-		GasLimit:   internal.CalcGasLimit(parent.GasLimit, w.conf.GasCeil),
+		GasLimit:   internal.CalcGasLimit(parent.GasLimit, w.minerConf.GasCeil),
 		Time:       uint64(timestamp),
 		Difficulty: uint256.NewInt(0),
 		// just for now

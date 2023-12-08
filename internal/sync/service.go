@@ -34,6 +34,8 @@ const respTimeout = 20 * time.Second // RespTimeout is the maximum time for comp
 // todo
 const maxRequestBlocks = 1024
 
+const maintainPeerStatusesInterval = 2 * time.Minute
+
 const resyncInterval = 1 * time.Minute
 
 const enableFullSSZDataLogging = false

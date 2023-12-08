@@ -17,8 +17,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
 	"net/http"
 	_ "net/http/pprof"
@@ -26,8 +26,8 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
+	"time"
 
 	"github.com/amazechain/amc/accounts"
 
@@ -60,15 +60,6 @@ func appRun(ctx *cli.Context) error {
 	}
 
 	log.Init(DefaultConfig.NodeCfg, DefaultConfig.LoggerCfg)
-	//log.SetLogger(log.WithContext(c, log.With(zap.NewLogger(zapLog), "caller", log.DefaultCaller)))
-
-	c, cancel := context.WithCancel(context.Background())
-
-	// initializing the node and providing the current git commit there
-	//log.WithFields(logrus.Fields{"git_branch": version.GitBranch, "git_tag": version.GitTag, "git_commit": version.GitCommit}).Info("Build info")
-
-	//todo
-	//log.Infof("blockchain %v", DefaultConfig)
 
 	if DefaultConfig.PprofCfg.Pprof {
 		if DefaultConfig.PprofCfg.MaxCpu > 0 {
@@ -89,27 +80,24 @@ func appRun(ctx *cli.Context) error {
 		}()
 	}
 
-	n, err := node.NewNode(c, &DefaultConfig)
+	stack, err := node.NewNode(ctx, &DefaultConfig)
 	if err != nil {
 		log.Error("Failed start Node", "err", err)
 		return err
 	}
 
-	// Unlock any account specifically requested
-	unlockAccounts(ctx, n, &DefaultConfig)
+	StartNode(ctx, stack, false)
 
-	if err := n.Start(); err != nil {
-		cancel()
-		return err
-	}
+	// Unlock any account specifically requested
+	unlockAccounts(ctx, stack, &DefaultConfig)
 
 	// Register wallet event handlers to open and auto-derive wallets
 	events := make(chan accounts.WalletEvent, 16)
-	n.AccountManager().Subscribe(events)
+	stack.AccountManager().Subscribe(events)
 
 	go func() {
 		// Open any wallets already attached
-		for _, wallet := range n.AccountManager().Wallets() {
+		for _, wallet := range stack.AccountManager().Wallets() {
 			if err := wallet.Open(""); err != nil {
 				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
 			}
@@ -140,32 +128,9 @@ func appRun(ctx *cli.Context) error {
 		}
 	}()
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	appWait(cancel, &wg)
-	n.Close()
-	wg.Wait()
+	stack.Wait()
 
 	return nil
-}
-
-func appWait(cancelFunc context.CancelFunc, group *sync.WaitGroup) {
-	sigs := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		sig := <-sigs
-		log.Info(sig.String())
-		done <- true
-	}()
-
-	log.Info("waiting signal ...")
-	<-done
-	log.Info("app quit ...")
-	cancelFunc()
-	group.Done()
 }
 
 // unlockAccounts unlocks any account specifically requested.
@@ -210,4 +175,68 @@ func MakePasswordList(ctx *cli.Context) []string {
 		lines[i] = strings.TrimRight(lines[i], "\r")
 	}
 	return lines
+}
+
+func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
+	if err := stack.Start(); err != nil {
+		log.Critf("Error starting protocol stack: %v", err)
+	}
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+
+		if ctx.IsSet(MinFreeDiskSpaceFlag.Name) {
+			minFreeDiskSpace := ctx.Int(MinFreeDiskSpaceFlag.Name)
+			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*1024*1024*1024)
+		}
+
+		shutdown := func() {
+			log.Info("Got interrupt, shutting down...")
+			go stack.Close()
+			for i := 10; i > 0; i-- {
+				<-sigc
+				if i > 1 {
+					log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
+				}
+			}
+			panic("Panic closing the amc node")
+		}
+
+		if isConsole {
+			// In JS console mode, SIGINT is ignored because it's handled by the console.
+			// However, SIGTERM still shuts down the node.
+			for {
+				sig := <-sigc
+				if sig == syscall.SIGTERM {
+					shutdown()
+					return
+				}
+			}
+		} else {
+			<-sigc
+			shutdown()
+		}
+	}()
+}
+
+func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritical uint64) {
+	if path == "" {
+		return
+	}
+	for {
+		freeSpace, err := getFreeDiskSpace(path)
+		if err != nil {
+			log.Warn("Failed to get free disk space", "path", path, "err", err)
+			break
+		}
+		if freeSpace < freeDiskSpaceCritical {
+			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", types.StorageSize(freeSpace), "path", path)
+			sigc <- syscall.SIGTERM
+			break
+		} else if freeSpace < 2*freeDiskSpaceCritical {
+			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", types.StorageSize(freeSpace), "critical_level", types.StorageSize(freeDiskSpaceCritical), "path", path)
+		}
+		time.Sleep(30 * time.Second)
+	}
 }

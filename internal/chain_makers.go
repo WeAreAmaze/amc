@@ -463,7 +463,7 @@ func (cr *FakeChainReader) RewardsOfEpoch(number *uint256.Int, lastEpoch *uint25
 // GenerateChainWithGenesis is a wrapper of GenerateChain which will initialize
 // genesis block to database first according to the provided genesis specification
 // then generate chain on top.
-func GenerateChainWithGenesis(genesis *GenesisBlock, engine consensus.Engine, n int, gen func(int, *BlockGen)) (kv.RwDB, []*block.Block, []block.Receipts) {
+func GenerateChainWithGenesis(genesis *GenesisBlock, chainConfig *params.ChainConfig, engine consensus.Engine, n int, gen func(int, *BlockGen)) (kv.RwDB, []*block.Block, []block.Receipts) {
 	var block *block.Block
 	db := rawdb.NewMemoryDatabase(paths.RandomTmpPath())
 
@@ -476,7 +476,7 @@ func GenerateChainWithGenesis(genesis *GenesisBlock, engine consensus.Engine, n 
 		return nil
 	})
 
-	pack, err := GenerateChain(genesis.GenesisBlockConfig.Config, block, engine, db, n, gen)
+	pack, err := GenerateChain(chainConfig, block, engine, db, n, gen)
 	if nil != err {
 		panic(err)
 	}
@@ -484,8 +484,8 @@ func GenerateChainWithGenesis(genesis *GenesisBlock, engine consensus.Engine, n 
 }
 
 // makeBlockChain creates a deterministic chain of blocks from genesis
-func makeBlockChainWithGenesis(genesis *GenesisBlock, n int, engine consensus.Engine, seed int) (kv.RwDB, []*block.Block) {
-	db, blocks, _ := GenerateChainWithGenesis(genesis, engine, n, func(i int, b *BlockGen) {
+func makeBlockChainWithGenesis(genesis *GenesisBlock, chainConfig *params.ChainConfig, n int, engine consensus.Engine, seed int) (kv.RwDB, []*block.Block) {
+	db, blocks, _ := GenerateChainWithGenesis(genesis, chainConfig, engine, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(types.Address{0: byte(seed), 19: byte(i)})
 	})
 	return db, blocks

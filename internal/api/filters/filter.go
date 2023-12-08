@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/amazechain/amc/common"
 	"github.com/amazechain/amc/common/block"
-	"github.com/amazechain/amc/common/txs_pool"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/consensus"
@@ -14,15 +13,11 @@ import (
 	"github.com/amazechain/amc/modules/rpc/jsonrpc"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"math/big"
 )
 
 type Api interface {
-	TxsPool() txs_pool.ITxsPool
-	Downloader() common.IDownloader
-	P2pServer() common.INetwork
-	Peers() map[peer.ID]common.Peer
+	TxsPool() common.ITxsPool
 	Database() kv.RwDB
 	Engine() consensus.Engine
 	BlockChain() common.IBlockChain

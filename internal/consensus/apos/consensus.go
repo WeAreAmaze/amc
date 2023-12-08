@@ -97,15 +97,15 @@ func AccumulateRewards(r *Reward, number *uint256.Int, chain consensus.ChainHead
 	return rewardMap, unpayMap, nil
 }
 
-func doReward(chainConf *params.ChainConfig, consConf *params.ConsensusConfig, state *state.IntraBlockState, header *block.Header, chain consensus.ChainHeaderReader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
+func doReward(chainConf *params.ChainConfig, state *state.IntraBlockState, header *block.Header, chain consensus.ChainHeaderReader) ([]*block.Reward, map[types.Address]*uint256.Int, error) {
 	beijing, _ := uint256.FromBig(chainConf.BeijingBlock)
 	number := header.Number64()
 	var rewards block.Rewards
 	var upayMap map[types.Address]*uint256.Int
 
-	if chainConf.IsBeijing(number.Uint64()) && new(uint256.Int).Mod(new(uint256.Int).Sub(number, beijing), uint256.NewInt(consConf.APos.RewardEpoch)).
+	if chainConf.IsBeijing(number.Uint64()) && new(uint256.Int).Mod(new(uint256.Int).Sub(number, beijing), uint256.NewInt(chainConf.Apos.RewardEpoch)).
 		Cmp(uint256.NewInt(0)) == 0 {
-		r := newReward(consConf, chainConf)
+		r := newReward(chainConf)
 		var (
 			err    error
 			payMap map[types.Address]*uint256.Int
@@ -128,8 +128,19 @@ func doReward(chainConf *params.ChainConfig, consConf *params.ConsensusConfig, s
 				})
 			}
 		}
-		state.SoftFinalise()
+		if !isWrongStateRootBlockNumber(header.Number64()) {
+			state.SoftFinalise()
+		}
 		sort.Sort(rewards)
 	}
 	return rewards, upayMap, nil
+}
+
+func isWrongStateRootBlockNumber(blockNr *uint256.Int) bool {
+	switch blockNr.Uint64() {
+	case 1288400, 1299200, 1310000, 1320800, 1331600, 1342400, 1353200, 1364000, 1374800, 1385600, 1396400, 1407200, 1418000, 1428800, 1439600, 1450400:
+		return true
+	default:
+		return false
+	}
 }

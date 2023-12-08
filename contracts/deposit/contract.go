@@ -30,6 +30,7 @@ import (
 	"github.com/amazechain/amc/params"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
+	"sync"
 )
 
 const (
@@ -112,11 +113,11 @@ type Info struct {
 //}
 
 type Deposit struct {
-	ctx             context.Context
-	cancel          context.CancelFunc
-	consensusConfig *params.ConsensusConfig
-	blockChain      common.IBlockChain
-	db              kv.RwDB
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	blockChain common.IBlockChain
+	db         kv.RwDB
 
 	logsSub   event.Subscription // Subscription for new log event
 	rmLogsSub event.Subscription // Subscription for removed log event
@@ -127,12 +128,11 @@ type Deposit struct {
 	depositContracts map[types.Address]DepositContract
 }
 
-func NewDeposit(ctx context.Context, config *params.ConsensusConfig, bc common.IBlockChain, db kv.RwDB, depositContracts map[types.Address]DepositContract) *Deposit {
+func NewDeposit(ctx context.Context, bc common.IBlockChain, db kv.RwDB, depositContracts map[types.Address]DepositContract) *Deposit {
 	c, cancel := context.WithCancel(ctx)
 	d := &Deposit{
 		ctx:              c,
 		cancel:           cancel,
-		consensusConfig:  config,
 		blockChain:       bc,
 		db:               db,
 		logsCh:           make(chan common.NewLogsEvent),
@@ -150,11 +150,14 @@ func NewDeposit(ctx context.Context, config *params.ConsensusConfig, bc common.I
 }
 
 func (d *Deposit) Start() {
+	d.wg.Add(1)
 	go d.eventLoop()
 }
 
-func (d *Deposit) Stop() {
+func (d *Deposit) Stop() error {
 	d.cancel()
+	d.wg.Wait()
+	return nil
 }
 
 func (d *Deposit) IsDepositAction(txs *transaction.Transaction) bool {
@@ -188,6 +191,8 @@ func (d *Deposit) eventLoop() {
 	defer func() {
 		d.logsSub.Unsubscribe()
 		d.rmLogsSub.Unsubscribe()
+		d.wg.Done()
+		log.Info("Context closed, exiting goroutine (eventLoop)")
 	}()
 
 	for {

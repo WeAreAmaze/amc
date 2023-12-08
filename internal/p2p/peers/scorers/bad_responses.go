@@ -14,7 +14,7 @@ const (
 	DefaultBadResponsesThreshold = 6
 	// DefaultBadResponsesDecayInterval defines how often to decay previous statistics.
 	// Every interval bad responses counter will be decremented by 1.
-	DefaultBadResponsesDecayInterval = 10 * time.Minute
+	DefaultBadResponsesDecayInterval = 2 * time.Minute
 	// DefaultBadResponsesPenaltyFactor defines the penalty factor applied to a peer based on their bad
 	// response count.
 	DefaultBadResponsesPenaltyFactor = 10

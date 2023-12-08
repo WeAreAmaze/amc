@@ -23,21 +23,19 @@ import (
 	"github.com/amazechain/amc/params"
 )
 
-type GenesisBlockConfig struct {
-	Config *params.ChainConfig `json:"config" yaml:"config"`
-
-	//	ChainID    uint64             `json:"chainID" yaml:"chainID"`
-	Nonce      uint64        `json:"nonce"`
-	Timestamp  uint64        `json:"timestamp"`
-	ExtraData  []byte        `json:"extraData"`
-	GasLimit   uint64        `json:"gasLimit"   gencodec:"required"`
-	Difficulty *uint256.Int  `json:"difficulty" gencodec:"required"`
-	Mixhash    types.Hash    `json:"mixHash"`
-	Coinbase   types.Address `json:"coinbase"`
+type Genesis struct {
+	Config     *params.ChainConfig `json:"config" yaml:"config"`
+	Nonce      uint64              `json:"nonce"`
+	Timestamp  uint64              `json:"timestamp"`
+	ExtraData  []byte              `json:"extraData"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
+	Difficulty *uint256.Int        `json:"difficulty" gencodec:"required"`
+	Mixhash    types.Hash          `json:"mixHash"`
+	Coinbase   types.Address       `json:"coinbase"`
 
 	//Engine *ConsensusConfig `json:"engine" yaml:"engine"`
-	Miners []string   `json:"miners" yaml:"miners"`
-	Alloc  []Allocate `json:"alloc" yaml:"alloc"  gencodec:"required"`
+	Miners []string     `json:"miners" yaml:"miners"`
+	Alloc  GenesisAlloc `json:"alloc" yaml:"alloc"  gencodec:"required"`
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -45,14 +43,14 @@ type GenesisBlockConfig struct {
 	GasUsed    uint64       `json:"gasUsed"`
 	ParentHash types.Hash   `json:"parentHash"`
 	BaseFee    *uint256.Int `json:"baseFeePerGas"`
-
-	RewardEpoch uint64 `json:"reward_epoch" yaml:"rewardEpoch"`
-	RewardLimit uint64 `json:"reward_limit" yaml:"rewardLimit"`
 }
 
-type Allocate struct {
-	Address string                    `json:"address" toml:"address"`
-	Balance string                    `json:"balance" toml:"balance"`
+// GenesisAlloc specifies the initial state that is part of the genesis block.
+type GenesisAlloc map[types.Address]GenesisAccount
+
+type GenesisAccount struct {
+	//Address string                    `json:"address" toml:"address"`
+	Balance string                    `json:"balance"`
 	Code    []byte                    `json:"code,omitempty"`
 	Storage map[types.Hash]types.Hash `json:"storage,omitempty"`
 	Nonce   uint64                    `json:"nonce,omitempty"`

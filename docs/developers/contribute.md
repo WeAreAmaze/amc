@@ -1,0 +1,2 @@
+# Contribute
+amc has docs specifically geared for developers and contributors, including documentation on the structure and architecture of amc, the general workflow we employ, and other useful tips. You can find these docs here. Check out our contributing guidelines here.

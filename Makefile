@@ -5,14 +5,34 @@ BUILD_PATH := ./build/bin/
 APP_NAME := amazechain
 APP_PATH := ./cmd/amc
 SHELL := /bin/bash
+GO = go
 #LDFLAGS := -ldflags "-w -s -X github.com/amazechain/amc/version.BuildNumber=${GIT_COMMIT} -X 'github.com/amazechain/amc/version.BuildTime=${BUILD_TIME}' -X 'github.com/amazechain/amc/version.GoVersion=${GO_VERSION}'"
+
+
+# Variables below for building on host OS, and are ignored for docker
+#
+# Pipe error below to /dev/null since Makefile structure kind of expects
+# Go to be available, but with docker it's not strictly necessary
+CGO_CFLAGS := $(shell $(GO) env CGO_CFLAGS 2>/dev/null) # don't lose default
+CGO_CFLAGS += -DMDBX_FORCE_ASSERTIONS=0 # Enable MDBX's asserts by default in 'devel' branch and disable in releases
+#CGO_CFLAGS += -DMDBX_DISABLE_VALIDATION=1 # This feature is not ready yet
+#CGO_CFLAGS += -DMDBX_ENABLE_PROFGC=0 # Disabled by default, but may be useful for performance debugging
+#CGO_CFLAGS += -DMDBX_ENABLE_PGOP_STAT=0 # Disabled by default, but may be useful for performance debugging
+#CGO_CFLAGS += -DMDBX_ENV_CHECKPID=0 # Erigon doesn't do fork() syscall
+CGO_CFLAGS += -O
+CGO_CFLAGS += -D__BLST_PORTABLE__
+CGO_CFLAGS += -Wno-unknown-warning-option -Wno-enum-int-mismatch -Wno-strict-prototypes
+#CGO_CFLAGS += -Wno-error=strict-prototypes
 
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 GIT_TAG    ?= $(shell git describe --tags '--match=v*' --dirty)
 PACKAGE = github.com/amazechain/amc
-GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
-GOBUILD = go build -v $(GO_FLAGS)
+
+BUILD_TAGS = nosqlite,noboltdb
+GO_FLAGS += -trimpath -tags $(BUILD_TAGS) -buildvcs=false
+GO_FLAGS += -ldflags  "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
+GOBUILD = CGO_CFLAGS="$(CGO_CFLAGS)" go build -v $(GO_FLAGS)
 
 
 # if using volume-mounting data dir, then must exist on host OS
@@ -57,7 +77,7 @@ amc: deps
 
 images:
 	@echo "docker images build ..."
-	DOCKER_BUILDKIT=1 docker build -t amazechain/amc:miner .
+	DOCKER_BUILDKIT=1 docker build -t amazechain/amc:local .
 	@echo "Compile done!"
 
 up:
@@ -87,16 +107,27 @@ devtools:
 	env GOBIN= go install github.com/prysmaticlabs/fastssz/sszgen@latest
 	env GOBIN= go install github.com/prysmaticlabs/protoc-gen-go-cast@latest
 
-devimg:
-	@echo "docker dev images build ..."
-	DOCKER_BUILDKIT=1 docker build -f Dockerfile.dev -t amazechain/amc:devbase .
-	@echo "Compile done!"
-dev:
-	@mkdir -p $(HOME)/.metachain
-	go run ./cmd/amc --data.dir=$(HOME)/.metachain/ --log.level=debug --http --http.port=20012 --http.addr=0.0.0.0 --ws --ws.port=20013 --ws.addr=0.0.0.0 \
-	--engine.miner --engine.etherbase=0x588639773bc6f163aa262245cda746c120676431 --engine.type=APosEngine \
-	--log.level debug \
-	--account.unlock=0x588639773bc6f163aa262245cda746c120676431 --account.allow.insecure.unlock --account.password $(HOME)/.metachain/passwd
+
+PACKAGE_NAME          := github.com/WeAreAmaze/amc
+GOLANG_CROSS_VERSION  ?= v1.20.7
+
+.PHONY: release
+release:
+	@docker run \
+		--rm \
+		--privileged \
+		-e CGO_ENABLED=1 \
+		-e GITHUB_TOKEN \
+		-e DOCKER_USERNAME \
+		-e DOCKER_PASSWORD \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v `pwd`:/go/src/$(PACKAGE_NAME) \
+		-w /go/src/$(PACKAGE_NAME) \
+		ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
+		--clean --skip-validate
+
+		@docker image push --all-tags amazechain/amc
+
 
 #== mobiles start
 mobile: clean mobile-dir android ios

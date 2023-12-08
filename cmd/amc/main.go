@@ -42,7 +42,7 @@ func main() {
 	flags = append(flags, p2pFlags...)
 	flags = append(flags, p2pLimitFlags...)
 
-	rootCmd = append(rootCmd, walletCommand, accountCommand, exportCommand)
+	rootCmd = append(rootCmd, walletCommand, accountCommand, exportCommand, initCommand)
 	commands := rootCmd
 
 	app := &cli.App{

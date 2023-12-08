@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common/math"
 	"github.com/amazechain/amc/contracts/deposit"
+	"github.com/amazechain/amc/internal/metrics/prometheus"
 	"github.com/amazechain/amc/internal/p2p"
 	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
@@ -58,6 +59,13 @@ var (
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errBlockDoesNotExist    = errors.New("block does not exist in blockchain")
 )
+var (
+	headBlockGauge       = prometheus.GetOrCreateCounter("chain_head_block", true)
+	blockInsertTimer     = prometheus.GetOrCreateHistogram("chain_inserts")
+	blockValidationTimer = prometheus.GetOrCreateHistogram("chain_validation")
+	blockExecutionTimer  = prometheus.GetOrCreateHistogram("chain_execution")
+	blockWriteTimer      = prometheus.GetOrCreateHistogram("chain_write")
+)
 
 type WriteStatus byte
 
@@ -81,7 +89,6 @@ const (
 
 type BlockChain struct {
 	chainConfig  *params.ChainConfig
-	engineConf   *params.ConsensusConfig
 	ctx          context.Context
 	cancel       context.CancelFunc
 	genesisBlock block2.IBlock
@@ -98,12 +105,9 @@ type BlockChain struct {
 
 	peers map[peer.ID]bool
 
-	downloader common.IDownloader
-
 	chBlocks chan block2.IBlock
 
-	pubsub common.IPubSub
-	p2p    p2p.P2P
+	p2p p2p.P2P
 
 	errorCh chan error
 
@@ -139,7 +143,7 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
-func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, downloader common.IDownloader, db kv.RwDB, p2p p2p.P2P, pConf *params.ChainConfig, eConf *params.ConsensusConfig) (common.IBlockChain, error) {
+func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, db kv.RwDB, p2p p2p.P2P, config *params.ChainConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	blockCache, _ := lru.New[types.Hash, *block2.Block](blockCacheLimit)
 	futureBlocks, _ := lru.New[types.Hash, *block2.Block](maxFutureBlocks)
@@ -148,8 +152,8 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	numberCache, _ := lru.New[types.Hash, uint64](numberCacheLimit)
 	headerCache, _ := lru.New[types.Hash, *block2.Header](headerCacheLimit)
 	bc := &BlockChain{
-		chainConfig:  pConf, // Chain & network configuration
-		engineConf:   eConf,
+		chainConfig: config, // Chain & network configuration
+		//engineConf:   eConf,
 		genesisBlock: genesisBlock,
 		//blocks:       []block2.IBlock{},
 		//currentBlock:  current,
@@ -161,7 +165,6 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 		chBlocks:      make(chan block2.IBlock, 100),
 		errorCh:       make(chan error),
 		p2p:           p2p,
-		downloader:    downloader,
 		latestBlockCh: make(chan block2.IBlock, 50),
 		engine:        engine,
 		blockCache:    blockCache,
@@ -180,8 +183,8 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	bc.engine.VerifyHeader(bc, bc.CurrentBlock().Header(), false)
 	bc.forker = NewForkChoice(bc, nil)
 	//bc.process = avm.NewVMProcessor(ctx, bc, engine)
-	bc.process = NewStateProcessor(pConf, bc, engine)
-	bc.validator = NewBlockValidator(pConf, bc, engine)
+	bc.process = NewStateProcessor(config, bc, engine)
+	bc.validator = NewBlockValidator(config, bc, engine)
 
 	return bc, nil
 }
@@ -1047,31 +1050,41 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 
 			var err error
 			var nopay map[types.Address]*uint256.Int
+
+			pstart := time.Now()
 			receipts, nopay, logs, usedGas, err = bc.process.Process(block.(*block2.Block), ibs, reader, writer, blockHashFunc)
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
 				//atomic.StoreUint32(&followupInterrupt, 1)
 				return nil, err
 			}
+			ptime := time.Since(pstart)
+			vstart := time.Now()
+
 			if err := bc.validator.ValidateState(block, ibs, receipts, usedGas); err != nil {
 				bc.reportBlock(block, receipts, err)
 				//atomic.StoreUint32(&followupInterrupt, 1)
 				return nil, err
 			}
+			vtime := time.Since(vstart)
 
+			blockExecutionTimer.Observe(float64(ptime)) // The time spent on EVM processing
+			blockValidationTimer.Observe(float64(vtime))
 			return nopay, nil
 		})
 		if nil != err {
 			return it.index, err
 		}
 
+		wstart := time.Now()
 		var status WriteStatus
 		status, err = bc.writeBlockWithState(block, receipts, ibs, nopay)
 		//atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err
 		}
-
+		blockWriteTimer.Observe(float64(time.Since(wstart)))
+		blockInsertTimer.Observe(float64(time.Since(start)))
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += usedGas
@@ -1405,6 +1418,7 @@ func (bc *BlockChain) writeHeadBlock(tx kv.RwTx, block block2.IBlock) error {
 	}
 
 	bc.currentBlock.Store(block.(*block2.Block))
+	headBlockGauge.Set(block.Number64().Uint64())
 	if notExternalTx {
 		if err = tx.Commit(); nil != err {
 			return err
@@ -1488,9 +1502,9 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		}
 		if bc.chainConfig.IsBeijing(point.Number64().Uint64()) {
 			beijing, _ := uint256.FromBig(bc.chainConfig.BeijingBlock)
-			if new(uint256.Int).Mod(new(uint256.Int).Sub(point.Number64(), beijing), uint256.NewInt(bc.engineConf.APos.RewardEpoch)).
+			if new(uint256.Int).Mod(new(uint256.Int).Sub(point.Number64(), beijing), uint256.NewInt(bc.chainConfig.Apos.RewardEpoch)).
 				Cmp(uint256.NewInt(0)) == 0 {
-				last := new(uint256.Int).Sub(point.Number64(), uint256.NewInt(bc.engineConf.APos.RewardEpoch))
+				last := new(uint256.Int).Sub(point.Number64(), uint256.NewInt(bc.chainConfig.Apos.RewardEpoch))
 				rewardMap, err := bc.RewardsOfEpoch(point.Number64(), last)
 				if nil != err {
 					return err
@@ -1701,9 +1715,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 
 		if bc.chainConfig.IsBeijing(oldChain[i].Number64().Uint64()) {
 			beijing, _ := uint256.FromBig(bc.chainConfig.BeijingBlock)
-			if new(uint256.Int).Mod(new(uint256.Int).Sub(oldChain[i].Number64(), beijing), uint256.NewInt(bc.engineConf.APos.RewardEpoch)).
+			if new(uint256.Int).Mod(new(uint256.Int).Sub(oldChain[i].Number64(), beijing), uint256.NewInt(bc.chainConfig.Apos.RewardEpoch)).
 				Cmp(uint256.NewInt(0)) == 0 {
-				last := new(uint256.Int).Sub(oldChain[i].Number64(), uint256.NewInt(bc.engineConf.APos.RewardEpoch))
+				last := new(uint256.Int).Sub(oldChain[i].Number64(), uint256.NewInt(bc.chainConfig.Apos.RewardEpoch))
 				rewardMap, err := bc.RewardsOfEpoch(oldChain[i].Number64(), last)
 				if nil != err {
 					return err
@@ -1792,6 +1806,11 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	}
 	return nil
 }
+func (bc *BlockChain) Close() error {
+	bc.Quit()
+	return nil
+}
+
 func (bc *BlockChain) Quit() <-chan struct{} {
 	bc.lock.Close()
 	return bc.ctx.Done()

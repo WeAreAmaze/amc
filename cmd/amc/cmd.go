@@ -17,7 +17,7 @@
 package main
 
 import (
-	"github.com/amazechain/amc/version"
+	"github.com/amazechain/amc/params/networkname"
 	"github.com/urfave/cli/v2"
 )
 
@@ -35,16 +35,7 @@ var (
 	p2pDenyList      = cli.NewStringSlice()
 )
 
-var rootCmd = []*cli.Command{
-	{
-		Name:    "version",
-		Aliases: []string{"v"},
-		Action: func(context *cli.Context) error {
-			version.PrintVersion()
-			return nil
-		},
-	},
-}
+var rootCmd []*cli.Command
 
 var networkFlags = []cli.Flag{
 	&cli.StringSliceFlag{
@@ -154,12 +145,12 @@ var rpcFlags = []cli.Flag{
 }
 
 var consensusFlag = []cli.Flag{
-	&cli.StringFlag{
-		Name:        "engine.type",
-		Usage:       "consensus engine",
-		Value:       "APosEngine", //APoaEngine,APosEngine
-		Destination: &DefaultConfig.GenesisBlockCfg.Config.Engine.EngineName,
-	},
+	//&cli.StringFlag{
+	//	Name:        "engine.type",
+	//	Usage:       "consensus engine",
+	//	Value:       "APosEngine", //APoaEngine,APosEngine
+	//	Destination: &DefaultConfig.ChainCfg.Consensus,
+	//},
 	&cli.BoolFlag{
 		Name:        "engine.miner",
 		Usage:       "miner",
@@ -170,7 +161,7 @@ var consensusFlag = []cli.Flag{
 		Name:        "engine.etherbase",
 		Usage:       "consensus etherbase",
 		Value:       "",
-		Destination: &DefaultConfig.GenesisBlockCfg.Config.Engine.Etherbase,
+		Destination: &DefaultConfig.Miner.Etherbase,
 	},
 }
 
@@ -405,6 +396,13 @@ var (
 		Destination: &DefaultConfig.NodeCfg.DataDir,
 	}
 
+	MinFreeDiskSpaceFlag = &cli.IntFlag{
+		Name:        "data.dir.minfreedisk",
+		Usage:       "Minimum free disk space in GB, once reached triggers auto shut down (default = 10GB, 0 = disabled)",
+		Value:       10,
+		Destination: &DefaultConfig.NodeCfg.MinFreeDiskSpace,
+	}
+
 	FromDataDirFlag = &cli.StringFlag{
 		Name:  "chaindata.from",
 		Usage: "source data  dir",
@@ -412,6 +410,13 @@ var (
 	ToDataDirFlag = &cli.StringFlag{
 		Name:  "chaindata.to",
 		Usage: "to data  dir",
+	}
+
+	ChainFlag = &cli.StringFlag{
+		Name:        "chain",
+		Usage:       "Name of the testnet to join (value:[mainnet,testnet,private])",
+		Value:       networkname.MainnetChainName,
+		Destination: &DefaultConfig.NodeCfg.Chain,
 	}
 )
 
@@ -473,66 +478,30 @@ var (
 
 	// MetricsEnabledFlag Metrics flags
 	MetricsEnabledFlag = &cli.BoolFlag{
-		Name:  "metrics",
-		Usage: "Enable metrics collection and reporting",
-	}
-
-	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
-		Name:        "metrics.influxdb",
-		Usage:       "Enable metrics export/push to an external InfluxDB database",
+		Name:        "metrics",
+		Usage:       "Enable metrics collection and reporting",
 		Value:       false,
-		Destination: &DefaultConfig.MetricsCfg.EnableInfluxDB,
-	}
-	MetricsInfluxDBEndpointFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.endpoint",
-		Usage:       "InfluxDB API endpoint to report metrics to",
-		Value:       DefaultConfig.MetricsCfg.InfluxDBEndpoint,
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBEndpoint,
+		Destination: &DefaultConfig.MetricsCfg.Enable,
 	}
 
-	MetricsInfluxDBDatabaseFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.database",
-		Usage:       "InfluxDB database name to push reported metrics to",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBDatabase,
+	// MetricsHTTPFlag defines the endpoint for a stand-alone metrics HTTP endpoint.
+	// Since the pprof service enables sensitive/vulnerable behavior, this allows a user
+	// to enable a public-OK metrics endpoint without having to worry about ALSO exposing
+	// other profiling behavior or information.
+	MetricsHTTPFlag = &cli.StringFlag{
+		Name:  "metrics.addr",
+		Usage: `Enable stand-alone metrics HTTP server listening interface.`,
+		//Category: flags.MetricsCategory,
+		Value:       "127.0.0.1",
+		Destination: &DefaultConfig.MetricsCfg.HTTP,
 	}
-	MetricsInfluxDBUsernameFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.username",
-		Usage:       "Username to authorize access to the database",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBUsername,
-	}
-	MetricsInfluxDBPasswordFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.password",
-		Usage:       "Password to authorize access to the database",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBPassword,
-	}
-
-	MetricsInfluxDBTagsFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.tags",
-		Usage:       "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBTags,
-	}
-	//
-	//MetricsEnableInfluxDBV2Flag = &cli.BoolFlag{
-	//	Name:  "metrics.influxdbv2",
-	//	Usage: "Enable metrics export/push to an external InfluxDB v2 database",
-	//}
-
-	MetricsInfluxDBTokenFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.token",
-		Usage:       "Token to authorize access to the database (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBToken,
-	}
-
-	MetricsInfluxDBBucketFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.bucket",
-		Usage:       "InfluxDB bucket name to push reported metrics to (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBBucket,
-	}
-
-	MetricsInfluxDBOrganizationFlag = &cli.StringFlag{
-		Name:        "metrics.influxdb.organization",
-		Usage:       "InfluxDB organization name (v2 only)",
-		Destination: &DefaultConfig.MetricsCfg.InfluxDBOrganization,
+	MetricsPortFlag = &cli.IntFlag{
+		Name: "metrics.port",
+		Usage: `Metrics HTTP server listening port.
+Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.`,
+		Value: 6060,
+		// Category: flags.MetricsCategory,
+		Destination: &DefaultConfig.MetricsCfg.Port,
 	}
 )
 
@@ -545,6 +514,8 @@ var (
 	}
 	settingFlag = []cli.Flag{
 		DataDirFlag,
+		ChainFlag,
+		MinFreeDiskSpaceFlag,
 	}
 	accountFlag = []cli.Flag{
 		PasswordFileFlag,
@@ -556,16 +527,8 @@ var (
 
 	metricsFlags = []cli.Flag{
 		MetricsEnabledFlag,
-		MetricsEnableInfluxDBFlag,
-		MetricsInfluxDBEndpointFlag,
-		MetricsInfluxDBTokenFlag,
-		MetricsInfluxDBBucketFlag,
-		MetricsInfluxDBOrganizationFlag,
-		MetricsInfluxDBTagsFlag,
-
-		MetricsInfluxDBPasswordFlag,
-		MetricsInfluxDBUsernameFlag,
-		MetricsInfluxDBDatabaseFlag,
+		MetricsHTTPFlag,
+		MetricsPortFlag,
 	}
 
 	p2pFlags = []cli.Flag{

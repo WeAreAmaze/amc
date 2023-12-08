@@ -72,6 +72,7 @@ func (s *Service) Start() {
 // Stop initial sync.
 func (s *Service) Stop() error {
 	s.cancel()
+	log.Info("InitialSync stopped")
 	return nil
 }
 

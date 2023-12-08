@@ -162,17 +162,9 @@ func (q *blocksQueue) loop() {
 	}
 
 	// Define initial state machines.
-	var startBlockNr *uint256.Int
-	if q.chain.CurrentBlock().Number64().Cmp(uint256.NewInt(0)) == 0 {
-		startBlockNr = uint256.NewInt(1)
-	} else {
-		startBlockNr = q.chain.CurrentBlock().Number64().Clone()
-		if startBlockNr.Cmp(uint256.NewInt(startBackBlock)) == 1 {
-			startBlockNr.SubUint64(startBlockNr, startBackBlock)
-		}
-	}
+	startBlockNr := new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
-	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i.AddUint64(i, blocksPerRequest) {
+	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {
 		q.smm.addStateMachine(i)
 	}
 
@@ -285,9 +277,9 @@ func (q *blocksQueue) onScheduleEvent(ctx context.Context) eventHandlerFn {
 			return m.state, errBlockNrIsTooHigh
 		}
 		blocksPerRequest := q.blocksFetcher.blocksPerPeriod
-		//if q.highestExpectedBlockNr.Cmp(new(uint256.Int).AddUint64(m.start, blocksPerRequest)) < 0 {
-		//	blocksPerRequest = new(uint256.Int).Sub(q.highestExpectedBlockNr, m.start).Uint64() + 1
-		//}
+		if q.highestExpectedBlockNr.Cmp(new(uint256.Int).AddUint64(m.start, blocksPerRequest)) < 0 {
+			blocksPerRequest = new(uint256.Int).Sub(q.highestExpectedBlockNr, m.start).Uint64() + 1
+		}
 		if err := q.blocksFetcher.scheduleRequest(ctx, m.start, blocksPerRequest); err != nil {
 			return m.state, err
 		}
@@ -407,7 +399,7 @@ func (q *blocksQueue) onProcessSkippedEvent(ctx context.Context) eventHandlerFn 
 
 		// Check if we have enough peers to progress, or sync needs to halt (due to no peers available).
 		//bestFinalizedSlot := q.blocksFetcher.bestFinalizedBlockNr()
-		if q.blocksFetcher.bestFinalizedBlockNr().Cmp(q.chain.CurrentBlock().Number64()) <= 0 {
+		if q.blocksFetcher.bestFinalizedBlockNr().Cmp(q.chain.CurrentBlock().Number64()) >= 0 {
 			return stateSkipped, errNoRequiredPeers
 		}
 

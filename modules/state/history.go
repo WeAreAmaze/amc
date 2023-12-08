@@ -40,6 +40,8 @@ import (
 	"os"
 	"runtime"
 	"time"
+
+	log3 "github.com/ledgerwatch/log/v3"
 )
 
 func GetAsOf(tx kv.Tx, indexC kv.Cursor, changesC kv.CursorDupSort, storage bool, key []byte, timestamp uint64) ([]byte, error) {
@@ -380,7 +382,7 @@ func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) e
 
 	// unwind account and storage
 	storageKeyLength := types.AddressLength + types.IncarnationLength + types.HashLength
-	changes := etl.NewCollector("unwind state", os.TempDir(), etl.NewOldestEntryBuffer(etl.BufferOptimalSize))
+	changes := etl.NewCollector("unwind state", os.TempDir(), etl.NewOldestEntryBuffer(etl.BufferOptimalSize), log3.New())
 	defer changes.Close()
 	//errRewind := changeset.RewindData(tx, current, unwindPoint, changes, ctx.Done())
 	//if errRewind != nil {

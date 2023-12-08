@@ -3,8 +3,8 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/amazechain/amc/params"
 	"github.com/amazechain/amc/utils"
-	"github.com/amazechain/amc/version"
 	"net"
 
 	"github.com/libp2p/go-libp2p"
@@ -57,7 +57,7 @@ func (s *Service) buildOptions(ip net.IP, priKey *ecdsa.PrivateKey) []libp2p.Opt
 	options := []libp2p.Option{
 		privKeyOption(priKey),
 		libp2p.ListenAddrs(listen),
-		libp2p.UserAgent(version.Version),
+		libp2p.UserAgent(params.Version),
 		libp2p.ConnectionGater(s),
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Muxer("/mplex/6.7.0", mplex.DefaultTransport),

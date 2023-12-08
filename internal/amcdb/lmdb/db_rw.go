@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/amazechain/amc/common/db"
-	"github.com/torquem-ch/mdbx-go/mdbx"
+	"github.com/erigontech/mdbx-go/mdbx"
 	"sync"
 )
 

@@ -77,8 +77,8 @@ func TestEvent_Send(t *testing.T) {
 		t.Log("ch2 Value", a)
 	}()
 	a := 2
-	feed.Send(&a)
-	feed.Send(&A{
+	feed.Send(a)
+	feed.Send(A{
 		A: "123",
 	})
 	wg.Wait()

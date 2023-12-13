@@ -1269,7 +1269,7 @@ func (pool *TxsPool) GetTransaction() (txs []*transaction.Transaction, err error
 }
 
 // GetTx
-func (pool *TxsPool) GetTx(hash types.Hash) *transaction.Transaction {
+func (pool *TxsPool) Get(hash types.Hash) *transaction.Transaction {
 	return pool.all.Get(hash)
 }
 
@@ -1342,4 +1342,12 @@ func (pool *TxsPool) ResetState(blockHash types.Hash) error {
 	//stateReader := state.NewStateHistoryReader(tx, tx, *blockNr+1)
 	//pool.currentState = state.New(stateReader)
 	return nil
+}
+
+// Locals retrieves the accounts currently considered local by the pool.
+func (pool *TxsPool) Locals() []types.Address {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	return pool.locals.flatten()
 }

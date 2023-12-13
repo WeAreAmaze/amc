@@ -167,8 +167,11 @@ type worker struct {
 
 	resubmitAdjustCh chan *intervalAdjust
 
-	running int32
-	newTxs  int32
+	running atomic.Bool
+	newTxs  atomic.Int32
+
+	//txsCh  chan common.NewTxsEvent
+	//txsSub event.Subscription
 
 	group  *errgroup.Group
 	ctx    context.Context
@@ -235,20 +238,20 @@ func newWorker(ctx context.Context, group *errgroup.Group, chainConfig *params.C
 }
 
 func (w *worker) start() {
-	atomic.StoreInt32(&w.running, 1)
+	w.running.Store(true)
 	w.startCh <- struct{}{}
 }
 
 func (w *worker) stop() {
-	atomic.StoreInt32(&w.running, 0)
+	w.running.Store(false)
 }
 
 func (w *worker) close() {
-
+	w.running.Store(false)
 }
 
 func (w *worker) isRunning() bool {
-	return atomic.LoadInt32(&w.running) == 1
+	return w.running.Load()
 }
 func (w *worker) setCoinbase(addr types.Address) {
 	w.mu.Lock()
@@ -264,11 +267,57 @@ func (w *worker) runLoop() error {
 		case <-w.ctx.Done():
 			return w.ctx.Err()
 		case req := <-w.newWorkCh:
-			err := w.commitWork(req.interrupt, req.noempty, req.timestamp)
+			err := w.commitWork(req.interrupt, req.timestamp)
 			if err != nil {
 				log.Error("runLoop err:", err.Error())
 				//w.startCh <- struct{}{}
 			}
+			//case ev := <-w.txsCh:
+			//	// Apply transactions to the pending state if we're not sealing
+			//	//
+			//	// Note all transactions received may not be continuous with transactions
+			//	// already included in the current sealing block. These transactions will
+			//	// be automatically eliminated.
+			//	if !w.isRunning() && w.current != nil {
+			//		// If block is already full, abort
+			//		if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
+			//			continue
+			//		}
+			//		txs := make(map[types.Address][]*txspool.LazyTransaction, len(ev.Txs))
+			//		for _, tx := range ev.Txs {
+			//			// acc, _ := transaction.Sender(w.current.signer, tx)
+			//			txs[*tx.From()] = append(txs[*tx.From()], &txspool.LazyTransaction{
+			//				Pool:      w.txsPool, // We don't know where this came from, yolo resolve from everywhere
+			//				Hash:      tx.Hash(),
+			//				Tx:        nil, // Do *not* set this! We need to resolve it later to pull blobs in
+			//				Time:      tx.Time(),
+			//				GasFeeCap: tx.GasFeeCap(),
+			//				GasTipCap: tx.GasTipCap(),
+			//				Gas:       tx.Gas(),
+			//				//BlobGas:   tx.BlobGas(),
+			//			})
+			//		}
+			//		txset := newTransactionsByPriceAndNonce( /*w.current.signer,*/ txs, w.current.header.BaseFee)
+			//		tcount := w.current.tcount
+			//		w.commitTransactions(w.current, txset, nil)
+			//
+			//		// Only update the snapshot if any new transactions were added
+			//		// to the pending block
+			//		if tcount != w.current.tcount {
+			//			w.updateSnapshot(w.current)
+			//		}
+			//	} else {
+			//		// Special case, if the consensus engine is 0 period clique(dev mode),
+			//		// submit sealing work here since all empty submission will be rejected
+			//		// by clique. Of course the advance sealing(empty submission) is disabled.
+			//		if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
+			//			w.commitWork(nil, time.Now().Unix())
+			//		}
+			//	}
+			//	w.newTxs.Add(int32(len(ev.Txs)))
+
+			//case <-w.txsSub.Err():
+			//	return nil
 		}
 	}
 }
@@ -418,7 +467,7 @@ func (w *worker) taskLoop() error {
 	}
 }
 
-func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int64) error {
+func (w *worker) commitWork(interrupt *atomic.Int32, timestamp int64) error {
 	start := time.Now()
 	if w.isRunning() {
 		if w.coinbase == (types.Address{}) {
@@ -440,7 +489,6 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 	defer tx.Rollback()
 
 	stateReader := state.NewPlainStateReader(tx)
-	stateWriter := state.NewNoopWriter()
 	ibs := state.New(stateReader)
 	// generate state for mobile verify
 	ibs.BeginWriteSnapshot()
@@ -468,6 +516,8 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 			ratio: ratio,
 			inc:   true,
 		}
+	case errors.Is(err, errBlockInterruptedByNewHead):
+		return nil
 	}
 
 	//var rewards []*block.Reward
@@ -478,10 +528,12 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 	//	}
 	//}
 
-	if err = w.commit(current, stateWriter, ibs, start, headers); nil != err {
+	if err = w.commit(current, ibs, start, headers); nil != err {
 		log.Errorf("w.commit failed, error %v\n", err)
 		return err
 	}
+
+	//w.current = current
 
 	return nil
 }
@@ -590,6 +642,118 @@ func (w *worker) workLoop(recommit time.Duration) error {
 	}
 }
 
+func (w *worker) commitTx(txn *transaction.Transaction, ibs *state.IntraBlockState, current *environment, getHeader func(hash types.Hash, number uint64) *block.Header) ([]*block.Log, error) {
+	noop := state.NewNoopWriter()
+	ibs.Prepare(txn.Hash(), types.Hash{}, current.tcount)
+	gasSnap := current.gasPool.Gas()
+	snap := ibs.Snapshot()
+	log.Debug("addTransactionsToMiningBlock", "txn hash", txn.Hash())
+	receipt, _, err := internal.ApplyTransaction(w.chainConfig, internal.GetHashFn(current.header, getHeader), w.engine, &current.coinbase, current.gasPool, ibs, noop, current.header, txn, &current.header.GasUsed, vm2.Config{})
+	if err != nil {
+		ibs.RevertToSnapshot(snap)
+		current.gasPool = new(common.GasPool).AddGas(gasSnap) // restore gasPool as well as ibs
+		return nil, err
+	}
+
+	current.txs = append(current.txs, txn)
+	current.receipts = append(current.receipts, receipt)
+	return receipt.Logs, nil
+}
+
+//func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
+//	gasLimit := env.header.GasLimit
+//	if env.gasPool == nil {
+//		env.gasPool = new(common.GasPool).AddGas(gasLimit)
+//	}
+//	var coalescedLogs []*block.Log
+//
+//	for {
+//		// Check interruption signal and abort building if it's fired.
+//		if interrupt != nil {
+//			if signal := interrupt.Load(); signal != commitInterruptNone {
+//				return signalToErr(signal)
+//			}
+//		}
+//		// If we don't have enough gas for any further transactions then we're done.
+//		if env.gasPool.Gas() < params.TxGas {
+//			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+//			break
+//		}
+//		// Retrieve the next transaction and abort if all done.
+//		ltx := txs.Peek()
+//		if ltx == nil {
+//			break
+//		}
+//		// If we don't have enough space for the next transaction, skip the account.
+//		if env.gasPool.Gas() < ltx.Gas {
+//			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
+//			txs.Pop()
+//			continue
+//		}
+//		//if left := uint64(params.MaxBlobGasPerBlock - env.blobs*params.BlobTxBlobGasPerBlob); left < ltx.BlobGas {
+//		//	log.Trace("Not enough blob gas left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas)
+//		//	txs.Pop()
+//		//	continue
+//		//}
+//		// Transaction seems to fit, pull it up from the pool
+//		tx := ltx.Resolve()
+//		if tx == nil {
+//			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
+//			txs.Pop()
+//			continue
+//		}
+//		// Error may be ignored here. The error has already been checked
+//		// during transaction acceptance is the transaction pool.
+//		//from, _ := types.Sender(env.signer, tx)
+//
+//		// Check whether the tx is replay protected. If we're not in the EIP155 hf
+//		// phase, start ignoring the sender until we do.
+//		if tx.Protected() && !w.chainConfig.IsSpuriousDragon(env.header.Number.Uint64()) {
+//			log.Trace("Ignoring replay protected transaction", "hash", ltx.Hash, "eip155", w.chainConfig.SpuriousDragonBlock)
+//			txs.Pop()
+//			continue
+//		}
+//		// Start executing the transaction
+//		//env.state.SetTxContext(tx.Hash(), env.tcount)
+//
+//		logs, err := w.commitTx(tx, env)
+//		switch {
+//		case errors.Is(err, core.ErrNonceTooLow):
+//			// New head notification data race between the transaction pool and miner, shift
+//			log.Trace("Skipping transaction with low nonce", "hash", ltx.Hash, "sender", from, "nonce", tx.Nonce())
+//			txs.Shift()
+//
+//		case errors.Is(err, nil):
+//			// Everything ok, collect the logs and shift in the next transaction from the same account
+//			coalescedLogs = append(coalescedLogs, logs...)
+//			env.tcount++
+//			txs.Shift()
+//
+//		default:
+//			// Transaction is regarded as invalid, drop all consecutive transactions from
+//			// the same sender because of `nonce-too-high` clause.
+//			log.Debug("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
+//			txs.Pop()
+//		}
+//	}
+//	if !w.isRunning() && len(coalescedLogs) > 0 {
+//		// We don't push the pendingLogsEvent while we are sealing. The reason is that
+//		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
+//		// In order to avoid pushing the repeated pendingLog, we disable the pending log pushing.
+//
+//		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+//		// logs by filling in the block hash when the block was mined by the local miner. This can
+//		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+//		cpy := make([]*block.Log, len(coalescedLogs))
+//		for i, l := range coalescedLogs {
+//			cpy[i] = new(block.Log)
+//			*cpy[i] = *l
+//		}
+//		w.pendingLogsFeed.Send(cpy)
+//	}
+//	return nil
+//}
+
 func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs *state.IntraBlockState, getHeader func(hash types.Hash, number uint64) *block.Header) error {
 	// todo fillTx
 	env.txs = []*transaction.Transaction{}
@@ -597,25 +761,6 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs
 	if err != nil {
 		log.Warn("get transaction error", "err", err)
 		return err
-	}
-
-	header := env.header
-	noop := state.NewNoopWriter()
-	var miningCommitTx = func(txn *transaction.Transaction, coinbase types.Address, vmConfig *vm2.Config, chainConfig *params.ChainConfig, ibs *state.IntraBlockState, current *environment) ([]*block.Log, error) {
-		ibs.Prepare(txn.Hash(), types.Hash{}, env.tcount)
-		gasSnap := current.gasPool.Gas()
-		snap := ibs.Snapshot()
-		log.Debug("addTransactionsToMiningBlock", "txn hash", txn.Hash())
-		receipt, _, err := internal.ApplyTransaction(chainConfig, internal.GetHashFn(header, getHeader), w.engine, &coinbase, env.gasPool, ibs, noop, current.header, txn, &header.GasUsed, *vmConfig)
-		if err != nil {
-			ibs.RevertToSnapshot(snap)
-			env.gasPool = new(common.GasPool).AddGas(gasSnap) // restore gasPool as well as ibs
-			return nil, err
-		}
-
-		current.txs = append(current.txs, txn)
-		current.receipts = append(current.receipts, receipt)
-		return receipt.Logs, nil
 	}
 
 	log.Tracef("fillTransactions txs len:%d", len(txs))
@@ -631,7 +776,8 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, ibs
 			break
 		}
 		// Start executing the transaction
-		_, err := miningCommitTx(tx, env.coinbase, &vm2.Config{}, w.chainConfig, ibs, env)
+		_, err := w.commitTx(tx, ibs, env, getHeader)
+		//_, err := miningCommitTx(tx, env.coinbase, &vm2.Config{}, w.chainConfig, ibs, env)
 
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
@@ -725,7 +871,7 @@ func (w *worker) makeEnv(parent *block.Header, header *block.Header, coinbase ty
 	return env
 }
 
-func (w *worker) commit(env *environment, writer state.WriterWithChangeSets, ibs *state.IntraBlockState, start time.Time, needHeaders []*block.Header) error {
+func (w *worker) commit(env *environment, ibs *state.IntraBlockState, start time.Time, needHeaders []*block.Header) error {
 	if w.isRunning() {
 		env := env.copy()
 		iblock, rewards, unpay, err := w.engine.FinalizeAndAssemble(w.chain, env.header, ibs, env.txs, nil, env.receipts)

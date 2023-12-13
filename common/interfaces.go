@@ -142,11 +142,12 @@ type ITxsPool interface {
 	Has(hash types.Hash) bool
 	Pending(enforceTips bool) map[types.Address][]*transaction.Transaction
 	GetTransaction() ([]*transaction.Transaction, error)
-	GetTx(hash types.Hash) *transaction.Transaction
+	Get(hash types.Hash) *transaction.Transaction
 	AddRemotes(txs []*transaction.Transaction) []error
 	AddLocal(tx *transaction.Transaction) error
 	Stats() (int, int, int, int)
 	Nonce(addr types.Address) uint64
 	Content() (map[types.Address][]*transaction.Transaction, map[types.Address][]*transaction.Transaction)
 	SubscribeTransactions(ch chan<- NewTxsEvent) event.Subscription
+	Locals() []types.Address
 }

@@ -1195,7 +1195,7 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash mvm_comm
 		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee64().ToBig()), nil
 	}
 
-	if tx := s.api.TxsPool().GetTx(mvm_types.ToAmcHash(hash)); tx != nil {
+	if tx := s.api.TxsPool().Get(mvm_types.ToAmcHash(hash)); tx != nil {
 		return newRPCPendingTransaction(tx, s.api.BlockChain().CurrentBlock().Header()), nil
 	}
 

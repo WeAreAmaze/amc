@@ -85,7 +85,7 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 }
 func TransactionsToProtoMessage(txs Transactions) proto.Message {
 	var out types_pb.Transactions
-	for _, tx :=  range txs {
+	for _, tx := range txs {
 		out.Transactions = append(out.Transactions, tx.ToProtoMessage().(*types_pb.Transaction))
 	}
 	return &out
@@ -94,15 +94,15 @@ func TransactionsToProtoMessage(txs Transactions) proto.Message {
 func TransactionsFromProtoMessage(msg proto.Message) (Transactions, error) {
 	var (
 		pbTxs *types_pb.Transactions
-		ok bool
-		txs Transactions
+		ok    bool
+		txs   Transactions
 	)
 
-	if pbTxs, ok =  msg.(*types_pb.Transactions); !ok {
+	if pbTxs, ok = msg.(*types_pb.Transactions); !ok {
 		return txs, fmt.Errorf("type error for Transactions")
 	}
 
-	for _, pbT :=  range pbTxs.Transactions {
+	for _, pbT := range pbTxs.Transactions {
 		tx, err := FromProtoMessage(pbT)
 		if nil != err {
 			return txs, err
@@ -544,6 +544,10 @@ func (tx *Transaction) EffectiveGasTip(baseFee *uint256.Int) (*uint256.Int, erro
 		err = ErrGasFeeCapTooLow
 	}
 	return uint256Min(tx.GasTipCap(), new(uint256.Int).Sub(gasFeeCap, baseFee)), err
+}
+
+func (tx *Transaction) Time() time.Time {
+	return tx.time
 }
 
 func uint256Min(x, y *uint256.Int) *uint256.Int {

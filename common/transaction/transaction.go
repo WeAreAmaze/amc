@@ -225,11 +225,11 @@ func txDataFromProtoMessage(message proto.Message) (TxData, error) {
 	}
 
 	// todo
-	protoHash := utils.ConvertH256ToHash(pbTx.Hash)
-	innerHash := inner.hash()
-	if bytes.Compare(protoHash[:], innerHash[:]) != 0 {
-		//return nil, ErrUnmarshalHash
-	}
+	//protoHash := utils.ConvertH256ToHash(pbTx.Hash)
+	//innerHash := inner.hash()
+	//if bytes.Compare(protoHash[:], innerHash[:]) != 0 {
+	//	//return nil, ErrUnmarshalHash
+	//}
 
 	return inner, nil
 }

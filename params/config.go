@@ -597,6 +597,11 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	return nil
 }
 
+// ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
+func (c *ChainConfig) ElasticityMultiplier() uint64 {
+	return ElasticityMultiplier
+}
+
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head uint64) *ConfigCompatError {
 	// Ethereum mainnet forks
 	if isForkIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, head) {

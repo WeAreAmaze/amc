@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"fmt"
 	"github.com/amazechain/amc/api/protocol/sync_pb"
 	types "github.com/amazechain/amc/common/block"
 	p2ptypes "github.com/amazechain/amc/internal/p2p/types"
@@ -130,9 +129,12 @@ func (s *Service) writeBodiesRangeToStream(ctx context.Context, startSlot, endSl
 			return err
 		}
 		if b == nil {
-			log.Warn("Could not retrieve blocks", "err", fmt.Errorf("block #%d not found", startSlot.Uint64()))
-			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrInvalidBlockNr.Error(), stream)
-			return err
+			break
+			// I don't think this an error
+
+			//log.Warn("Could not retrieve blocks", "err", fmt.Errorf("block #%d not found", startSlot.Uint64()))
+			//s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrInvalidBlockNr.Error(), stream)
+			//return err
 		}
 
 		blks = append(blks, b)

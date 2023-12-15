@@ -18,6 +18,7 @@ package internal
 
 import (
 	crand "crypto/rand"
+	"errors"
 	"github.com/holiman/uint256"
 	"math"
 	"math/big"
@@ -74,14 +75,16 @@ func NewForkChoice(chainReader ChainReader, preserve func(header block2.IHeader)
 // total difficulty is higher. In the extern mode, the trusted
 // header is always selected as the head.
 func (f *ForkChoice) ReorgNeeded(current block2.IHeader, header block2.IHeader) (bool, error) {
+	//fmt.Printf("local %#v \nextend %#v \n", current, header)
 	var (
 		localTD  = f.chain.GetTd(current.Hash(), current.Number64())
 		externTd = f.chain.GetTd(header.Hash(), header.Number64())
 	)
+
+	if localTD == nil || externTd == nil {
+		return false, errors.New("missing td")
+	}
 	log.Tracef("ForkChoice.ReorgNeeded: localID = %d, externTd = %d", localTD.Uint64(), externTd.Uint64())
-	//if localTD == nil || externTd == nil {
-	//	return false, errors.New("missing td")
-	//}
 	// Accept the new header as the chain head if the transition
 	// is already triggered. We assume all the headers after the
 	// transition come from the trusted consensus layer.
@@ -89,6 +92,13 @@ func (f *ForkChoice) ReorgNeeded(current block2.IHeader, header block2.IHeader) 
 	//	return true, nil
 	//}
 	// If the total difficulty is higher than our known, add it to the canonical chain
+
+	if diff := externTd.Cmp(localTD); diff > 0 {
+		return true, nil
+	} else if diff < 0 {
+		return false, nil
+	}
+
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	reorg := externTd.Cmp(localTD) > 0

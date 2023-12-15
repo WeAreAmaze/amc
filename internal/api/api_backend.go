@@ -451,7 +451,7 @@ func (eth *API) StateAtTransaction(ctx context.Context, dbTx kv.Tx, blk *types.B
 		//// Ensure any modifications are committed to the state
 		//// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		//statedb.FinalizeTx(rules, )
-		statedb.Prepare(tx.Hash(), blk.Hash(), idx)
+		statedb.Prepare(tx.Hash(), blk.Hash(), idx, *tx.From())
 
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, blk.BaseFee64())

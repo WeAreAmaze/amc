@@ -23,11 +23,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/aggsign"
+	"github.com/amazechain/amc/common/crypto/bls/blst"
 	"github.com/amazechain/amc/internal/consensus/misc"
 	"github.com/holiman/uint256"
 
 	"github.com/amazechain/amc/common/crypto/bls"
-	"github.com/amazechain/amc/internal/api"
 	"github.com/amazechain/amc/modules/rawdb"
 
 	"github.com/amazechain/amc/accounts"
@@ -727,7 +728,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
 				///limit 1  seen 9999 number 9999- 8919
-				return errors.New(fmt.Sprintf("signed recently, must wait for others %d %d %d %s", limit, seen, number, signer.String()))
+				return errors.New(fmt.Sprintf("signed recently, must wait for others, limit=%d last=%d  current=%d signer=%s", limit, seen, number, signer.String()))
 			}
 		}
 	}
@@ -746,7 +747,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		ctx, cancle := context.WithTimeout(context.Background(), delay)
 		defer cancle()
 		member := c.CountDepositor()
-		aggSign, verifiers, err := api.SignMerge(ctx, header, member)
+		aggSign, verifiers, err := SignMerge(ctx, header, member, stop)
 		if nil != err {
 			return err
 		}
@@ -904,4 +905,58 @@ func (c *APos) CountDepositor() uint64 {
 
 func (c *APos) IsServiceTransaction(sender types.Address, syscall consensus.SystemCall) bool {
 	return false
+}
+
+func SignMerge(ctx context.Context, header *block.Header, depositNum uint64, stop <-chan struct{}) (types.Signature, []*block.Verify, error) {
+	aggrSigns := make([]bls.Signature, 0)
+	verifiers := make([]*block.Verify, 0)
+	uniq := make(map[types.Address]struct{})
+
+LOOP:
+	for {
+		select {
+		case s := <-aggsign.SigChannel:
+			log.Tracef("accept sign, %+v", s)
+			if s.Number != header.Number.Uint64() {
+				log.Tracef("discard sign: need block number %d, get %d", header.Number.Uint64(), s.Number)
+				continue
+			}
+
+			if _, ok := uniq[s.Address]; ok {
+				continue
+			}
+
+			if !s.Check(header.Root) {
+				log.Tracef("discard sign: sign check failed! %v", s)
+				continue
+			}
+			sig, err := bls.SignatureFromBytes(s.Sign[:])
+			if nil != err {
+				return types.Signature{}, nil, err
+			}
+
+			aggrSigns = append(aggrSigns, sig)
+			verifiers = append(verifiers, &block.Verify{
+				Address:   s.Address,
+				PublicKey: s.PublicKey,
+			})
+			uniq[s.Address] = struct{}{}
+		case <-stop:
+			break LOOP
+		case <-ctx.Done():
+			break LOOP
+		}
+	}
+	// todo enough sigs check
+	// 1
+	// uint64(len(aggrSigns)) < depositNum/2
+	// uint64(len(aggrSigns)) < 7
+	if uint64(len(aggrSigns)) < 3 {
+		return types.Signature{}, nil, consensus.ErrNotEnoughSign
+	}
+
+	aggS := blst.AggregateSignatures(aggrSigns)
+	var aggSign types.Signature
+	copy(aggSign[:], aggS.Marshal())
+	return aggSign, verifiers, nil
 }

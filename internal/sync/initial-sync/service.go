@@ -55,8 +55,10 @@ func (s *Service) Start() {
 	event.GlobalEvent.Send(common.DownloaderStartEvent{})
 	defer event.GlobalEvent.Send(common.DownloaderFinishEvent{})
 
-	log.Info("Starting initial chain sync...")
+	log.Info("Waiting Minimum peers...")
 	highestExpectedBlockNr := s.waitForMinimumPeers()
+	log.Info("Starting initial chain sync...", "currentNr", s.cfg.Chain.CurrentBlock().Number64(), "hash", s.cfg.Chain.CurrentBlock().Hash(), "highestExceptBlock", highestExpectedBlockNr)
+
 	if err := s.roundRobinSync(highestExpectedBlockNr); err != nil {
 		if errors.Is(s.ctx.Err(), context.Canceled) {
 			return
@@ -123,7 +125,7 @@ func (s *Service) waitForMinimumPeers() (highestExpectedBlockNr *uint256.Int) {
 		if len(peers) >= required {
 			break
 		}
-		log.Info("Waiting for enough suitable peers before syncing (initial-sync.Server)", "suitable", len(peers), "required", required)
+		log.Trace("Waiting for enough suitable peers before syncing (initial-sync.Server)", "suitable", len(peers), "required", required)
 		time.Sleep(handshakePollingInterval)
 	}
 	return

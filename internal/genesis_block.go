@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/params/networkname"
 	"math/big"
 	"sync"
@@ -39,7 +40,6 @@ import (
 
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
-	"github.com/amazechain/amc/conf"
 )
 
 var ErrGenesisNoConfig = errors.New("genesis has no chain configuration")

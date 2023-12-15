@@ -41,6 +41,10 @@ type Log struct {
 	BlockNumber *uint256.Int `json:"blockNumber"`
 	// hash of the transaction
 	TxHash types.Hash `json:"transactionHash" gencodec:"required"`
+
+	// Address of the transaction
+	Sender types.Address `json:"-"`
+
 	// index of the transaction in the block
 	TxIndex uint `json:"transactionIndex" gencodec:"required"`
 	// hash of the block in which the transaction was included
@@ -64,6 +68,7 @@ func (l *Log) ToProtoMessage() proto.Message {
 		BlockHash:   utils.ConvertHashToH256(l.BlockHash),
 		Index:       uint64(l.Index),
 		Removed:     l.Removed,
+		Sender:      utils.ConvertAddressToH160(l.Sender),
 	}
 }
 
@@ -86,6 +91,7 @@ func (l *Log) FromProtoMessage(message proto.Message) error {
 	l.BlockHash = utils.ConvertH256ToHash(pLog.BlockHash)
 	l.Index = uint(pLog.Index)
 	l.Removed = pLog.Removed
+	l.Sender = utils.ConvertH160toAddress(pLog.Sender)
 
 	return nil
 }

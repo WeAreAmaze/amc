@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/aggsign"
 	"github.com/amazechain/amc/conf"
 	"github.com/amazechain/amc/internal"
 	"github.com/amazechain/amc/internal/api/filters"
@@ -528,7 +529,6 @@ func (diff *BlockOverrides) Apply(blockCtx *evmtypes.BlockContext) {
 }
 
 func DoCall(ctx context.Context, api *API, args TransactionArgs, blockNrOrHash jsonrpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*internal.ExecutionResult, error) {
-	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	// header := api.BlockChain().CurrentBlock().Header()
 	//state := api.BlockChain().StateAt(header.Hash()).(*statedb.StateDB)
@@ -978,14 +978,14 @@ func (s *BlockChainAPI) MinedBlock(ctx context.Context, address types.Address) (
 	return rpcSub, nil
 }
 
-func (s *BlockChainAPI) SubmitSign(sign AggSign) error {
+func (s *BlockChainAPI) SubmitSign(sign aggsign.AggSign) error {
 	info := DepositInfo(s.api.db, sign.Address)
 	if nil == info {
 		return fmt.Errorf("unauthed address: %s", sign.Address)
 	}
 	sign.PublicKey.SetBytes(info.PublicKey.Bytes())
 	go func() {
-		sigChannel <- sign
+		aggsign.SigChannel <- sign
 	}()
 	return nil
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
+	"math/bits"
 )
 
 // Account is the Ethereum consensus representation of accounts.
@@ -60,104 +61,85 @@ func NewAccount() StateAccount {
 	}
 }
 
-func (a *StateAccount) EncodingLengthForStorage() uint {
+func (a *StateAccount) EncodingLengthForStorageProto() uint {
 	pb := a.ToProtoMessage()
 	return uint(proto.Size(pb))
 }
 
-//	var structLength uint = 1 // 1 byte for fieldset
-//
-//	if !a.Balance.IsZero() {
-//		structLength += uint(a.Balance.ByteLen()) + 1
-//	}
-//
-//	if a.Nonce > 0 {
-//		structLength += uint((bits.Len64(a.Nonce)+7)/8) + 1
-//	}
-//
-//	if !a.IsEmptyCodeHash() {
-//		structLength += 33 // 32-byte array + 1 bytes for length
-//	}
-//
-//	if a.Incarnation > 0 {
-//		structLength += uint((bits.Len64(a.Incarnation)+7)/8) + 1
-//	}
-//
-//	return structLength
-//}
+func (a *StateAccount) EncodingLengthForStorage() uint {
+	var structLength uint = 1 // 1 byte for fieldset
 
-//func (a *Account) EncodingLengthForHashing() uint {
-//	var structLength uint
-//
-//	balanceBytes := 0
-//	if !a.Balance.LtUint64(128) {
-//		balanceBytes = a.Balance.ByteLen()
-//	}
-//
-//	nonceBytes := rlp.IntLenExcludingHead(a.Nonce)
-//
-//	structLength += uint(balanceBytes + nonceBytes + 2)
-//
-//	structLength += 66 // Two 32-byte arrays + 2 prefixes
-//
-//	if structLength < 56 {
-//		return 1 + structLength
-//	}
-//
-//	lengthBytes := (bits.Len(structLength) + 7) / 8
-//
-//	return uint(1+lengthBytes) + structLength
-//}
+	if !a.Balance.IsZero() {
+		structLength += uint(a.Balance.ByteLen()) + 1
+	}
 
-func (a *StateAccount) EncodeForStorage(buffer []byte) {
+	if a.Nonce > 0 {
+		structLength += uint((bits.Len64(a.Nonce)+7)/8) + 1
+	}
+
+	if !a.IsEmptyCodeHash() {
+		structLength += 33 // 32-byte array + 1 bytes for length
+	}
+
+	if a.Incarnation > 0 {
+		structLength += uint((bits.Len16(a.Incarnation)+7)/8) + 1
+	}
+
+	return structLength
+}
+
+func (a *StateAccount) EncodeForStorageProto(buffer []byte) {
 	pb := a.ToProtoMessage()
 	data, _ := proto.Marshal(pb)
 	copy(buffer, data)
-	//var fieldSet = 0 // start with first bit set to 0
-	//var pos = 1
-	//if a.Nonce > 0 {
-	//	fieldSet = 1
-	//	nonceBytes := (bits.Len64(a.Nonce) + 7) / 8
-	//	buffer[pos] = byte(nonceBytes)
-	//	var nonce = a.Nonce
-	//	for i := nonceBytes; i > 0; i-- {
-	//		buffer[pos+i] = byte(nonce)
-	//		nonce >>= 8
-	//	}
-	//	pos += nonceBytes + 1
-	//}
-	//
-	//// Encoding balance
-	//if !a.Balance.IsZero() {
-	//	fieldSet |= 2
-	//	balanceBytes := a.Balance.ByteLen()
-	//	buffer[pos] = byte(balanceBytes)
-	//	pos++
-	//	a.Balance.WriteToSlice(buffer[pos : pos+balanceBytes])
-	//	pos += balanceBytes
-	//}
-	//
-	//if a.Incarnation > 0 {
-	//	fieldSet |= 4
-	//	incarnationBytes := (bits.Len64(uint64(a.Incarnation)) + 7) / 8
-	//	buffer[pos] = byte(incarnationBytes)
-	//	var incarnation = a.Incarnation
-	//	for i := incarnationBytes; i > 0; i-- {
-	//		buffer[pos+i] = byte(incarnation)
-	//		incarnation >>= 8
-	//	}
-	//	pos += incarnationBytes + 1
-	//}
-	//
-	//// Encoding CodeHash
-	//if !a.IsEmptyCodeHash() {
-	//	fieldSet |= 8
-	//	buffer[pos] = 32
-	//	copy(buffer[pos+1:], a.CodeHash.Bytes())
-	//	//pos += 33
-	//}
-	//
-	//buffer[0] = byte(fieldSet)
+}
+
+func (a *StateAccount) EncodeForStorage(buffer []byte) {
+	var fieldSet = 0 // start with first bit set to 0
+	var pos = 1
+	if a.Nonce > 0 {
+		fieldSet = 1
+		nonceBytes := (bits.Len64(a.Nonce) + 7) / 8
+		buffer[pos] = byte(nonceBytes)
+		var nonce = a.Nonce
+		for i := nonceBytes; i > 0; i-- {
+			buffer[pos+i] = byte(nonce)
+			nonce >>= 8
+		}
+		pos += nonceBytes + 1
+	}
+
+	// Encoding balance
+	if !a.Balance.IsZero() {
+		fieldSet |= 2
+		balanceBytes := a.Balance.ByteLen()
+		buffer[pos] = byte(balanceBytes)
+		pos++
+		a.Balance.WriteToSlice(buffer[pos : pos+balanceBytes])
+		pos += balanceBytes
+	}
+
+	if a.Incarnation > 0 {
+		fieldSet |= 4
+		incarnationBytes := (bits.Len16(a.Incarnation) + 7) / 8
+		buffer[pos] = byte(incarnationBytes)
+		var incarnation = a.Incarnation
+		for i := incarnationBytes; i > 0; i-- {
+			buffer[pos+i] = byte(incarnation)
+			incarnation >>= 8
+		}
+		pos += incarnationBytes + 1
+	}
+
+	// Encoding CodeHash
+	if !a.IsEmptyCodeHash() {
+		fieldSet |= 8
+		buffer[pos] = 32
+		copy(buffer[pos+1:], a.CodeHash.Bytes())
+		//pos += 33
+	}
+
+	buffer[0] = byte(fieldSet)
 }
 
 // Decodes length and determines whether it corresponds to a structure of a byte array
@@ -455,97 +437,105 @@ func (a *StateAccount) Reset() {
 	a.Nonce = 0
 	a.Incarnation = 0
 	a.Balance.Clear()
-	copy(a.Root[:], emptyRoot[:])
+	//copy(a.Root[:], emptyRoot[:])
+	a.Root = types.Hash{}
 	copy(a.CodeHash[:], emptyCodeHash[:])
 }
 
-func (a *StateAccount) DecodeForStorage(enc []byte) error {
+func (a *StateAccount) DecodeForStorageProto(enc []byte) error {
 	a.Reset()
 	if len(enc) == 0 {
 		return nil
 	}
 	return a.Unmarshal(enc)
-	//pbAccount := new(state.Account)
-	//if err := proto.Unmarshal(enc, pbAccount); nil != err {
-	//	return err
-	//}
-	//if err := a.FromProtoMessage(pbAccount); nil != err {
-	//	return err
-	//}
-
-	//a.Reset()
-	//
-	//if len(enc) == 0 {
-	//	return nil
-	//}
-	//
-	//var fieldSet = enc[0]
-	//var pos = 1
-	//
-	//if fieldSet&1 > 0 {
-	//	decodeLength := int(enc[pos])
-	//
-	//	if len(enc) < pos+decodeLength+1 {
-	//		return fmt.Errorf(
-	//			"malformed CBOR for Account.Nonce: %s, Length %d",
-	//			enc[pos+1:], decodeLength)
-	//	}
-	//
-	//	a.Nonce = bytesToUint64(enc[pos+1 : pos+decodeLength+1])
-	//	pos += decodeLength + 1
-	//}
-	//
-	//if fieldSet&2 > 0 {
-	//	decodeLength := int(enc[pos])
-	//
-	//	if len(enc) < pos+decodeLength+1 {
-	//		return fmt.Errorf(
-	//			"malformed CBOR for Account.Nonce: %s, Length %d",
-	//			enc[pos+1:], decodeLength)
-	//	}
-	//
-	//	a.Balance.SetBytes(enc[pos+1 : pos+decodeLength+1])
-	//	pos += decodeLength + 1
-	//}
-	//
-	//if fieldSet&4 > 0 {
-	//	decodeLength := int(enc[pos])
-	//
-	//	if len(enc) < pos+decodeLength+1 {
-	//		return fmt.Errorf(
-	//			"malformed CBOR for Account.Incarnation: %s, Length %d",
-	//			enc[pos+1:], decodeLength)
-	//	}
-	//
-	//	a.Incarnation = uint16(bytesToUint64(enc[pos+1 : pos+decodeLength+1]))
-	//	pos += decodeLength + 1
-	//}
-	//
-	//if fieldSet&8 > 0 {
-	//
-	//	decodeLength := int(enc[pos])
-	//
-	//	if decodeLength != 32 {
-	//		return fmt.Errorf("codehash should be 32 bytes long, got %d instead",
-	//			decodeLength)
-	//	}
-	//
-	//	if len(enc) < pos+decodeLength+1 {
-	//		return fmt.Errorf(
-	//			"malformed CBOR for Account.CodeHash: %s, Length %d",
-	//			enc[pos+1:], decodeLength)
-	//	}
-	//
-	//	a.CodeHash.SetBytes(enc[pos+1 : pos+decodeLength+1])
-	//	pos += decodeLength + 1
-	//}
-	//
-	//_ = pos
 }
+func (a *StateAccount) DecodeForStorage(enc []byte) error {
+	a.Reset()
+
+	if len(enc) == 0 {
+		return nil
+	}
+
+	var fieldSet = enc[0]
+	var pos = 1
+
+	if fieldSet&1 > 0 {
+		decodeLength := int(enc[pos])
+
+		if len(enc) < pos+decodeLength+1 {
+			return fmt.Errorf(
+				"malformed CBOR for Account.Nonce: %s, Length %d",
+				enc[pos+1:], decodeLength)
+		}
+
+		a.Nonce = bytesToUint64(enc[pos+1 : pos+decodeLength+1])
+		pos += decodeLength + 1
+	}
+
+	if fieldSet&2 > 0 {
+		decodeLength := int(enc[pos])
+
+		if len(enc) < pos+decodeLength+1 {
+			return fmt.Errorf(
+				"malformed CBOR for Account.Nonce: %s, Length %d",
+				enc[pos+1:], decodeLength)
+		}
+
+		a.Balance.SetBytes(enc[pos+1 : pos+decodeLength+1])
+		pos += decodeLength + 1
+	}
+
+	if fieldSet&4 > 0 {
+		decodeLength := int(enc[pos])
+
+		if len(enc) < pos+decodeLength+1 {
+			return fmt.Errorf(
+				"malformed CBOR for Account.Incarnation: %s, Length %d",
+				enc[pos+1:], decodeLength)
+		}
+
+		a.Incarnation = bytesToUint16(enc[pos+1 : pos+decodeLength+1])
+		pos += decodeLength + 1
+	}
+
+	if fieldSet&8 > 0 {
+
+		decodeLength := int(enc[pos])
+
+		if decodeLength != 32 {
+			return fmt.Errorf("codehash should be 32 bytes long, got %d instead",
+				decodeLength)
+		}
+
+		if len(enc) < pos+decodeLength+1 {
+			return fmt.Errorf(
+				"malformed CBOR for Account.CodeHash: %s, Length %d",
+				enc[pos+1:], decodeLength)
+		}
+
+		a.CodeHash.SetBytes(enc[pos+1 : pos+decodeLength+1])
+		pos += decodeLength + 1
+	}
+
+	_ = pos
+
+	return nil
+}
+
 func bytesToUint64(buf []byte) (x uint64) {
 	for i, b := range buf {
 		x = x<<8 + uint64(b)
 		if i == 7 {
+			return
+		}
+	}
+	return
+}
+
+func bytesToUint16(buf []byte) (x uint16) {
+	for i, b := range buf {
+		x = x<<8 + uint16(b)
+		if i == 1 {
 			return
 		}
 	}

@@ -46,7 +46,7 @@ func (s *Service) pingHandler(_ context.Context, msg interface{}, stream libp2pc
 	closeStream(stream)
 
 	if valid {
-		s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), &sync_pb.Ping{SeqNumber: uint64(*m)})
+		//s.cfg.p2p.Peers().SetPing(stream.Conn().RemotePeer(), &sync_pb.Ping{SeqNumber: uint64(*m)})
 		// If the sequence number was valid we're done.
 		return nil
 	}

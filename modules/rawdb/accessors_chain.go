@@ -87,14 +87,13 @@ func IsCanonicalHash(db kv.Getter, hash types.Hash) (bool, error) {
 func ReadHeaderNumber(db kv.Getter, hash types.Hash) *uint64 {
 	data, err := db.GetOne(modules.HeaderNumber, hash.Bytes())
 	if err != nil {
-		log.Error("ReadHeaderNumber failed", "err", err)
+		log.Crit("ReadHeaderNumber failed", "err", err)
 	}
 	if len(data) == 0 {
 		return nil
 	}
 	if len(data) != 8 {
-		log.Error("ReadHeaderNumber got wrong data len", "len", len(data))
-		return nil
+		log.Crit("ReadHeaderNumber got wrong data len", "len", len(data))
 	}
 	number := binary.BigEndian.Uint64(data)
 	return &number
@@ -384,14 +383,16 @@ func ReadBodyByNumber(db kv.Tx, number uint64) (*block.Body, uint64, uint32, err
 }
 
 func ReadBodyWithTransactions(db kv.Getter, hash types.Hash, number uint64) (*block.Body, error) {
-	canonicalHash, err := ReadCanonicalHash(db, number)
+	body, baseTxId, txAmount := ReadBody(db, hash, number)
+	if body == nil {
+		return nil, nil
+	}
+	var err error
+	body.Txs, err = CanonicalTransactions(db, baseTxId, txAmount)
 	if err != nil {
-		return nil, fmt.Errorf("read canonical hash failed: %d, %w", number, err)
+		return nil, err
 	}
-	if canonicalHash == hash {
-		return ReadCanonicalBodyWithTransactions(db, hash, number), nil
-	}
-	return nil, fmt.Errorf("mismatch hash: %v", hash)
+	return body, err
 }
 
 func ReadCanonicalBodyWithTransactions(db kv.Getter, hash types.Hash, number uint64) *block.Body {

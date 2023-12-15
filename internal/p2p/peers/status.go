@@ -598,7 +598,7 @@ func (p *Status) BestPeers(wantPeers int, ourCurrentHeight *uint256.Int) (*uint2
 	potentialPIDs := make([]peer.ID, 0, len(connected))
 	for _, pid := range connected {
 		peerData, ok := p.store.PeerData(pid)
-		if ok && peerData.CurrentHeight().Cmp(ourCurrentHeight) == 1 {
+		if ok && peerData.CurrentHeight().Cmp(ourCurrentHeight) >= 0 {
 			pidHead[pid] = peerData.CurrentHeight()
 			potentialPIDs = append(potentialPIDs, pid)
 		}
@@ -622,7 +622,6 @@ func (p *Status) BestPeers(wantPeers int, ourCurrentHeight *uint256.Int) (*uint2
 	targetBlockNumber = pidHead[potentialPIDs[len(potentialPIDs)-1]]
 
 	return targetBlockNumber, potentialPIDs
-
 }
 
 // PeersToPrune selects the most suitable inbound peers

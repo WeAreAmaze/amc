@@ -81,21 +81,36 @@ func (v *BlockValidator) ValidateBody(b block.IBlock) error {
 		}
 	}
 
-	// Check whether the block's known, and if not, that it's linkable
-	if v.bc.HasBlockAndState(b.Hash(), b.Number64().Uint64()) {
+	if v.bc.HasBlock(b.Hash(), b.Number64().Uint64()) {
 		return ErrKnownBlock
 	}
 
+	// Check whether the block's known, and if not, that it's linkable
+	//if v.bc.HasBlockAndState(b.Hash(), b.Number64().Uint64()) {
+	//	return ErrKnownBlock
+	//}
+
 	if hash := DeriveSha(transaction.Transactions(b.Transactions())); hash != b.TxHash() {
-		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, b.TxHash())
+		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", b.TxHash(), hash)
+	}
+
+	if !v.bc.HasBlock(b.ParentHash(), b.Number64().Uint64()-1) {
+		return ErrUnknownAncestor
 	}
 
 	if !v.bc.HasBlockAndState(b.ParentHash(), b.Number64().Uint64()-1) {
-		if !v.bc.HasBlock(b.ParentHash(), b.Number64().Uint64()-1) {
-			return ErrUnknownAncestor
-		}
 		return ErrPrunedAncestor
 	}
+
+	if b.Number64().Cmp(v.bc.CurrentBlock().Number64()) <= 0 {
+		return ErrPrunedAncestor
+	}
+	//if !v.bc.HasBlockAndState(b.ParentHash(), b.Number64().Uint64()-1) {
+	//	if !v.bc.HasBlock(b.ParentHash(), b.Number64().Uint64()-1) {
+	//		return ErrUnknownAncestor
+	//	}
+	//	return ErrPrunedAncestor
+	//}
 	return nil
 }
 

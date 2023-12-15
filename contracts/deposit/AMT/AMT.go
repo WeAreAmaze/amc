@@ -94,3 +94,20 @@ func (Contract) UnpackDepositLogData(data []byte) (publicKey []byte, signature [
 	log.Debug("unpacked DepositEvent Logs", "publicKey", hexutil.Encode(unpackedLogs[0].([]byte)), "signature", hexutil.Encode(unpackedLogs[2].([]byte)), "message", hexutil.Encode(depositAmount.Bytes()))
 	return
 }
+
+// UnpackWithdrawnLogData unpacks the data from a deposit log using the ABI decoder.
+func (Contract) UnpackWithdrawnLogData(data []byte) (amount *uint256.Int, err error) {
+
+	unpackedLogs, err := contractAbi.Unpack("WithdrawnEvent", data)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to unpack logs")
+	}
+	amount, overflow := uint256.FromBig(unpackedLogs[0].(*big.Int))
+	if overflow {
+		return nil, errors.New("unable to unpack amount")
+	}
+
+	log.Debug("unpacked AMT WithdrawnEvent Logs", "message", hexutil.Encode(amount.Bytes()))
+
+	return amount, nil
+}

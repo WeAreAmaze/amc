@@ -18,13 +18,19 @@ package block
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/amazechain/amc/api/protocol/types_pb"
+	"github.com/amazechain/amc/common/crypto"
+	"github.com/amazechain/amc/common/transaction"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/avm/rlp"
+	"github.com/amazechain/amc/params"
 	"github.com/amazechain/amc/utils"
 	"github.com/holiman/uint256"
 	"google.golang.org/protobuf/proto"
+	"math/big"
+
 )
 
 const (
@@ -94,6 +100,58 @@ func (rs *Receipts) ToProtoMessage() proto.Message {
 	return &types_pb.Receipts{
 		Receipts: receipts,
 	}
+}
+
+// DeriveFields fills the receipts with their computed fields based on consensus
+// data and contextual infos like containing block and transactions.
+func (rs Receipts) DeriveFields(config *params.ChainConfig, hash types.Hash, number uint64, txs []*transaction.Transaction) error {
+	signer := transaction.MakeSigner(config, new(big.Int).SetUint64(number))
+
+	logIndex := uint(0)
+	if len(txs) != len(rs) {
+		return errors.New("transaction and receipt count mismatch")
+	}
+	for i := 0; i < len(rs); i++ {
+		// The transaction type and hash can be retrieved from the transaction itself
+		rs[i].Type = txs[i].Type()
+		rs[i].TxHash = txs[i].Hash()
+
+		//rs[i].EffectiveGasPrice = txs[i].inner.effectiveGasPrice(new(big.Int), baseFee)
+
+		// block location fields
+		rs[i].BlockHash = hash
+		rs[i].BlockNumber = new(uint256.Int).SetUint64(number)
+		rs[i].TransactionIndex = uint(i)
+		// Deriving the signer is expensive, only do if it's actually needed
+		from, _ := transaction.Sender(signer, txs[i])
+
+		// The contract address can be derived from the transaction itself
+		if txs[i].To() == nil {
+
+			rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
+		} else {
+			rs[i].ContractAddress = types.Address{}
+		}
+
+		// The used gas can be calculated based on previous r
+		if i == 0 {
+			rs[i].GasUsed = rs[i].CumulativeGasUsed
+		} else {
+			rs[i].GasUsed = rs[i].CumulativeGasUsed - rs[i-1].CumulativeGasUsed
+		}
+
+		// The derived log fields can simply be set from the block and transaction
+		for j := 0; j < len(rs[i].Logs); j++ {
+			rs[i].Logs[j].BlockNumber = uint256.NewInt(number)
+			rs[i].Logs[j].BlockHash = hash
+			rs[i].Logs[j].TxHash = rs[i].TxHash
+			rs[i].Logs[j].TxIndex = uint(i)
+			rs[i].Logs[j].Index = logIndex
+			rs[i].Logs[j].Sender = from
+			logIndex++
+		}
+	}
+	return nil
 }
 
 type Receipt struct {
@@ -198,6 +256,14 @@ func (r *Receipt) fromProtoMessage(message proto.Message) error {
 	r.TransactionIndex = uint(pReceipt.TransactionIndex)
 
 	return nil
+}
+
+// Copy creates a deep copy of the Receipt.
+func (r *Receipt) Copy() *Receipt {
+	pb := r.toProtoMessage()
+	cr := new(Receipt)
+	cr.fromProtoMessage(pb)
+	return cr
 }
 
 // storedReceipt is the consensus encoding of a receipt.

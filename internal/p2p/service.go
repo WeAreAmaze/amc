@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	pubsublog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -162,6 +163,8 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 	// Initialize Data maps.
 	//types.InitializeDataMaps()
 
+	pubsublog.SetLogLevel("pubsub", "debug")
+
 	return s, nil
 }
 
@@ -186,9 +189,9 @@ func (s *Service) Start() {
 
 	s.isPreGenesis = false
 
-	var peersToWatch []string
+	var relayNodes []string
 	if s.cfg.RelayNodeAddr != "" {
-		peersToWatch = append(peersToWatch, s.cfg.RelayNodeAddr)
+		relayNodes = append(relayNodes, s.cfg.RelayNodeAddr)
 		if err := dialRelayNode(s.ctx, s.host, s.cfg.RelayNodeAddr); err != nil {
 			log.Error("Could not dial relay node", "err", err)
 		}
@@ -238,9 +241,9 @@ func (s *Service) Start() {
 	s.RefreshENR()
 
 	// Periodic functions.
-	if len(peersToWatch) > 0 {
+	if len(relayNodes) > 0 {
 		utils.RunEvery(s.ctx, ttfbTimeout, func() {
-			ensurePeerConnections(s.ctx, s.host, peersToWatch...)
+			ensurePeerConnections(s.ctx, s.host, relayNodes...)
 		})
 	}
 
@@ -250,7 +253,8 @@ func (s *Service) Start() {
 	utils.RunEvery(s.ctx, 1*time.Minute, func() {
 		//utils.RunEvery(s.ctx, 5*time.Second, func() {
 		log.Info("Peer summary", "inbound", len(s.peers.InboundConnected()), "outbound", len(s.peers.OutboundConnected()), "activePeers", len(s.peers.Active()), "disconnectedPeers", len(s.peers.Disconnected()))
-		for _, p := range s.peers.All() {
+		//s.peers.Prune()
+		for _, p := range s.peers.Active() {
 			//addr, _ := s.peers.Address(p)
 			//IP, _ := s.peers.IP(p)
 			//ENR, _ := s.peers.ENR(p)

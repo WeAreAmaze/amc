@@ -22,6 +22,7 @@ import (
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules"
+	"github.com/ledgerwatch/erigon-lib/kv/mdbx"
 
 	"github.com/amazechain/amc/params"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -58,4 +59,10 @@ func WriteChainConfig(db kv.RwTx, hash types.Hash, cfg *params.ChainConfig) erro
 		return err
 	}
 	return nil
+}
+
+func NewMemoryDatabase(tmpDir string) kv.RwDB {
+	modules.AmcInit()
+	kv.ChaindataTablesCfg = modules.AmcTableCfg
+	return mdbx.NewMDBX(nil).InMem(tmpDir).MustOpen()
 }

@@ -10,6 +10,7 @@ import (
 	block2 "github.com/amazechain/amc/common/block"
 	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/internal/p2p"
+	"github.com/amazechain/amc/log"
 	v2 "github.com/amazechain/amc/modules/event/v2"
 	"github.com/amazechain/amc/utils"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -78,8 +79,7 @@ type Service struct {
 
 	txpool common.ITxsPool
 	txsSub v2.Subscription
-	txsCh chan common.NewTxsEvent
-
+	txsCh  chan common.NewTxsEvent
 
 	validateBlockLock               sync.RWMutex
 	seenExitLock                    sync.RWMutex
@@ -122,12 +122,15 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 // Start the regular sync service.
 func (s *Service) Start() {
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
-	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, p peer.ID) error {
+	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, id peer.ID) error {
+
 		// no-op
+		//s.cfg.p2p.Peers()
+		log.Error("disconnect peer", "peer", id)
 		//for no reason disconnect
 		//todo
-		if nextValidTime, err := s.cfg.p2p.Peers().NextValidTime(p); err == nil && time.Now().After(nextValidTime) {
-			s.cfg.p2p.Peers().SetNextValidTime(p, time.Now().Add(10*time.Minute))
+		if nextValidTime, err := s.cfg.p2p.Peers().NextValidTime(id); err == nil && time.Now().After(nextValidTime) {
+			s.cfg.p2p.Peers().SetNextValidTime(id, time.Now().Add(10*time.Minute))
 		}
 		return nil
 	})
@@ -135,7 +138,7 @@ func (s *Service) Start() {
 	s.maintainPeerStatuses()
 	s.resyncIfBehind()
 
-	s.txsCh = make( chan common.NewTxsEvent)
+	s.txsCh = make(chan common.NewTxsEvent)
 	s.txsSub = s.txpool.SubscribeTransactions(s.txsCh)
 	go s.broadcastTransactions()
 

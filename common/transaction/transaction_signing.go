@@ -60,6 +60,31 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	return signer
 }
 
+// LatestSigner returns the 'most permissive' Signer available for the given chain
+// configuration. Specifically, this enables support of all types of transacrions
+// when their respective forks are scheduled to occur at any block number (or time)
+// in the chain config.
+//
+// Use this in transaction-handling code where the current block number is unknown. If you
+// have the current block number available, use MakeSigner instead.
+func LatestSigner(config *params.ChainConfig) Signer {
+	if config.ChainID != nil {
+		//if config.CancunTime != nil {
+		//	return NewCancunSigner(config.ChainID)
+		//}
+		if config.LondonBlock != nil {
+			return NewLondonSigner(config.ChainID)
+		}
+		if config.BerlinBlock != nil {
+			return NewEIP2930Signer(config.ChainID)
+		}
+		//if config.EIP155Block != nil {
+		//	return NewEIP155Signer(config.ChainID)
+		//}
+	}
+	return HomesteadSigner{}
+}
+
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
 // this enables support for EIP-155 replay protection and all implemented EIP-2718
 // transaction types if chainID is non-nil.

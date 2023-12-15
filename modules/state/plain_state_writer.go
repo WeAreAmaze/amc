@@ -23,7 +23,6 @@ import (
 	"github.com/amazechain/amc/modules"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"google.golang.org/protobuf/proto"
 )
 
 var _ WriterWithChangeSets = (*PlainStateWriter)(nil)
@@ -63,15 +62,9 @@ func (w *PlainStateWriter) UpdateAccountData(address types.Address, original, ac
 			return err
 		}
 	}
-	//var value []byte
-	//account.EncodeForStorage(value)
-	pb := account.ToProtoMessage()
-	data, _ := proto.Marshal(pb)
-	//if w.accumulator != nil {
-	//	w.accumulator.ChangeAccount(address, account.Incarnation, value)
-	//}
-	// defer fmt.Printf("Write Account   address: %s, balance: %d \n", address, data)
-	return w.db.Put(modules.Account, address[:], data)
+	value := make([]byte, account.EncodingLengthForStorage())
+	account.EncodeForStorage(value)
+	return w.db.Put(modules.Account, address[:], value)
 }
 
 func (w *PlainStateWriter) UpdateAccountCode(address types.Address, incarnation uint16, codeHash types.Hash, code []byte) error {

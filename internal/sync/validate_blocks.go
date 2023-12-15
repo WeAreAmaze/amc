@@ -101,11 +101,12 @@ func (s *Service) validateBlockPubSub(ctx context.Context, pid peer.ID, msg *pub
 	// Handle block when the parent is unknown.
 	if !s.cfg.chain.HasBlock(header.ParentHash, header.Number.Uint64()-1) {
 		// todo feature?
+		return pubsub.ValidationIgnore, nil
 	}
 
 	msg.ValidatorData = iBlock.ToProtoMessage() // Used in downstream subscriber
-
-	log.Debug("Received block")
+	//
+	//log.Debug("Received block")
 
 	blockVerificationGossipSummary.Observe(float64(time.Since(receivedTime).Milliseconds()))
 	return pubsub.ValidationAccept, nil

@@ -37,7 +37,7 @@ const (
 	// startBackSlots defines number of slots before the current head, which defines a start position
 	// of the initial machine. This allows more robustness in case of normal sync sets head to some
 	// orphaned block: in that case starting earlier and re-fetching blocks allows to reorganize chain.
-	//startBackSlots = 32
+	startBackBlock = 7
 )
 
 var (
@@ -162,7 +162,6 @@ func (q *blocksQueue) loop() {
 	}
 
 	// Define initial state machines.
-	// currentblock update?
 	startBlockNr := new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
 	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {
@@ -206,6 +205,12 @@ func (q *blocksQueue) loop() {
 						continue
 					}
 				}
+				//if fsm.start.Cmp(q.highestExpectedBlockNr) == 1 {
+				//	if err := q.smm.removeStateMachine(fsm.start); err != nil {
+				//		log.Debug("Can not remove state machine", "err", err)
+				//	}
+				//	continue
+				//}
 				// Do garbage collection, and advance sliding window forward.
 				if q.chain.CurrentBlock().Number64().Cmp(new(uint256.Int).AddUint64(fsm.start, blocksPerRequest-1)) >= 0 {
 					highestStartSlot, err := q.smm.highestStartSlot()

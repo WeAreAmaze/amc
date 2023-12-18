@@ -53,7 +53,7 @@ const (
 
 func Init(nodeConfig conf.NodeConfig, config conf.LoggerConfig) {
 	formatter := new(prefixed.TextFormatter)
-	formatter.TimestampFormat = "2006-01-02 15:04:05"
+	formatter.TimestampFormat = "2006-01-02T15:04:05.999-0700"
 	formatter.FullTimestamp = true
 	formatter.DisableColors = false
 	logrus.SetFormatter(formatter)
@@ -61,7 +61,7 @@ func Init(nodeConfig conf.NodeConfig, config conf.LoggerConfig) {
 	logrus.SetLevel(lvl)
 
 	jsonFormatter := new(logrus.JSONFormatter)
-	jsonFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	jsonFormatter.TimestampFormat = "2006-01-02T15:04:05.999-0700"
 	terminal.SetFormatter(jsonFormatter)
 	terminal.SetLevel(lvl)
 	terminal.SetOutput(&lumberjack.Logger{
@@ -78,7 +78,7 @@ func InitMobileLogger(filepath string, isDebug bool) {
 		return
 	}
 	formatter := new(prefixed.TextFormatter)
-	formatter.TimestampFormat = "2006-01-02 15:04:05"
+	formatter.TimestampFormat = "2006-01-02T15:04:05.999-0700"
 	formatter.FullTimestamp = true
 	formatter.DisableColors = false
 	logrus.SetFormatter(formatter)

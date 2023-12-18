@@ -412,6 +412,11 @@ var (
 		Usage: "to data  dir",
 	}
 
+	AddressFlag = &cli.StringFlag{
+		Name:  "address",
+		Usage: "address",
+	}
+
 	ChainFlag = &cli.StringFlag{
 		Name:        "chain",
 		Usage:       "Name of the testnet to join (value:[mainnet,testnet,private])",

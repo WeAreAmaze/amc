@@ -37,7 +37,7 @@ const (
 	// startBackSlots defines number of slots before the current head, which defines a start position
 	// of the initial machine. This allows more robustness in case of normal sync sets head to some
 	// orphaned block: in that case starting earlier and re-fetching blocks allows to reorganize chain.
-	startBackBlock = 7
+	startBackBlock = 128
 )
 
 var (
@@ -163,6 +163,9 @@ func (q *blocksQueue) loop() {
 
 	// Define initial state machines.
 	startBlockNr := new(uint256.Int).AddUint64(q.chain.CurrentBlock().Number64(), 1)
+	if startBlockNr.Uint64() > startBackBlock {
+		startBlockNr.SubUint64(startBlockNr, startBackBlock)
+	}
 	blocksPerRequest := q.blocksFetcher.blocksPerPeriod
 	for i := startBlockNr.Clone(); i.Cmp(new(uint256.Int).AddUint64(startBlockNr, blocksPerRequest*lookaheadSteps)) == -1; i = i.AddUint64(i, blocksPerRequest) {
 		q.smm.addStateMachine(i)

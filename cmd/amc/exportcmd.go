@@ -25,11 +25,14 @@ import (
 	"github.com/amazechain/amc/internal/node"
 	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules"
+	"github.com/amazechain/amc/modules/ethdb/bitmapdb"
+	"github.com/amazechain/amc/modules/state"
 	"github.com/amazechain/amc/params"
 	"github.com/amazechain/amc/turbo/backup"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/urfave/cli/v2"
+	"math"
 	"math/big"
 	"os"
 	"time"
@@ -80,6 +83,17 @@ var (
 				Flags: []cli.Flag{
 					FromDataDirFlag,
 					ToDataDirFlag,
+				},
+				Description: ``,
+			},
+			{
+				Name:      "history",
+				Usage:     "Export address history",
+				ArgsUsage: "",
+				Action:    exportHistory,
+				Flags: []cli.Flag{
+					DataDirFlag,
+					AddressFlag,
 				},
 				Description: ``,
 			},
@@ -159,6 +173,49 @@ func exportBalance(ctx *cli.Context) error {
 			acc.Balance.Hex(),
 			new(big.Float).Quo(new(big.Float).SetInt(acc.Balance.ToBig()), new(big.Float).SetInt(big.NewInt(params.AMT))),
 		)
+	}
+
+	return nil
+}
+
+func exportHistory(ctx *cli.Context) error {
+	modules.AmcInit()
+	kv.ChaindataTablesCfg = modules.AmcTableCfg
+
+	exportAddress := common.HexToAddress(ctx.String(AddressFlag.Name))
+
+	stack, err := node.NewNode(ctx, &DefaultConfig)
+	if err != nil {
+		return err
+	}
+	db := stack.Database()
+	defer stack.Close()
+
+	roTX, err := db.BeginRo(ctx.Context)
+	if err != nil {
+		return err
+	}
+	defer roTX.Rollback()
+
+	index, err := bitmapdb.Get64(roTX, modules.AccountsHistory, exportAddress.Bytes(), 0, math.MaxUint32)
+	if err != nil {
+		return err
+	}
+
+	it := index.Iterator()
+
+	for it.HasNext() {
+		blockNr := it.Next()
+
+		stateReader := state.NewPlainState(roTX, blockNr+1)
+		ibs := state.New(stateReader)
+
+		fmt.Printf("%d, %s, %d\n",
+			blockNr,
+			ibs.GetBalance(exportAddress).Hex(),
+			ibs.GetNonce(exportAddress),
+		)
+
 	}
 
 	return nil

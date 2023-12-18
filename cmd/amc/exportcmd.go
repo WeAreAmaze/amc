@@ -153,8 +153,10 @@ func exportBalance(ctx *cli.Context) error {
 			return err
 		}
 
-		fmt.Printf("%x, %.2f\n",
+		fmt.Printf("%x, %d, %s, %.2f\n",
 			k,
+			acc.Nonce,
+			acc.Balance.Hex(),
 			new(big.Float).Quo(new(big.Float).SetInt(acc.Balance.ToBig()), new(big.Float).SetInt(big.NewInt(params.AMT))),
 		)
 	}

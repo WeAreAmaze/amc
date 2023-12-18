@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common/account"
 	"github.com/amazechain/amc/modules"
-	mdbx2 "github.com/erigontech/mdbx-go"
+	mdbx2 "github.com/erigontech/mdbx-go/mdbx"
 	"github.com/ledgerwatch/erigon-lib/common"
 	"github.com/ledgerwatch/erigon-lib/common/cmp"
 	"github.com/ledgerwatch/erigon-lib/kv"

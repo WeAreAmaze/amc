@@ -768,8 +768,8 @@ func (bc *BlockChain) HasBlockAndState(hash types.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	//return bc.HasState(block.Hash())
-	return nil != bc.GetTd(hash, uint256.NewInt(number))
+	return bc.HasState(block.Hash())
+	//return nil != bc.GetTd(hash, uint256.NewInt(number))
 }
 
 // HasState
@@ -1211,8 +1211,8 @@ func (bc *BlockChain) insertSideChain(block block2.IBlock, it *insertIterator) (
 		numbers []uint64
 	)
 	parent := it.previous()
-	//for parent != nil && !bc.HasState(parent.Hash()) {
-	for parent != nil && nil == bc.GetTd(parent.Hash(), parent.Number64()) {
+	for parent != nil && !bc.HasState(parent.Hash()) {
+		//for parent != nil && nil == bc.GetTd(parent.Hash(), parent.Number64()) {
 		hashes = append(hashes, parent.Hash())
 		numbers = append(numbers, parent.Number64().Uint64())
 

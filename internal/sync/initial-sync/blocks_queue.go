@@ -215,7 +215,7 @@ func (q *blocksQueue) loop() {
 				//	continue
 				//}
 				// Do garbage collection, and advance sliding window forward.
-				if q.chain.CurrentBlock().Number64().Cmp(new(uint256.Int).AddUint64(fsm.start, blocksPerRequest-1)) >= 0 {
+				if q.chain.CurrentBlock().Number64().Cmp(new(uint256.Int).AddUint64(fsm.start, blocksPerRequest-1+startBackBlock)) >= 0 {
 					highestStartSlot, err := q.smm.highestStartSlot()
 					if err != nil {
 						log.Debug("Cannot obtain highest epoch state number", "err", err)

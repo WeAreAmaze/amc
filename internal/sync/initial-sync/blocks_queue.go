@@ -37,7 +37,7 @@ const (
 	// startBackSlots defines number of slots before the current head, which defines a start position
 	// of the initial machine. This allows more robustness in case of normal sync sets head to some
 	// orphaned block: in that case starting earlier and re-fetching blocks allows to reorganize chain.
-	startBackBlock = 128
+	startBackBlock = 5
 )
 
 var (
@@ -215,7 +215,7 @@ func (q *blocksQueue) loop() {
 				//	continue
 				//}
 				// Do garbage collection, and advance sliding window forward.
-				if q.chain.CurrentBlock().Number64().Cmp(new(uint256.Int).AddUint64(fsm.start, blocksPerRequest-1+startBackBlock)) >= 0 {
+				if q.chain.CurrentBlock().Number64().Cmp(new(uint256.Int).AddUint64(fsm.start, blocksPerRequest-1)) >= 0 {
 					highestStartSlot, err := q.smm.highestStartSlot()
 					if err != nil {
 						log.Debug("Cannot obtain highest epoch state number", "err", err)

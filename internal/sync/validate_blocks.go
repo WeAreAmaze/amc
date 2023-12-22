@@ -31,9 +31,9 @@ func (s *Service) validateBlockPubSub(ctx context.Context, pid peer.ID, msg *pub
 	}
 
 	// We should not attempt to process blocks until fully synced, but propagation is OK.
-	if s.cfg.initialSync.Syncing() {
-		return pubsub.ValidationIgnore, nil
-	}
+	//if s.cfg.initialSync.Syncing() {
+	//	return pubsub.ValidationIgnore, nil
+	//}
 
 	ctx, span := trace.StartSpan(ctx, "sync.validateBlockPubSub")
 	defer span.End()
@@ -101,6 +101,9 @@ func (s *Service) validateBlockPubSub(ctx context.Context, pid peer.ID, msg *pub
 	// Handle block when the parent is unknown.
 	if !s.cfg.chain.HasBlock(header.ParentHash, header.Number.Uint64()-1) {
 		// todo feature?
+		if err := s.cfg.chain.AddFutureBlock(iBlock); err != nil {
+			return pubsub.ValidationIgnore, err
+		}
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -136,7 +139,7 @@ func captureArrivalTimeMetric(headerTime uint64) error {
 	startTime := time.Unix(int64(headerTime), 0)
 	//todo future block
 	if time.Now().Sub(startTime) < 0 {
-		return fmt.Errorf("the block is future block time is %s", startTime.Format(time.RFC3339))
+		//return fmt.Errorf("the block is future block time is %s", startTime.Format(time.RFC3339))
 	}
 	ms := time.Now().Sub(startTime) / time.Millisecond
 	arrivalBlockPropagationHistogram.Observe(float64(ms))

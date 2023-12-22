@@ -54,6 +54,8 @@ func (s *Service) Start() {
 
 	event.GlobalEvent.Send(common.DownloaderStartEvent{})
 	defer event.GlobalEvent.Send(common.DownloaderFinishEvent{})
+	s.markSyncing()
+	defer s.markSynced()
 
 	log.Info("Waiting Minimum peers...")
 	highestExpectedBlockNr := s.waitForMinimumPeers()
@@ -66,7 +68,6 @@ func (s *Service) Start() {
 		panic(err)
 	}
 	log.Info(fmt.Sprintf("Synced up to blockNr: %d", s.cfg.Chain.CurrentBlock().Number64().Uint64()))
-	s.markSynced()
 }
 
 // Stop initial sync.

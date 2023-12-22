@@ -79,7 +79,7 @@ const (
 	//maxTimeFutureBlocks
 	blockCacheLimit     = 1024
 	receiptsCacheLimit  = 32
-	maxFutureBlocks     = 256
+	maxFutureBlocks     = 4096
 	maxTimeFutureBlocks = 5 * 60 // 5 min
 
 	headerCacheLimit = 1024

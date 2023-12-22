@@ -198,7 +198,7 @@ func NewNode(cliCtx *cli.Context, cfg *conf.Config) (*Node, error) {
 
 	cfg.ChainCfg = chainConfig
 
-	p2p, err := p2p.NewService(ctx, genesisBlock.Hash(), cfg.P2PCfg, cfg.NodeCfg)
+	p2p, err := p2p.NewService(ctx, genesisBlock.Hash(), cfg.P2PCfg, cfg.NodeCfg, cfg.LoggerCfg)
 	if err != nil {
 		return nil, err
 	}

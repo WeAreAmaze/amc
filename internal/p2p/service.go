@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	pubsublog "github.com/ipfs/go-log/v2"
+
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -88,7 +90,7 @@ type Service struct {
 
 // NewService initializes a new p2p service compatible with shared.Service interface. No
 // connections are made until the Start function is called during the service registry startup.
-func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig, nodeCfg conf.NodeConfig) (*Service, error) {
+func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig, nodeCfg conf.NodeConfig, logCfg conf.LoggerConfig) (*Service, error) {
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
 	_ = cancel // govet fix for lost cancel. Cancel is handled in service.Stop().
@@ -162,7 +164,9 @@ func NewService(ctx context.Context, genesisHash types.Hash, cfg *conf.P2PConfig
 	// Initialize Data maps.
 	//types.InitializeDataMaps()
 
-	//pubsublog.SetLogLevel("pubsub", "debug")
+	if logCfg.Level == "debug" || logCfg.Level == "trace" {
+		pubsublog.SetLogLevel("pubsub", "debug")
+	}
 
 	return s, nil
 }

@@ -1798,7 +1798,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	if nil != err {
 		return err
 	}
-	bc.currentBlock.Store(commonBlock.(*block2.Block))
 
 	for i := len(oldChain) - 1; i >= 0; i-- {
 		// Also send event for blocks removed from the canon chain.

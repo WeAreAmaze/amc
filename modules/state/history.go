@@ -380,6 +380,7 @@ func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) e
 		return fmt.Errorf("getting rewind data: %w", errRewind)
 	}
 
+	log.Info("unwind state", "from:", current, "to :", unwindPoint)
 	if err := changes.Load(tx, modules.Account, func(k, v []byte, table etl.CurrentTableReader, next etl.LoadNextFunc) error {
 		if len(k) == 20 {
 			if len(v) > 0 {

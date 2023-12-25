@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/amazechain/amc/common/types"
+	"github.com/amazechain/amc/log"
 	"github.com/amazechain/amc/modules"
 	"github.com/amazechain/amc/modules/ethdb"
 	"math"
@@ -207,8 +208,8 @@ func ForPrefix(db kv.Tx, bucket string, startkey []byte, walker func(blockN uint
 }
 
 func Truncate(tx kv.RwTx, from uint64) error {
+	log.Info("truncate change set", "from:", from)
 	keyStart := modules.EncodeBlockNumber(from)
-
 	{
 		c, err := tx.RwCursorDupSort(modules.AccountChangeSet)
 		if err != nil {

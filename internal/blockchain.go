@@ -928,14 +928,26 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
 		//for block != nil && bc.skipBlock(err) {
-		//	log.Debug("Writing previously known block", "number", block.Number64(), "hash", block.Hash())
-		//	if err := bc.writeKnownBlock(block); err != nil {
-		//		return it.index, err
+		//	//log.Debug("Writing previously known block", "number", block.Number64(), "hash", block.Hash())
+		//	//if err := bc.writeKnownBlock(block); err != nil {
+		//	//	return it.index, err
+		//	//}
+		//	if block.ParentHash() != current.Hash() {
+		//		if err := bc.reorg(current, block); err != nil {
+		//			return it.index, err
+		//		}
 		//	}
 		//	lastCanon = block
 		//	block, err = it.next()
 		//}
 
+		if block != nil && reorg && block.ParentHash() != current.Hash() {
+			if err := bc.reorg(current, block); err != nil {
+				return it.index, err
+			}
+			lastCanon = block
+			block, err = it.next()
+		}
 	}
 
 	switch {
@@ -1008,36 +1020,36 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 			break
 		}
 
-		if bc.skipBlock(err) {
-
-			log.Debug("Inserted known block", "number", block.Number64(), "hash", block.Hash(),
-				"txs", len(block.Transactions()), "gas", block.GasUsed(),
-				"root", block.StateRoot())
-
-			// Special case. Commit the empty receipt slice if we meet the known
-			// block in the middle. It can only happen in the clique chain. Whenever
-			// we insert blocks via `insertSideChain`, we only commit `td`, `header`
-			// and `body` if it's non-existent. Since we don't have receipts without
-			// reexecution, so nothing to commit. But if the sidechain will be adopted
-			// as the canonical chain eventually, it needs to be reexecuted for missing
-			// state, but if it's this special case here(skip reexecution) we will lose
-			// the empty receipt entry.
-			//if len(block.Transactions()) == 0 {
-			//	rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
-			//} else {
-			//	log.Error("Please file an issue, skip known block execution without receipt",
-			//		"hash", block.Hash(), "number", block.NumberU64())
-			//}
-			if err := bc.writeKnownBlock(block); err != nil {
-				return it.index, err
-			}
-			stats.processed++
-
-			// We can assume that logs are empty here, since the only way for consecutive
-			// Clique blocks to have the same state is if there are no transactions.
-			lastCanon = block
-			continue
-		}
+		//if bc.skipBlock(err) {
+		//
+		//	log.Debug("Inserted known block", "number", block.Number64(), "hash", block.Hash(),
+		//		"txs", len(block.Transactions()), "gas", block.GasUsed(),
+		//		"root", block.StateRoot())
+		//
+		//	// Special case. Commit the empty receipt slice if we meet the known
+		//	// block in the middle. It can only happen in the clique chain. Whenever
+		//	// we insert blocks via `insertSideChain`, we only commit `td`, `header`
+		//	// and `body` if it's non-existent. Since we don't have receipts without
+		//	// reexecution, so nothing to commit. But if the sidechain will be adopted
+		//	// as the canonical chain eventually, it needs to be reexecuted for missing
+		//	// state, but if it's this special case here(skip reexecution) we will lose
+		//	// the empty receipt entry.
+		//	//if len(block.Transactions()) == 0 {
+		//	//	rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), nil)
+		//	//} else {
+		//	//	log.Error("Please file an issue, skip known block execution without receipt",
+		//	//		"hash", block.Hash(), "number", block.NumberU64())
+		//	//}
+		//	if err := bc.writeKnownBlock(block); err != nil {
+		//		return it.index, err
+		//	}
+		//	stats.processed++
+		//
+		//	// We can assume that logs are empty here, since the only way for consecutive
+		//	// Clique blocks to have the same state is if there are no transactions.
+		//	lastCanon = block
+		//	continue
+		//}
 
 		log.Debugf("Current block: number=%v, hash=%v, difficult=%v | Insert block: number=%v, hash=%v, difficult= %v",
 			bc.CurrentBlock().Number64(), bc.CurrentBlock().Hash(), bc.CurrentBlock().Difficulty(), block.Number64(), block.Hash(), block.Difficulty())
@@ -1611,9 +1623,10 @@ func (bc *BlockChain) writeKnownBlock(block block2.IBlock) error {
 			return err
 		}
 	}
-	return bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
-		return bc.writeHeadBlock(tx, block)
-	})
+	return nil
+	//return bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+	//	return bc.writeHeadBlock(tx, block)
+	//})
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
@@ -1622,7 +1635,7 @@ func (bc *BlockChain) writeKnownBlock(block block2.IBlock) error {
 // Note the new head block won't be processed here, callers need to handle it
 // externally.
 func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
-	log.Debug("reorg", "oldBlock", oldBlock.Number64(), "newBlock", newBlock.Number64())
+	log.Debug("reorg", "oldBlock", oldBlock.Number64(), "old hash", oldBlock.Hash(), "newBlock", newBlock.Number64(), "new hash", newBlock.Hash())
 	var (
 		newChain    block2.Blocks
 		oldChain    block2.Blocks

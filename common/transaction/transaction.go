@@ -675,13 +675,11 @@ func NewMessage(from types.Address, to *types.Address, nonce uint64, amount *uin
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *uint256.Int) (Message, error) {
 	msg := Message{
-		nonce:    tx.Nonce(),
-		gasLimit: tx.Gas(),
-		gasPrice: *new(uint256.Int).Set(tx.GasPrice()),
-		feeCap:   *new(uint256.Int).Set(tx.GasFeeCap()),
-		tip:      *new(uint256.Int).Set(tx.GasTipCap()),
-		//gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
-		//gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
+		nonce:      tx.Nonce(),
+		gasLimit:   tx.Gas(),
+		gasPrice:   *new(uint256.Int).Set(tx.GasPrice()),
+		feeCap:     *new(uint256.Int).Set(tx.GasFeeCap()),
+		tip:        *new(uint256.Int).Set(tx.GasTipCap()),
 		to:         tx.To(),
 		amount:     *tx.Value(),
 		data:       tx.Data(),

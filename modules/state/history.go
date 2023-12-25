@@ -371,31 +371,15 @@ func WalkAsOfAccounts(tx kv.Tx, startAddress types.Address, timestamp uint64, wa
 }
 
 func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) error {
-	// unwind history
-	if err := UnwindHistory(tx, modules.AccountChangeSet, unwindPoint, ctx.Done()); nil != err {
-		return fmt.Errorf("unwind AccountHistoryIndex failed, %v", err)
-	}
-
-	if err := UnwindHistory(tx, modules.StorageChangeSet, unwindPoint, ctx.Done()); nil != err {
-		return fmt.Errorf("unwind StorageHistoryIndex failed, %v", err)
-	}
-
 	// unwind account and storage
 	storageKeyLength := types.AddressLength + types.IncarnationLength + types.HashLength
 	changes := etl.NewCollector("unwind state", os.TempDir(), etl.NewOldestEntryBuffer(etl.BufferOptimalSize), log3.New())
 	defer changes.Close()
-	//errRewind := changeset.RewindData(tx, current, unwindPoint, changes, ctx.Done())
-	//if errRewind != nil {
-	//	return fmt.Errorf("getting rewind data: %w", errRewind)
-	//}
-	if err := changeset.WalkAndCollect(
-		changes.Collect,
-		tx, modules.AccountChangeSet,
-		unwindPoint, current,
-		ctx.Done(),
-	); err != nil {
-		return fmt.Errorf("getting account rewind data: %w", err)
+	errRewind := changeset.RewindData(tx, current, unwindPoint, changes, ctx.Done())
+	if errRewind != nil {
+		return fmt.Errorf("getting rewind data: %w", errRewind)
 	}
+
 	if err := changes.Load(tx, modules.Account, func(k, v []byte, table etl.CurrentTableReader, next etl.LoadNextFunc) error {
 		if len(k) == 20 {
 			if len(v) > 0 {
@@ -426,34 +410,16 @@ func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) e
 
 				newV := make([]byte, acc.EncodingLengthForStorage())
 				acc.EncodeForStorage(newV)
-				//if accumulator != nil {
-				//	accumulator.ChangeAccount(address, acc.Incarnation, newV)
-				//}
 				if err := next(k, k, newV); err != nil {
 					return err
 				}
 			} else {
-				//if accumulator != nil {
-				//	var address common.Address
-				//	copy(address[:], k)
-				//	accumulator.DeleteAccount(address)
-				//}
 				if err := next(k, k, nil); err != nil {
 					return err
 				}
 			}
 			return nil
 		}
-		//if accumulator != nil {
-		//	var address common.Address
-		//	var incarnation uint64
-		//	var location common.Hash
-		//	copy(address[:], k[:length.Addr])
-		//	incarnation = binary.BigEndian.Uint64(k[length.Addr:])
-		//	copy(location[:], k[length.Addr+length.Incarnation:])
-		//	log.Debug(fmt.Sprintf("un ch st: %x, %d, %x, %x\n", address, incarnation, location, common.Copy(v)))
-		//	accumulator.ChangeStorage(address, incarnation, location, common.Copy(v))
-		//}
 		if len(v) > 0 {
 			if err := next(k, k[:storageKeyLength], v); err != nil {
 				return err
@@ -468,14 +434,7 @@ func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) e
 	}, etl.TransformArgs{Quit: ctx.Done()}); err != nil {
 		return err
 	}
-	if err := changeset.WalkAndCollect(
-		changes.Collect,
-		tx, modules.StorageChangeSet,
-		unwindPoint, current,
-		ctx.Done(),
-	); err != nil {
-		return fmt.Errorf("getting storage rewind data: %w", err)
-	}
+
 	if err := changes.Load(tx, modules.Storage, func(k, v []byte, table etl.CurrentTableReader, next etl.LoadNextFunc) error {
 		if len(k) == 20 {
 			if len(v) > 0 {
@@ -506,34 +465,16 @@ func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) e
 
 				newV := make([]byte, acc.EncodingLengthForStorage())
 				acc.EncodeForStorage(newV)
-				//if accumulator != nil {
-				//	accumulator.ChangeAccount(address, acc.Incarnation, newV)
-				//}
 				if err := next(k, k, newV); err != nil {
 					return err
 				}
 			} else {
-				//if accumulator != nil {
-				//	var address common.Address
-				//	copy(address[:], k)
-				//	accumulator.DeleteAccount(address)
-				//}
 				if err := next(k, k, nil); err != nil {
 					return err
 				}
 			}
 			return nil
 		}
-		//if accumulator != nil {
-		//	var address common.Address
-		//	var incarnation uint64
-		//	var location common.Hash
-		//	copy(address[:], k[:length.Addr])
-		//	incarnation = binary.BigEndian.Uint64(k[length.Addr:])
-		//	copy(location[:], k[length.Addr+length.Incarnation:])
-		//	log.Debug(fmt.Sprintf("un ch st: %x, %d, %x, %x\n", address, incarnation, location, common.Copy(v)))
-		//	accumulator.ChangeStorage(address, incarnation, location, common.Copy(v))
-		//}
 		if len(v) > 0 {
 			if err := next(k, k[:storageKeyLength], v); err != nil {
 				return err
@@ -550,20 +491,23 @@ func UnwindState(ctx context.Context, tx kv.RwTx, current, unwindPoint uint64) e
 	}
 
 	// unwind changeSet
-	if err := changeset.Truncate(tx, unwindPoint); err != nil {
+	if err := changeset.Truncate(tx, unwindPoint+1); err != nil {
 		return err
 	}
 
+	// unwind history
+	if err := UnwindHistory(tx, modules.AccountChangeSet, unwindPoint, ctx.Done()); nil != err {
+		return fmt.Errorf("unwind AccountHistoryIndex failed, %v", err)
+	}
+
+	if err := UnwindHistory(tx, modules.StorageChangeSet, unwindPoint, ctx.Done()); nil != err {
+		return fmt.Errorf("unwind StorageHistoryIndex failed, %v", err)
+	}
+
 	// delete receipt and log
-	if err := rawdb.TruncateReceipts(tx, unwindPoint); err != nil {
+	if err := rawdb.TruncateReceipts(tx, unwindPoint+1); err != nil {
 		return fmt.Errorf("truncate receipts: %w", err)
 	}
-	//if err := rawdb.TruncateBorReceipts(tx, u.UnwindPoint+1); err != nil {
-	//	return fmt.Errorf("truncate bor receipts: %w", err)
-	//}
-	//if err := rawdb.DeleteNewerEpochs(tx, u.UnwindPoint+1); err != nil {
-	//	return fmt.Errorf("delete newer epochs: %w", err)
-	//}
 	return nil
 }
 

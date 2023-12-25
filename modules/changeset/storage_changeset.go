@@ -21,10 +21,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/amazechain/amc/common/types"
 	"github.com/amazechain/amc/modules"
 	"sort"
 
-	libcommon "github.com/ledgerwatch/erigon-lib/common"
 	"github.com/ledgerwatch/erigon-lib/common/length"
 	"github.com/ledgerwatch/erigon-lib/etl"
 	"github.com/ledgerwatch/erigon-lib/kv"
@@ -119,10 +119,10 @@ func RewindData(db kv.Tx, timestampSrc, timestampDst uint64, changes *etl.Collec
 
 func WalkAndCollect(collectorFunc func([]byte, []byte) error, db kv.Tx, bucket string, timestampDst, timestampSrc uint64, quit <-chan struct{}) error {
 	return ForRange(db, bucket, timestampDst, timestampSrc+1, func(bl uint64, k, v []byte) error {
-		if err := libcommon.Stopped(quit); err != nil {
+		if err := Stopped(quit); err != nil {
 			return err
 		}
-		if innerErr := collectorFunc(libcommon.Copy(k), libcommon.Copy(v)); innerErr != nil {
+		if innerErr := collectorFunc(types.CopyBytes(k), types.CopyBytes(v)); innerErr != nil {
 			return innerErr
 		}
 		return nil

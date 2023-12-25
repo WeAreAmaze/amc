@@ -143,6 +143,10 @@ func (bc *BlockChain) Engine() consensus.Engine {
 	return bc.engine
 }
 
+func shouldPreserve(header block2.IHeader) bool {
+	return false
+}
+
 func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine consensus.Engine, db kv.RwDB, p2p p2p.P2P, config *params.ChainConfig) (common.IBlockChain, error) {
 	c, cancel := context.WithCancel(ctx)
 	blockCache, _ := lru.New[types.Hash, *block2.Block](blockCacheLimit)
@@ -181,7 +185,7 @@ func NewBlockChain(ctx context.Context, genesisBlock block2.IBlock, engine conse
 	}
 
 	bc.engine.VerifyHeader(bc, bc.CurrentBlock().Header(), false)
-	bc.forker = NewForkChoice(bc, nil)
+	bc.forker = NewForkChoice(bc, shouldPreserve)
 	//bc.process = avm.NewVMProcessor(ctx, bc, engine)
 	bc.process = NewStateProcessor(config, bc, engine)
 	bc.validator = NewBlockValidator(config, bc, engine)
@@ -895,10 +899,11 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		var (
 			reorg   bool
 			current = bc.CurrentBlock()
+			errR    error
 		)
 		for block != nil && bc.skipBlock(err) {
-			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
-			if err != nil {
+			reorg, errR = bc.forker.ReorgNeeded(current.Header(), block.Header())
+			if errR != nil {
 				return it.index, err
 			}
 			if reorg {
@@ -931,6 +936,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 			lastCanon = block
 			block, err = it.next()
 		}
+
 	}
 
 	switch {
@@ -1034,7 +1040,7 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 			continue
 		}
 
-		log.Tracef("Current block: number=%v, hash=%v, difficult=%v | Insert block block: number=%v, hash=%v, difficult= %v",
+		log.Debugf("Current block: number=%v, hash=%v, difficult=%v | Insert block: number=%v, hash=%v, difficult= %v",
 			bc.CurrentBlock().Number64(), bc.CurrentBlock().Hash(), bc.CurrentBlock().Difficulty(), block.Number64(), block.Hash(), block.Difficulty())
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
@@ -1600,19 +1606,15 @@ func (bc *BlockChain) AddFutureBlock(block block2.IBlock) error {
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block block2.IBlock) error {
-	var err error
-
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
 		if err := bc.reorg(current, block); err != nil {
 			return err
 		}
 	}
-	bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
-		err = bc.writeHeadBlock(tx, block)
-		return nil
+	return bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
+		return bc.writeHeadBlock(tx, block)
 	})
-	return err
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
@@ -1628,7 +1630,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 		commonBlock block2.IBlock
 
 		deletedTxs []types.Hash
-		addedTxs   []types.Hash
+		// addedTxs   []types.Hash
 	)
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.Number64().Uint64() > newBlock.Number64().Uint64() {
@@ -1741,9 +1743,14 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	}
 	reInsert := make([]block2.IBlock, 0, len(newChain))
 	err = bc.DB().Update(bc.ctx, func(tx kv.RwTx) error {
-		if err := state.UnwindState(context.Background(), tx, bc.CurrentBlock().Number64().Uint64(), newChain[len(newChain)-1].Number64().Uint64()); nil != err {
-			return fmt.Errorf("uwind state failed, start: %d, end: %d,  %v", newChain[len(newChain)-1].Number64().Uint64(), bc.CurrentBlock().Number64().Uint64(), err)
+		unwindPoint := commonBlock.Number64().Uint64()
+		if err := state.UnwindState(context.Background(), tx, bc.CurrentBlock().Number64().Uint64(), unwindPoint); nil != err {
+			return fmt.Errorf("uwind state failed, start: %d, end: %d,  %v", unwindPoint, bc.CurrentBlock().Number64().Uint64(), err)
 		}
+		if err := rawdb.TruncateCanonicalHash(tx, unwindPoint+1, false); nil != err {
+			return err
+		}
+
 		if err := bc.writeHeadBlock(tx, commonBlock); nil != err {
 			return err
 		}
@@ -1757,10 +1764,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 			reInsert = append(reInsert, newChain[i])
 		}
 
-		//return bc.ChainDB.Update(bc.ctx, func(txw kv.RwTx) error {
-		// Delete useless indexes right now which includes the non-canonical
-		// transaction indexes, canonical chain indexes which above the head.
-		for _, t := range types.HashDifference(deletedTxs, addedTxs) {
+		// delete txlookup table tx hash -> block
+		for _, t := range deletedTxs {
 			rawdb.DeleteTxLookupEntry(tx, t)
 		}
 
@@ -1793,6 +1798,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock block2.IBlock) error {
 	if nil != err {
 		return err
 	}
+	bc.currentBlock.Store(commonBlock.(*block2.Block))
+
 	for i := len(oldChain) - 1; i >= 0; i-- {
 		// Also send event for blocks removed from the canon chain.
 		event.GlobalEvent.Send(common.ChainSideEvent{Block: oldChain[i].(*block2.Block)})

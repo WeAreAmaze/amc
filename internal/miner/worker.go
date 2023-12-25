@@ -654,7 +654,7 @@ func (w *worker) commitTx(txn *transaction.Transaction, ibs *state.IntraBlockSta
 	ibs.Prepare(txn.Hash(), types.Hash{}, current.tcount, *txn.From())
 	gasSnap := current.gasPool.Gas()
 	snap := ibs.Snapshot()
-	log.Debug("addTransactionsToMiningBlock", "txn hash", txn.Hash())
+	log.Trace("addTransactionsToMiningBlock", "txn hash", txn.Hash())
 	receipt, _, err := internal.ApplyTransaction(w.chainConfig, internal.GetHashFn(current.header, getHeader), w.engine, &current.coinbase, current.gasPool, ibs, noop, current.header, txn, &current.header.GasUsed, vm2.Config{})
 	if err != nil {
 		ibs.RevertToSnapshot(snap)

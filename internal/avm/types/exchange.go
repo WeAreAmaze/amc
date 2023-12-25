@@ -365,7 +365,7 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 			S:        S,
 		}
 
-		log.Debug("tx type is LegacyTxType")
+		log.Tracef("tx type is LegacyTxType")
 	case AccessListTxType:
 		at := &transaction.AccessListTx{
 			Nonce:      tx.Nonce(),
@@ -382,7 +382,7 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 		}
 		at.ChainID, _ = uint256.FromBig(tx.ChainId())
 		inner = at
-		log.Debug("tx type is AccessListTxType")
+		log.Tracef("tx type is AccessListTxType")
 	case DynamicFeeTxType:
 		dft := &transaction.DynamicFeeTx{
 			Nonce:      tx.Nonce(),
@@ -400,7 +400,7 @@ func (tx *Transaction) ToAmcTransaction(chainConfig *params.ChainConfig, blockNu
 		dft.GasTipCap, _ = uint256.FromBig(tx.GasTipCap())
 		dft.GasFeeCap, _ = uint256.FromBig(tx.GasFeeCap())
 		inner = dft
-		log.Debug("tx type is DynamicFeeTxType")
+		log.Trace("tx type is DynamicFeeTxType")
 	}
 
 	amcTx := transaction.NewTx(inner)

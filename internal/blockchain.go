@@ -899,11 +899,10 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		var (
 			reorg   bool
 			current = bc.CurrentBlock()
-			errR    error
 		)
 		for block != nil && bc.skipBlock(err) {
-			reorg, errR = bc.forker.ReorgNeeded(current.Header(), block.Header())
-			if errR != nil {
+			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
+			if err != nil {
 				return it.index, err
 			}
 			if reorg {
@@ -928,14 +927,14 @@ func (bc *BlockChain) insertChain(chain []block2.IBlock) (int, error) {
 		// When node runs a fast sync again, it can re-import a batch of known blocks via
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
-		for block != nil && bc.skipBlock(err) {
-			log.Debug("Writing previously known block", "number", block.Number64(), "hash", block.Hash())
-			if err := bc.writeKnownBlock(block); err != nil {
-				return it.index, err
-			}
-			lastCanon = block
-			block, err = it.next()
-		}
+		//for block != nil && bc.skipBlock(err) {
+		//	log.Debug("Writing previously known block", "number", block.Number64(), "hash", block.Hash())
+		//	if err := bc.writeKnownBlock(block); err != nil {
+		//		return it.index, err
+		//	}
+		//	lastCanon = block
+		//	block, err = it.next()
+		//}
 
 	}
 

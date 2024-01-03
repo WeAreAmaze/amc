@@ -193,13 +193,15 @@ func NewNode(cliCtx *cli.Context, cfg *conf.Config) (*Node, error) {
 	}
 
 	// update ChainConfig everytime
-	if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
-		if err := WriteChainConfig(tx, genesisHash, genesisConfig); err != nil {
-			return err
+	if cfg.NodeCfg.Chain != "private" {
+		if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
+			if err := WriteChainConfig(tx, genesisHash, genesisConfig); err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+			return nil, err
 		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
 
 	// Acquire the instance directory lock.

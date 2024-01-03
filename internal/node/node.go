@@ -195,6 +195,8 @@ func NewNode(cliCtx *cli.Context, cfg *conf.Config) (*Node, error) {
 	// update ChainConfig everytime
 	if cfg.NodeCfg.Chain != "private" {
 		if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
+			genesisHash = *params.GenesisHashByChainName(cfg.NodeCfg.Chain)
+			genesisConfig = internal.GenesisByChainName(cfg.NodeCfg.Chain)
 			if err := WriteChainConfig(tx, genesisHash, genesisConfig); err != nil {
 				return err
 			}

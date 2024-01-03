@@ -23,6 +23,7 @@ import (
 	"github.com/amazechain/amc/common/hexutil"
 	"github.com/amazechain/amc/contracts/deposit"
 	"github.com/amazechain/amc/contracts/deposit/AMT"
+	fujideposit "github.com/amazechain/amc/contracts/deposit/FUJI"
 	nftdeposit "github.com/amazechain/amc/contracts/deposit/NFT"
 	"github.com/amazechain/amc/internal/debug"
 	"github.com/amazechain/amc/internal/metrics/prometheus"
@@ -191,6 +192,16 @@ func NewNode(cliCtx *cli.Context, cfg *conf.Config) (*Node, error) {
 		}
 	}
 
+	// update ChainConfig everytime
+	if err := chainKv.Update(ctx, func(tx kv.RwTx) error {
+		if err := WriteChainConfig(tx, genesisHash, genesisConfig); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
 	// Acquire the instance directory lock.
 	if err := node.openDataDir(cfg); err != nil {
 		return nil, err
@@ -229,6 +240,14 @@ func NewNode(cliCtx *cli.Context, cfg *conf.Config) (*Node, error) {
 				panic(fmt.Sprintf("cannot decode DepositNFTContract address: %s", depositNFTContractAddress))
 			}
 			depositContracts[addr] = new(nftdeposit.Contract)
+		}
+
+		if depositFUJIContractAddress := cfg.ChainCfg.Apos.DepositFUJIContract; depositFUJIContractAddress != "" {
+			var addr types.Address
+			if !addr.DecodeString(depositFUJIContractAddress) {
+				panic(fmt.Sprintf("cannot decode DepositFUJIContract address: %s", depositFUJIContractAddress))
+			}
+			depositContracts[addr] = new(fujideposit.Contract)
 		}
 		depositContract = deposit.NewDeposit(ctx, bc, chainKv, depositContracts)
 	}
@@ -846,16 +865,21 @@ func WriteGenesisBlock(db kv.RwTx, genesis *conf.Genesis) (*block.Block, error) 
 		//config,
 	}
 	log.Info("Writing genesis block")
-	block, _, err := g.Write(db)
+	genBlock, _, err := g.Write(db)
 	if nil != err {
 		return nil, err
 	}
-	if err := rawdb.WriteChainConfig(db, block.Hash(), genesis.Config); err != nil {
-		log.Error("cannot get chain config from db", "err", err)
-		return nil, err
-	}
-	return block, nil
 
+	return genBlock, nil
+
+}
+
+func WriteChainConfig(db kv.RwTx, genesisHash types.Hash, genesis *conf.Genesis) error {
+	if err := rawdb.WriteChainConfig(db, genesisHash, genesis.Config); err != nil {
+		log.Error("cannot get chain config from db", "err", err)
+		return err
+	}
+	return nil
 }
 
 func SplitTagsFlag(tagsFlag string) map[string]string {

@@ -192,8 +192,9 @@ type APosConfig struct {
 	RewardEpoch uint64   `json:"rewardEpoch"`
 	RewardLimit *big.Int `json:"rewardLimit"`
 
-	DepositContract    string `json:"depositContract"`    // Deposit contract
-	DepositNFTContract string `json:"depositNFTContract"` // Deposit NFT contract
+	DepositContract     string `json:"depositContract"`     // Deposit contract
+	DepositNFTContract  string `json:"depositNFTContract"`  // Deposit NFT contract
+	DepositFUJIContract string `json:"depositFUJIContract"` // Deposit NFT contract
 }
 
 // String implements the stringer interface, returning the consensus engine details.

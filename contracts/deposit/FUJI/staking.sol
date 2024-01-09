@@ -16,9 +16,12 @@ contract StakingFUJI is IDeposit, IERC721Receiver, Ownable {
 
     mapping(address => uint256) depoistNFT;
     mapping(address => uint256) depositExpire;
-    mapping(address => uint256) withdrawNFT;
 
-    constructor(address fujiAddr, address fujiAdminAddress) Ownable(address(this)) {
+    mapping(uint256 => address) withdrawIDToAddress;
+    mapping(address => uint256) withdrawAddressToID;
+    // mapping(address => uint256) withdrawNFT;
+
+    constructor(address fujiAddr, address fujiAdminAddress) Ownable(msg.sender) {
         token = IERC721(fujiAddr);
         token.setApprovalForAll(fujiAdminAddress, true);
     }
@@ -80,7 +83,9 @@ contract StakingFUJI is IDeposit, IERC721Receiver, Ownable {
             "Staking: Insuficient Allowance"
         );
 
-        withdrawNFT[msg.sender] = tokenID;
+        withdrawIDToAddress[tokenID] = msg.sender;
+        withdrawAddressToID[msg.sender] = tokenID;
+        // withdrawNFT[msg.sender] = tokenID;
         delete depoistNFT[msg.sender];
         delete depositExpire[msg.sender];
 
@@ -115,7 +120,7 @@ contract StakingFUJI is IDeposit, IERC721Receiver, Ownable {
     }
 
     function withdrawOf(address account) external view returns (uint256) {
-        return withdrawNFT[account];
+        return withdrawAddressToID[account];
     }
 
 
@@ -146,15 +151,24 @@ contract StakingFUJI is IDeposit, IERC721Receiver, Ownable {
             "Staking: not allowed token"
         );
 
-        if (withdrawNFT[sender] > 0) {
+        // A deposit T1  , withdraw T1, A send T1 to B, B deposit T1,  A deposit T2
+        if (withdrawIDToAddress[tokenID] != address(0)) {
+            address withdrawAddress = withdrawIDToAddress[tokenID];
+            delete withdrawAddressToID[withdrawAddress];
+            delete withdrawIDToAddress[tokenID];
+        }
+        
+
+        if (withdrawAddressToID[sender] > 0) {
             require(
-                token.ownerOf(withdrawNFT[sender]) != address(this),
+                token.ownerOf(withdrawAddressToID[sender]) != address(this),
                 "Staking: Have not withdraw"
             );
 
-            delete  withdrawNFT[sender];
+            uint256 withdrawTokenID = withdrawAddressToID[sender];
+            delete withdrawAddressToID[sender];
+            delete withdrawIDToAddress[withdrawTokenID];
         }
-
 
         depoistNFT[sender] = tokenID;
         return

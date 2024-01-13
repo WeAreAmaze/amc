@@ -160,10 +160,10 @@ contract StakingFUJI is IDeposit, IERC721Receiver, Ownable {
         
 
         if (withdrawAddressToID[sender] > 0) {
-            require(
-                token.ownerOf(withdrawAddressToID[sender]) != address(this),
-                "Staking: Have not withdraw"
-            );
+//            require(
+//                token.ownerOf(withdrawAddressToID[sender]) != address(this),
+//                "Staking: Have not withdraw"
+//            );
 
             uint256 withdrawTokenID = withdrawAddressToID[sender];
             delete withdrawAddressToID[sender];

@@ -26,3 +26,4 @@
 1. [Developers](./developers/developers.md)
    1. [Code Submission Standards](./developers/codesubmission.md)
    2. [Contribute](./developers/contribute.md)
+   3. [Code of Conduct](./developers/codeofconduct.md)

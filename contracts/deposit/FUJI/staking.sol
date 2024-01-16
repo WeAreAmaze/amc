@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts@v5.0.0/access/Ownable.sol";
-import "@openzeppelin/contracts@v5.0.0/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts@v5.0.0/token/ERC721/IERC721Receiver.sol";
-import "@openzeppelin/contracts@v5.0.0/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts-upgradeable@v5.0.0/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts@v4.9.0/access/Ownable.sol";
+import "@openzeppelin/contracts@v4.9.0/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts@v4.9.0/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts@v4.9.0/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts-upgradeable@v4.9.0/proxy/utils/Initializable.sol";
 import "./IDeposit.sol";
 
 contract StakingFUJI is IDeposit, IERC721Receiver, Ownable {

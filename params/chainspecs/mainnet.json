@@ -23,6 +23,7 @@
     "rewardEpoch": 10800,
     "rewardLimit": 500000000000000000,
     "depositContract": "AMC85A5E24ef94fe5bDD5055133E6bd00DcEA25F37D",
-    "depositNFTContract": "AMCF762E4Aa8Da0B9FC8113ECBFf6c84B3a6B7B5544"
+    "depositNFTContract": "AMCF762E4Aa8Da0B9FC8113ECBFf6c84B3a6B7B5544",
+    "depositFUJIContract": "AMC8018c0ba6717FE077cB37Db5D6187B400ee76Eeb"
   }
 }

@@ -79,6 +79,9 @@ func initGenesis(cliCtx *cli.Context) error {
 		if nil != err {
 			return err
 		}
+		if err := node.WriteChainConfig(tx, genesisBlock.Hash(), genesis); err != nil {
+			return err
+		}
 		return nil
 	}); err != nil {
 		utils.Fatalf("Failed to wrote genesis state to database: %w", err)

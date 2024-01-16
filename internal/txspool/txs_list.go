@@ -544,8 +544,8 @@ func (l *txsList) Add(tx *transaction.Transaction, priceBump uint64) (bool, *tra
 		}
 		// thresholdFeeCap = oldFC  * (100 + priceBump) / 100
 		a := uint256.NewInt(100 + priceBump)
-		aFeeCap := new(uint256.Int).Mul(a, old.GasPrice())
-		aTip := a.Mul(a, old.GasPrice())
+		aFeeCap := new(uint256.Int).Mul(a, old.GasFeeCap())
+		aTip := a.Mul(a, old.GasTipCap())
 
 		// thresholdTip    = oldTip * (100 + priceBump) / 100
 		b := uint256.NewInt(100)

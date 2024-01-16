@@ -21,7 +21,7 @@ contract StakingFUJI is IDeposit, IERC721Receiver, Ownable {
     mapping(address => uint256) withdrawAddressToID;
     // mapping(address => uint256) withdrawNFT;
 
-    constructor(address fujiAddr, address fujiAdminAddress) Ownable(msg.sender) {
+    constructor(address fujiAddr, address fujiAdminAddress) Ownable() {
         token = IERC721(fujiAddr);
         token.setApprovalForAll(fujiAdminAddress, true);
     }

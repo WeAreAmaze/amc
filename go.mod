@@ -13,7 +13,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7
 	github.com/emicklei/dot v1.0.0
-	github.com/erigontech/mdbx-go v0.27.14
+	github.com/erigontech/mdbx-go v0.37.1
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-kit/kit v0.10.0
@@ -56,10 +56,10 @@ require (
 	github.com/urfave/cli/v2 v2.17.2-0.20221006022127-8f469abc00aa
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.24.0
-	golang.org/x/crypto v0.13.0
+	golang.org/x/crypto v0.21.0
 	golang.org/x/exp v0.0.0-20230711023510-fffb14384f22
-	golang.org/x/sync v0.3.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/sync v0.6.0
+	golang.org/x/sys v0.18.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
@@ -178,11 +178,11 @@ require (
 	go.uber.org/dig v1.16.1 // indirect
 	go.uber.org/fx v1.19.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/mod v0.11.0 // indirect
-	golang.org/x/net v0.12.0 // indirect
-	golang.org/x/term v0.12.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
-	golang.org/x/tools v0.7.0 // indirect
+	golang.org/x/mod v0.16.0 // indirect
+	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/term v0.18.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/tools v0.19.0 // indirect
 	gonum.org/v1/gonum v0.11.0 // indirect
 	google.golang.org/genproto v0.0.0-20221201164419-0e50fba7f41c // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
@@ -196,3 +196,5 @@ require (
 //replace github.com/torquem-ch/mdbx-go v0.30.0 => github.com/amazechain/mdbx-go v0.0.0-20230203081605-fc0b6278d4f7
 
 replace github.com/VictoriaMetrics/metrics => github.com/ledgerwatch/victoria-metrics v0.0.4
+
+// replace github.com/elastic/gosigar => github.com/Jackmeng1985/gosigar v0.14.2-fix-ios

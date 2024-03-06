@@ -136,9 +136,9 @@ mobile-dir:
 	#go get golang.org/x/mobile/bind/objc
 	mkdir -p $(BUILD_MOBILE_PATH)/android
 ios:
-	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/evmsdk.xcframework -target=ios $(MOBILE_PACKAGE)
+	GOOS=ios CGO_ENABLED=1 GOARCH=arm64 gomobile bind ${MOBILE_GO_FLAGS}  -o $(BUILD_MOBILE_PATH)/evmsdk.xcframework -target=ios/arm64  $(MOBILE_PACKAGE)
 android:
-	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind -x ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/android/evmsdk.aar -target=android $(MOBILE_PACKAGE)
+	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind -x ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/android/evmsdk.aar -target=android/arm64 $(MOBILE_PACKAGE)
 
 open-output:
 	open ./mobile

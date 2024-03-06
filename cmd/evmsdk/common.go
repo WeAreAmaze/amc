@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"github.com/amazechain/amc/common/crypto"
 	"github.com/amazechain/amc/common/crypto/ecies"
+	"github.com/amazechain/amc/common/hexutil"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 	"io"
@@ -620,6 +621,8 @@ func (e *EvmEngine) vertify(in []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	simpleLog("start verify ", "blockNr", bean.Entire.Header.Number.Uint64())
+
 	if bean.Entire.Header == nil {
 		return nil, errors.New("nil pointer found")
 	}
@@ -646,7 +649,7 @@ func (e *EvmEngine) vertify(in []byte) ([]byte, error) {
 		}
 	}
 
-	simpleLog("==calculated stateroot:", hex.EncodeToString(res.StateRoot[:]))
+	simpleLog("calculated stateRoot:", "stateRoot", hexutil.Encode(res.StateRoot[:]))
 
 	//privkey
 	res.Number = bean.Entire.Header.Number.Uint64()
@@ -663,6 +666,8 @@ func (e *EvmEngine) vertify(in []byte) ([]byte, error) {
 
 	//sign
 	copy(res.Sign[:], sk.Sign(res.StateRoot[:]).Marshal())
+
+	simpleLog("sign stateRoot:", "Sign", hexutil.Encode(res.Sign[:]))
 
 	//address
 	res.Address = commTyp.HexToAddress(e.Account)

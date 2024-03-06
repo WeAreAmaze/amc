@@ -172,7 +172,7 @@ func (ws *WebSocketService) Chans(pubk string) (<-chan []byte, chan<- []byte, er
 				simpleLog("ws producer stopped")
 				return
 			}
-			simpleLog("sending msg:", string(wrappedRequest))
+			simpleLog("submit Sign to chain")
 		}
 	}()
 	return chO, chI, nil

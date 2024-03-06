@@ -19,6 +19,7 @@ package evmsdk
 import (
 	"context"
 	"fmt"
+	"github.com/amazechain/amc/common/hexutil"
 	"unsafe"
 
 	common2 "github.com/amazechain/amc/common"
@@ -108,6 +109,9 @@ func checkBlock2(getHashF func(n uint64) types.Hash, block *block2.Block, ibs *s
 
 	engine := apos.NewFaker()
 	for i, tx := range block.Transactions() {
+		//
+		simpleLog("apply transaction", "transactionIndex", i, "from", tx.From().Hex(), "to", tx.To().Hex(), "value", tx.Value().Uint64(), "data", hexutil.Encode(tx.Data()), "gas", tx.Gas(), "gasPrice", tx.GasPrice().Uint64())
+		//
 		ibs.Prepare(tx.Hash(), block.Hash(), i)
 		_, _, err := internal.ApplyTransaction(chainConfig, getHashF, engine, &coinbase, gp, ibs, noop, header, tx, usedGas, cfg)
 		if err != nil {

@@ -10,7 +10,7 @@ AMC (Amaze Chain) is a blockchain full node implementation characterized by bein
 
 AMC is a node implementation compatible with all node protocols that support Amaze Chain.
 
-It was originally built and promoted by Amze, licensed under Apache and MIT licenses.
+It was originally built and promoted by Amaze, licensed under Apache and MIT licenses.
 
 As a complete Amaze Chain node, amc allows users to connect to the Amaze Chain network and interact with the Amaze Chain blockchain.
 

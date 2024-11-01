@@ -1,7 +1,7 @@
 # AmazeChain
 AmazeChain(AMC) is an implementation of public blockchain (execution client), on the efficiency frontier, written in Go.
 
-**Disclaimer: this software is currently a tech preview. We will do our best to keep it stable and make no breaking changes, but we don't guarantee anything. Things can and will break.**
+**Disclaimer: This software is currently in a tech preview stage. While we’ll strive to maintain stability and avoid breaking changes, we cannot make any guarantees. Issues may arise, and disruptions are possible.**
 
 ## System Requirements
 

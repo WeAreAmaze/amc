@@ -44,7 +44,7 @@ DOCKER_GID ?= $(shell id -g)
 #OSFLAG=$(shell uname -sm)
 
 ANDROID_SDK=$(ANDROID_HOME)
-NDK_VERSION=21.1.6352462
+NDK_VERSION=25.2.9519653
 NDK_HOME=$(ANDROID_SDK)/ndk/$(NDK_VERSION)
 #ANDROID_SDK=/Users/mac/Library/Android/sdk
 MOBILE_GO_FLAGS = -ldflags "-X ${PACKAGE}/cmd/evmsdk/common.VERSION=${GIT_COMMIT}"
@@ -138,8 +138,9 @@ mobile-dir:
 ios:
 	GOOS=ios CGO_ENABLED=1 GOARCH=arm64 gomobile bind ${MOBILE_GO_FLAGS}  -o $(BUILD_MOBILE_PATH)/evmsdk.xcframework -target=ios/arm64  $(MOBILE_PACKAGE)
 android:
-	ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind -x ${MOBILE_GO_FLAGS} -androidapi 21 -o $(BUILD_MOBILE_PATH)/android/evmsdk.aar -target=android/arm64 $(MOBILE_PACKAGE)
-
+	CGO_ENABLED=1 ANDROID_HOME=$(ANDROID_SDK) ANDROID_NDK_HOME=$(NDK_HOME) gomobile bind -x ${MOBILE_GO_FLAGS} -androidapi 23 -o $(BUILD_MOBILE_PATH)/android/evmsdk.aar -target=android/arm -v $(MOBILE_PACKAGE)
+#   ANDROID_NDK_CC=$(NDK_HOME)/bin/arm-linux-androideabi-gcc NDK_CC=$(NDK_HOME)/bin/arm-linux-androideabi-gcc
+# GOARCH=arm GOOS=android CGO_ENABLED=1
 open-output:
 	open ./mobile
 

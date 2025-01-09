@@ -64,7 +64,7 @@ func (err *AmbiguousAddrError) Error() string {
 
 // accountCache is a live index of all accounts in the keystore.
 type accountCache struct {
-	keydir   string
+	keys     string
 	watcher  *watcher
 	mu       sync.Mutex
 	all      accountsByURL
@@ -74,9 +74,9 @@ type accountCache struct {
 	fileC    fileCache
 }
 
-func newAccountCache(keydir string) (*accountCache, chan struct{}) {
+func newAccountCache(keys string) (*accountCache, chan struct{}) {
 	ac := &accountCache{
-		keydir: keydir,
+		keys:   keys,
 		byAddr: make(map[types.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
 		fileC:  fileCache{all: mapset.NewThreadUnsafeSet[string]()},
@@ -175,7 +175,7 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	if a.URL.Path != "" {
 		// If only the basename is specified, complete the path.
 		if !strings.ContainsRune(a.URL.Path, filepath.Separator) {
-			a.URL.Path = filepath.Join(ac.keydir, a.URL.Path)
+			a.URL.Path = filepath.Join(ac.keys, a.URL.Path)
 		}
 		for i := range matches {
 			if matches[i].URL == a.URL {
@@ -220,7 +220,10 @@ func (ac *accountCache) maybeReload() {
 	ac.watcher.start()
 	ac.throttle.Reset(minReloadInterval)
 	ac.mu.Unlock()
-	ac.scanAccounts()
+	err := ac.scanAccounts()
+	if err != nil {
+		return
+	}
 }
 
 func (ac *accountCache) close() {
@@ -240,7 +243,7 @@ func (ac *accountCache) close() {
 // updates the account cache accordingly
 func (ac *accountCache) scanAccounts() error {
 	// Scan the entire folder metadata for file changes
-	creates, deletes, updates, err := ac.fileC.scan(ac.keydir)
+	creates, deletes, updates, err := ac.fileC.scan(ac.keys)
 	if err != nil {
 		log.Debug("Failed to reload keystore contents", "err", err)
 		return err
@@ -262,7 +265,12 @@ func (ac *accountCache) scanAccounts() error {
 			log.Debug("Failed to open keystore file", "path", path, "err", err)
 			return nil
 		}
-		defer fd.Close()
+		defer func(fd *os.File) {
+			err := fd.Close()
+			if err != nil {
+				return
+			}
+		}(fd)
 		buf.Reset(fd)
 		// Parse the address.
 		key.Address = ""

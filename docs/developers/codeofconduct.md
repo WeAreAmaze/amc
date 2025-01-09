@@ -6,12 +6,13 @@ description: Fundamental shared values and special norms that distinguish Amazec
 
 ## Our Pledge
 
-We as Amazechain members, contributors, and leaders pledge to make
-participation in our community a harassment-free experience for everyone,
-regardless of age, body size, visible or invisible disability, ethnicity,
-sex characteristics, gender identity and expression, level of experience,
-education, socio-economic status, nationality, personal appearance, race,
-caste, color, religion, or sexual identity and orientation.
+As members, contributors, and leaders of Amazechain, 
+we commit to fostering an inclusive environment within our community.
+We strive to ensure that everyone, regardless of age, physical attributes,
+disabilities, cultural backgrounds, gender identities, levels of expertise, 
+educational backgrounds, socioeconomic statuses, nationalities, appearances, 
+races, castes, colors, religions, sexual identities, or orientations, 
+feels respected and valued. Harassment of any form will not be tolerated.
 
 We pledge to act and interact in ways that contribute to an open, welcoming,
 diverse, inclusive, and healthy community.

@@ -746,7 +746,7 @@ func (c *APos) Seal(chain consensus.ChainHeaderReader, b block.IBlock, results c
 		ctx, cancle := context.WithTimeout(context.Background(), delay)
 		defer cancle()
 		member := c.CountDepositor()
-		aggSign, verifiers, err := api.SignMerge(ctx, header, member)
+		aggSign, verifiers, err := api.SignMerge(ctx, header)
 		if nil != err {
 			return err
 		}

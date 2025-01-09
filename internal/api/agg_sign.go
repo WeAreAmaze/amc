@@ -206,7 +206,7 @@ func IsDeposit(db kv.RwDB, addr types.Address) (bool, error) {
 	return rawdb.IsDeposit(tx, addr), nil
 }
 
-func SignMerge(ctx context.Context, header *block.Header, depositNum uint64) (types.Signature, []*block.Verify, error) {
+func SignMerge(ctx context.Context, header *block.Header) (types.Signature, []*block.Verify, error) {
 	aggrSigns := make([]bls.Signature, 0)
 	verifiers := make([]*block.Verify, 0)
 	uniq := make(map[types.Address]struct{})
@@ -288,7 +288,10 @@ func MachineVerify(ctx context.Context) error {
 					var hash types.Hash
 					hasher := sha3.NewLegacyKeccak256()
 					state.EncodeBeforeState(hasher, b.Entire.Entire.Snap.Items, b.Entire.Codes)
-					hasher.(crypto.KeccakState).Read(hash[:])
+					_, err = hasher.(crypto.KeccakState).Read(hash[:])
+					if err != nil {
+						return
+					}
 					if b.Entire.Entire.Header.MixDigest != hash {
 						log.Warn("misMatch before state hash", "want:", b.Entire.Entire.Header.MixDigest, "get:", hash, b.Entire.Entire.Header.Number.Uint64())
 						return
@@ -321,5 +324,4 @@ func MachineVerify(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
 }

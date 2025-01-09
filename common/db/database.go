@@ -30,7 +30,7 @@ type IDBWriter interface {
 }
 
 /*
-	IIterator mdbx must close
+IIterator mdbx must close
 */
 type IIterator interface {
 	Next() (err error)

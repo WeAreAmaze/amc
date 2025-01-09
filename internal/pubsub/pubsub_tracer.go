@@ -17,9 +17,9 @@
 package pubsub
 
 import (
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/rcrowley/go-metrics"
 )
 

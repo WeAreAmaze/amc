@@ -51,7 +51,7 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.4
-	github.com/supranational/blst v0.3.11-0.20230406105308-e9dfc5ee724b
+	github.com/supranational/blst v0.3.11
 	github.com/trailofbits/go-mutexasserts v0.0.0-20230328101604-8cdbc5f3d279
 	github.com/urfave/cli/v2 v2.17.2-0.20221006022127-8f469abc00aa
 	go.opencensus.io v0.24.0
@@ -178,6 +178,7 @@ require (
 	go.uber.org/dig v1.16.1 // indirect
 	go.uber.org/fx v1.19.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/mobile v0.0.0-20240213143359-d1f7d3436075 // indirect
 	golang.org/x/mod v0.16.0 // indirect
 	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
@@ -197,4 +198,4 @@ require (
 
 replace github.com/VictoriaMetrics/metrics => github.com/ledgerwatch/victoria-metrics v0.0.4
 
-// replace github.com/elastic/gosigar => github.com/Jackmeng1985/gosigar v0.14.2-fix-ios
+replace github.com/elastic/gosigar => github.com/Jackmeng1985/gosigar v0.14.2-fix-ios

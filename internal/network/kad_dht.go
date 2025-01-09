@@ -113,12 +113,12 @@ func (k *KadDHT) loopDiscoverRemote() {
 }
 
 //func (k *KadDHT) findPeers() []peer.AddrInfo {
-	//peers, err := k.routingDiscovery.FindPeers(k.ctx, DiscoverProtocol)
-	//if err != nil {
-	//	return nil
-	//} else {
-	//	return peers
-	//}
+//peers, err := k.routingDiscovery.FindPeers(k.ctx, DiscoverProtocol)
+//if err != nil {
+//	return nil
+//} else {
+//	return peers
+//}
 //}
 
 func (k *KadDHT) discoverLocal() error {

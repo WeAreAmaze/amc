@@ -6,7 +6,7 @@ description: Fundamental shared values and special norms that distinguish Amazec
 
 ## Our Pledge
 
-As members, contributors, and leaders of Amazechain, 
+As a member, contributors, and leaders of Amazechain, 
 we commit to fostering an inclusive environment within our community.
 We strive to ensure that everyone, regardless of age, physical attributes,
 disabilities, cultural backgrounds, gender identities, levels of expertise, 

@@ -17,6 +17,8 @@ feels respected and valued. Harassment of any form will not be tolerated.
 We pledge to act and interact in ways that contribute to an open, welcoming,
 diverse, inclusive, and healthy community.
 
+Together, we will build a community that stands as a beacon of inclusivity, diversity, and respect, setting an example for others to follow. We invite all members to join us in this endeavor, contributing their unique perspectives and experiences to make Amazechain not just a community, but a home for all.
+
 ## Our Standards
 
 Examples of behavior that contributes to a positive environment for our

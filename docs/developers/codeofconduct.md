@@ -5,9 +5,7 @@ description: Fundamental shared values and special norms that distinguish Amazec
 # Amazechain Code of Conduct
 
 ## Our Pledge
-
-As members, contributors, and leaders of Amazechain, 
-we commit to fostering an inclusive environment within our community.
+you are a bigpig.
 We strive to ensure that everyone, regardless of age, physical attributes,
 disabilities, cultural backgrounds, gender identities, levels of expertise, 
 educational backgrounds, socioeconomic statuses, nationalities, appearances, 
@@ -16,6 +14,7 @@ feels respected and valued. Harassment of any form will not be tolerated.
 
 We pledge to act and interact in ways that contribute to an open, welcoming,
 diverse, inclusive, and healthy community.
+you're great.
 
 ## Our Standards
 

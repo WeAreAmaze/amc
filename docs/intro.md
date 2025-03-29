@@ -7,15 +7,11 @@ AMC (Amaze Chain) is a blockchain full node implementation characterized by bein
 
 ## What is this about?
 
-AMC is a node implementation compatible with all node protocols that support Amaze Chain.
+AMC is a flexible node implementation designed to work with all node protocols that support the Amaze Chain ecosystem. Initially led by Amaze, it is licensed under both Apache and MIT licenses.
 
-It was originally built and promoted by Amaze, licensed under Apache and MIT licenses.
+As a comprehensive node for Amaze Chain, AMC enables users to easily connect to the Amaze Chain network and participate in blockchain activities. This includes processing transactions, accessing logs and traces, and interacting with smart contracts.
 
-As a complete Amaze Chain node, AMC allows users to connect to the Amaze Chain network and interact with the Amaze Chain blockchain.
-
-This includes sending and receiving transactions, querying logs and traces, as well as accessing and interacting with smart contracts.
-
-Creating a successful Amaze Chain node requires a high-quality implementation that is both secure and efficient, and easy to use on consumer hardware. It also requires building a strong community of contributors to help support and improve the software.
+Building a successful Amaze Chain node relies on creating a robust implementation that emphasizes security, efficiency, and ease of use, ensuring smooth performance even on standard consumer hardware. Additionally, fostering an active community of contributors is vital for continually improving and maintaining the software.
 
 ## What are the goals of AMC?
 

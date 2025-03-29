@@ -55,6 +55,8 @@ comments, commits, code, wiki edits, issues, and other contributions that are
 not aligned to this Code of Conduct, and will communicate reasons for moderation
 decisions when appropriate.
 
+Community leaders also serve as role models, embodying the values and principles outlined in the Code of Conduct. They are expected to lead by example, demonstrating respect, inclusivity, and a commitment to fostering a positive and collaborative environment for all members.
+
 ## Scope
 
 This Code of Conduct applies within all community spaces, and also applies when

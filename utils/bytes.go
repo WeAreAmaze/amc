@@ -9,6 +9,7 @@ package utils
 func ToBytes4(x []byte) [4]byte {
 	var y [4]byte
 	copy(y[:], x)
+	i
 	return y
 }
 

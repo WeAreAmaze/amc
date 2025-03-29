@@ -6,8 +6,9 @@ description: Fundamental shared values and special norms that distinguish Amazec
 
 ## Our Pledge
 
-As members, contributors, and leaders of Amazechain, 
-we commit to fostering an inclusive environment within our community.
+As memcontributors, git push origin deve
+
+we commit to fosn inclusive environment within our community.
 We strive to ensure that everyone, regardless of age, physical attributes,
 disabilities, cultural backgrounds, gender identities, levels of expertise, 
 educational backgrounds, socioeconomic statuses, nationalities, appearances, 

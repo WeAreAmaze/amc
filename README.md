@@ -17,7 +17,7 @@ For building the latest alpha release (this will be suitable for most users just
 
 ### Most Linux systems and macOS
 
-AMC is written in Go, so building from source code requires the most recent version of Go to be installed.
+To build AMC from source code, it is necessary to have the new version of Go installed, as AMC is developed using the Go programming language.
 Instructions for installing Go are available at the [Go installation page](https://golang.org/doc/install) and necessary bundles can be downloaded from the [Go download page](https://golang.org/dl/).
 And the repository should be cloned to a local repository. Then, the command make amc configures everything for a temporary build and cleans up afterwards. This method of building only works on UNIX-like operating systems
 ```sh

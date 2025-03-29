@@ -6,13 +6,14 @@ description: Fundamental shared values and special norms that distinguish Amazec
 
 ## Our Pledge
 
-As members, contributors, and leaders of Amazechain, 
-we commit to fostering an inclusive environment within our community.
-We strive to ensure that everyone, regardless of age, physical attributes,
-disabilities, cultural backgrounds, gender identities, levels of expertise, 
-educational backgrounds, socioeconomic statuses, nationalities, appearances, 
-races, castes, colors, religions, sexual identities, or orientations, 
-feels respected and valued. Harassment of any form will not be tolerated.
+As members, contributors, and leaders of Amazechain, we pledge to cultivate
+an environment of inclusivity within our community. Our goal is to create a 
+space where every individual, irrespective of age, physical characteristics, 
+disabilities, cultural heritage, gender identities, expertise levels, educational
+backgrounds, socioeconomic statuses, nationalities, appearances, races, castes, 
+ethnicities, religions, sexual orientations, or gender expressions, is treated 
+with respect and appreciation. We have a zero-tolerance policy towards any form 
+of harassment.
 
 We pledge to act and interact in ways that contribute to an open, welcoming,
 diverse, inclusive, and healthy community.
@@ -57,17 +58,16 @@ decisions when appropriate.
 
 ## Scope
 
-This Code of Conduct applies within all community spaces, and also applies when
-an individual is officially representing the community in public spaces.
-Examples of representing our community include using an official e-mail address,
-posting via an official social media account, or acting as an appointed
-representative at an online or offline event.
+The Code of Conduct is applicable in all community spaces and extends to situations 
+where an individual represents the community publicly. Instances of representation 
+include the use of an official email address, posting on official social media accounts,
+or acting as an appointed representative in online or offline events.
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at Amazechain Discord.
-All complaints will be reviewed and investigated promptly and fairly.
+Reports of abusive, harassing, or otherwise unacceptable behavior can be submitted
+to the community leaders responsible for enforcement at Amazechain Discord.
+All complaints will undergo a prompt and fair review and investigation.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.
